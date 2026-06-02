@@ -254,19 +254,19 @@ char* Neuron::GetTextFromType(NeuronType t)
 	switch (t)
 	{
 		case basic:
-			return (char*)"basic";
+			return (char*)"простой";
 		case input:
-			return (char*)"input";
+			return (char*)"входной";
 		case output:
-			return (char*)"output";
+			return (char*)"выходной";
 		case radialbasis:
-			return (char*)"radial basis";
+			return (char*)"радиальный";
 		case memory:
-			return (char*)"memory";
+			return (char*)"память";
 		case random:
-			return (char*)"random";
+			return (char*)"случайный";
 		default:
-			return (char*)"other";
+			return (char*)"другой";
 	}
 }
 

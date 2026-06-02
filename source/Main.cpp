@@ -312,16 +312,16 @@ void Main::LoadFilenames()
 		if (size > 1000000)
 		{
 			size /= 1000000;
-			unit += "MB";
+			unit += "МБ";
 		}
 		else if (size > 1000)
 		{
 			size /= 1000;
-			unit += "KB";
+			unit += "КБ";
 		}
 		else
 		{
-			unit += "b";
+			unit += "б";
 		}			
 
 		f.fileSize += std::to_string(size);
@@ -345,7 +345,7 @@ void Main::LoadFilenames()
 		f.fullCaption.resize(25, ' ');
 		f.fullCaption += f.fileSize;
 		f.fullCaption.resize(40, ' ');
-		f.fullCaption += (f.isWorld) ? ("[world]") : ("");
+		f.fullCaption += (f.isWorld) ? ("[мир]") : ("");
 
 		allFilenames.push_back(f);
 	}
@@ -380,7 +380,7 @@ void Main::CreateNewFile()
 
 Main::Main()
 {
-	LogPrint((char*)"Started. Seed:\r\n");
+	LogPrint((char*)"Запущено. Seed:\r\n");
 
 	//Set seed
 	#ifdef RandomSeed		

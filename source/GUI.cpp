@@ -8,6 +8,7 @@ void InitImGUI()
 	ImGui::CreateContext();
 
 	io = &ImGui::GetIO();
+	io->Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 16.0f, NULL, io->Fonts->GetGlyphRangesCyrillic());
 
 	ImPlot::CreateContext();
 
@@ -53,29 +54,29 @@ void Main::DrawMainWindow()
 	ImGui::SetNextWindowSize({ GUIWindowWidth * 1.0f, 135.0f });
 	ImGui::SetNextWindowPos({ (2 * FieldX + FieldWidth) * 1.0f, InterfaceBorder * 1.0f });
 
-	ImGui::Begin("Main", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+	ImGui::Begin("Главное", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 	{
 		//FPS text 
-		ImGui::Text("steps: %i", ticknum);
-		ImGui::Text("(interval %i, ticks/sec: %i, fps: %i)", limit_interval, realTPS, realFPS);
-		ImGui::Text("Objects total: %i", field->GetNumObjects());
-		ImGui::Text("Bots total: %i", field->GetNumBots());
+		ImGui::Text("шаги: %i", ticknum);
+		ImGui::Text("(интервал %i, тиков/с: %i, кадров/с: %i)", limit_interval, realTPS, realFPS);
+		ImGui::Text("Всего объектов: %i", field->GetNumObjects());
+		ImGui::Text("Всего ботов: %i", field->GetNumBots());
 
 		//Show season name
 		/*
 		switch (season)
 		{
 		case summer:
-			ImGui::Text("Season: Summer");
+			ImGui::Text("Сезон: лето");
 			break;
 		case autumn:
-			ImGui::Text("Season: Autumn");
+			ImGui::Text("Сезон: осень");
 			break;
 		case winter:
-			ImGui::Text("Season: Winter");
+			ImGui::Text("Сезон: зима");
 			break;
 		case spring:
-			ImGui::Text("Season: Spring");
+			ImGui::Text("Сезон: весна");
 			break;
 		}
 
@@ -83,10 +84,10 @@ void Main::DrawMainWindow()
 		ImGui::Text(" ( %i )", ChangeSeasonInterval - changeSeasonCounter);*/
 
 		//Neural net params and FOV x
-		ImGui::Text("Layers: %i, Neurons: %i, Render_X: %i", NumNeuronLayers, NeuronsInLayer, field->renderX);
+		ImGui::Text("Слоев: %i, нейронов: %i, сдвиг X: %i", NumNeuronLayers, NeuronsInLayer, field->renderX);
 
 		//Simulation seed and unique id
-		ImGui::Text("Seed: %i, simulation id: %i", seed, id);
+		ImGui::Text("Зерно: %i, id симуляции: %i", seed, id);
 
 	}
 	ImGui::End();
@@ -99,31 +100,31 @@ void Main::DrawSystemWindow()
 	ImGui::SetNextWindowSize({ GUIWindowWidth * 1.0f, 70.0f });
 	ImGui::SetNextWindowPos({ (2 * FieldX + FieldWidth) * 1.0f, 140.0f });
 
-	ImGui::Begin("System", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+	ImGui::Begin("Система", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 	{
-		ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Platform");
+		ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Платформа");
 		ImGui::SameLine();
 		ImGui::Text(" %s", SDL_GetPlatform());
 
 		ImGui::SameLine();
 
-		ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "CPU cores: %d", SDL_GetCPUCount());
+		ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Ядер процессора: %d", SDL_GetCPUCount());
 
-		ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "RAM: %.2f GB", SDL_GetSystemRAM() / 1024.0f);
+		ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
 
 		ImGui::SameLine();
 
 		//Show number of threads
 		#ifdef UseOneThread
-		ImGui::Text(", 1 thread used");
+		ImGui::Text(", 1 поток");
 		#endif
 
 		#ifdef UseFourThreads
-		ImGui::Text(", 4 threads used");
+		ImGui::Text(", 4 потока");
 		#endif
 
 		#ifdef UseEightThreads
-		ImGui::Text(", 8 threads used");
+		ImGui::Text(", 8 потоков");
 		#endif
 	}
 	ImGui::End();
@@ -135,20 +136,20 @@ void Main::DrawControlsWindow()
 	ImGui::SetNextWindowSize({ GUIWindowWidth * 1.0f, 160.0f });
 	ImGui::SetNextWindowPos({ (2 * FieldX + FieldWidth) * 1.0f, 220.0f });
 
-	ImGui::Begin("Controls", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+	ImGui::Begin("Управление", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 	{
-		if (ImGui::Button((simulate) ? "stop" : "start", { 200, 25 }))
+		if (ImGui::Button((simulate) ? "Стоп" : "Старт", { 200, 25 }))
 		{
 			Pause();
 		}
 
 		//Sliders
 		ImGui::PushItemWidth(200);
-		ImGui::SliderInt("limit TPS", &limit_ticks_per_second, 0, GUI_Max_tps, "%d");
-		ImGui::SliderInt("limit FPS", &limitFPS, 0, GUI_Max_fps, "%d");
+		ImGui::SliderInt("лимит тиков", &limit_ticks_per_second, 0, GUI_Max_tps, "%d");
+		ImGui::SliderInt("лимит кадров", &limitFPS, 0, GUI_Max_fps, "%d");
 
-		ImGui::SliderInt("PS reward", &(field->photosynthesisReward), 0, GUI_Max_food);		
-		ImGui::SliderInt("brush", &brushSize, GUI_Max_brush, 0, "%d");
+		ImGui::SliderInt("энергия ФС", &(field->photosynthesisReward), 0, GUI_Max_food);
+		ImGui::SliderInt("кисть", &brushSize, GUI_Max_brush, 0, "%d");
 	}
 	ImGui::End();
 }
@@ -159,21 +160,21 @@ void Main::DrawSelectionWindow()
 	ImGui::SetNextWindowSize({ GUIWindowWidth * 1.0f, 150.0f });
 	ImGui::SetNextWindowPos({ (2 * FieldX + FieldWidth) * 1.0f, 390.0f });
 
-	ImGui::Begin("Selection", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+	ImGui::Begin("Выбор", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 	{
 		if (selectedObject)
 		{
 			if (field->ValidateObjectExistance(selectedObject))
 			{
 				//Object info
-				ImGui::Text("type: Bot	X: %i, Y: %i", selectedObject->x, selectedObject->y);
-				ImGui::Text("lifetime: %i / %i", selectedObject->GetLifetime(), MaxBotLifetime);
-				ImGui::Text("energy: %i (PS: %i, predation: %i)", selectedObject->energy, ((Bot*)selectedObject)->GetEnergyFromPS(), ((Bot*)selectedObject)->GetEnergyFromKills());
+				ImGui::Text("тип: бот	X: %i, Y: %i", selectedObject->x, selectedObject->y);
+				ImGui::Text("возраст: %i / %i", selectedObject->GetLifetime(), MaxBotLifetime);
+				ImGui::Text("энергия: %i (ФС: %i, охота: %i)", selectedObject->energy, ((Bot*)selectedObject)->GetEnergyFromPS(), ((Bot*)selectedObject)->GetEnergyFromKills());
 
 				//Mutation markers
 				int m[NumberOfMutationMarkers];
 				memcpy(m, ((Bot*)selectedObject)->GetMarkers(), sizeof(m));
-				ImGui::Text("markers: {");
+				ImGui::Text("метки: {");
 
 				repeat(NumberOfMutationMarkers)
 				{
@@ -188,18 +189,18 @@ void Main::DrawSelectionWindow()
 				Uint8 c[3];
 
 				memcpy(c, ((Bot*)selectedObject)->GetColor(), sizeof(c));
-				ImGui::Text("color: {%i, %i, %i}", c[0], c[1], c[2]);
+				ImGui::Text("цвет: {%i, %i, %i}", c[0], c[1], c[2]);
 
 				ImGui::SameLine();
 				ImGui::TextColored(ImVec4(((c[0] * 1.0f) / 255.0f), ((c[1] * 1.0f) / 255.0f), ((c[2] * 1.0f) / 255.0f), 1.0f), "*****");
 
 				ImGui::SameLine();
-				if (ImGui::Button("Repaint", { 50, 20 }))
+				if (ImGui::Button("Новый", { 55, 20 }))
 				{
 					field->RepaintBot((Bot*)selectedObject, Bot::GetRandomColor(), 1);
 				}
 
-				if (ImGui::Button("Show brain", { 100, 25 }))
+				if (ImGui::Button("Показать мозг", { 120, 25 }))
 				{
 					showBrain = !showBrain;
 				}
@@ -219,19 +220,19 @@ void Main::DrawRenderWindow()
 	ImGui::SetNextWindowSize({ GUIWindowWidth * 1.0f, 140.0f});
 	ImGui::SetNextWindowPos({ (2 * FieldX + FieldWidth) * 1.0f, 550.0f });
 
-	ImGui::Begin("Display", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+	ImGui::Begin("Вид", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 	{
 		ImGui::BeginGroup();
 
-		ImGui::Text("Render:");
+		ImGui::Text("Режим:");
 
-		ImGui::RadioButton("Natural colors", (int*)&renderType, 0);
+		ImGui::RadioButton("Обычный", (int*)&renderType, 0);
 		ImGui::SameLine();
-		ImGui::RadioButton("Predators", (int*)&renderType, 1);
+		ImGui::RadioButton("Охота", (int*)&renderType, 1);
 
-		ImGui::RadioButton("Energy", (int*)&renderType, 2);
+		ImGui::RadioButton("Энергия", (int*)&renderType, 2);
 		ImGui::SameLine();
-		ImGui::RadioButton("No render", (int*)&renderType, 3);
+		ImGui::RadioButton("Без отрис.", (int*)&renderType, 3);
 
 		ImGui::EndGroup();
 	}
@@ -244,7 +245,7 @@ void Main::DrawConsoleWindow()
 	ImGui::SetNextWindowSize({ GUIWindowWidth * 1.0f, 120.0f });
 	ImGui::SetNextWindowPos({ (2 * FieldX + FieldWidth) * 1.0f, 700.0f});
 
-	ImGui::Begin("Log", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+	ImGui::Begin("Журнал", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 	{
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(LogBackgroundColor));
 
@@ -268,19 +269,19 @@ void Main::DrawMouseFunctionWindow()
 	ImGui::SetNextWindowSize({ GUIWindowWidth * 1.0f, 130.0f});
 	ImGui::SetNextWindowPos({ (2 * FieldX + FieldWidth) * 1.0f, 830.0f });
 
-	ImGui::Begin("Mouse function", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+	ImGui::Begin("Действие мыши", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 	{
 		ImGui::BeginGroup();
 
-		ImGui::RadioButton("Select", (int*)&mouseFunc, 0);
+		ImGui::RadioButton("Выбрать", (int*)&mouseFunc, 0);
 		ImGui::SameLine();
-		ImGui::RadioButton("Remove", (int*)&mouseFunc, 1);
+		ImGui::RadioButton("Удалить", (int*)&mouseFunc, 1);
 
-		ImGui::RadioButton("Place rock", (int*)&mouseFunc, 2);
+		ImGui::RadioButton("Камень", (int*)&mouseFunc, 2);
 		ImGui::SameLine();
-		ImGui::RadioButton("From file", (int*)&mouseFunc, 3);
+		ImGui::RadioButton("Из файла", (int*)&mouseFunc, 3);
 
-		ImGui::RadioButton("Mutate", (int*)&mouseFunc, 4);
+		ImGui::RadioButton("Мутировать", (int*)&mouseFunc, 4);
 
 		ImGui::EndGroup();
 	}
@@ -293,10 +294,10 @@ void Main::DrawAdditionalsWindow()
 	ImGui::SetNextWindowSize({ GUIWindowWidth * 1.0f, 100.0f });
 	ImGui::SetNextWindowPos({ (2 * FieldX + FieldWidth) * 1.0f, 970.0f });
 
-	ImGui::Begin("Additional windows", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+	ImGui::Begin("Окна", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 	{
 
-		if (ImGui::Button("Save/load", { 75, 30 }))
+		if (ImGui::Button("Файлы", { 75, 30 }))
 		{
 			LoadFilenames();
 
@@ -304,18 +305,18 @@ void Main::DrawAdditionalsWindow()
 		}
 		ImGui::SameLine();
 
-		if (ImGui::Button("Dangerous", { 75, 30 }))
+		if (ImGui::Button("Опасное", { 75, 30 }))
 		{
 			showDangerous = !showDangerous;
 		}
 		ImGui::SameLine();
 
-		if (ImGui::Button("Adaptation", { 75, 30 }))
+		if (ImGui::Button("Среда", { 75, 30 }))
 		{
 			showAdaptation = !showAdaptation;
 		}
 
-		if (ImGui::Button("Chart", { 75, 30 }))
+		if (ImGui::Button("График", { 75, 30 }))
 		{
 			showChart = !showChart;
 		}
@@ -333,10 +334,10 @@ void Main::DrawSaveLoadWindow()
 		ImGui::SetNextWindowSize({ 400.0f, 200.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 100.0f }, ImGuiCond_Once);
 
-		ImGui::Begin("Save/load", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Сохранение и загрузка", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 			//List of files
-			ImGui::Text("Select file");
+			ImGui::Text("Выберите файл");
 
 			ImGui::ListBoxHeader("##", ImVec2(380, 110));
 
@@ -356,7 +357,7 @@ void Main::DrawSaveLoadWindow()
 
 			//Buttons
 
-			if (ImGui::Button("Load", { 50, 30 }))
+			if (ImGui::Button("Загрузить", { 80, 30 }))
 			{
 				if (selectedFile)
 				{
@@ -367,9 +368,9 @@ void Main::DrawSaveLoadWindow()
 						if (ret.id != -1)
 						{
 							if (ret.width != FieldCellsWidth)
-								LogPrint("World loaded(width mismatch)\r\n");
+								LogPrint("Мир загружен (ширина не совпадает)\r\n");
 							else
-								LogPrint("World loaded\r\n");
+								LogPrint("Мир загружен\r\n");
 
 							seed = ret.seed;
 							ticknum = ret.tick;
@@ -378,7 +379,7 @@ void Main::DrawSaveLoadWindow()
 							field->seed = seed;
 						}
 						else
-							LogPrint("Error while loading world\r\n");
+							LogPrint("Ошибка загрузки мира\r\n");
 					}
 					else
 					{
@@ -390,16 +391,16 @@ void Main::DrawSaveLoadWindow()
 						selectedObject = saver.LoadObject((char*)selectedFile->nameFull.c_str());
 
 						if (selectedObject)
-							LogPrint("Object loaded\r\n");
+							LogPrint("Объект загружен\r\n");
 						else
-							LogPrint("Error while loading object\r\n");
+							LogPrint("Ошибка загрузки объекта\r\n");
 					}
 				}
 			}			
 
 			ImGui::SameLine();
 
-			if (ImGui::Button("Save bot", { 100, 30 }))
+			if (ImGui::Button("Сохр. бота", { 90, 30 }))
 			{
 				if (selectedObject)
 				{
@@ -407,13 +408,13 @@ void Main::DrawSaveLoadWindow()
 					{
 						if (saver.SaveObject(selectedObject, (char*)selectedFile->nameFull.c_str()))
 						{
-							LogPrint("Object saved\r\n");
+							LogPrint("Объект сохранен\r\n");
 
 							LoadFilenames();
 						}
 						else
 						{
-							LogPrint("Error while saving object\r\n");
+							LogPrint("Ошибка сохранения объекта\r\n");
 						}
 					}
 				}
@@ -421,26 +422,26 @@ void Main::DrawSaveLoadWindow()
 
 			ImGui::SameLine();
 
-			if (ImGui::Button("Save world", { 100, 30 }))
+			if (ImGui::Button("Сохр. мир", { 90, 30 }))
 			{
 				if (selectedFile)
 				{
 					if (saver.SaveWorld(field, (char*)selectedFile->nameFull.c_str(), id, ticknum))
 					{
-						LogPrint("World saved\r\n");
+						LogPrint("Мир сохранен\r\n");
 
 						LoadFilenames();
 					}
 					else
 					{
-						LogPrint("Error while saving world\r\n");
+						LogPrint("Ошибка сохранения мира\r\n");
 					}
 				}
 			}
 
 			ImGui::SameLine();
 
-			if (ImGui::Button("New file", { 100, 30 }))
+			if (ImGui::Button("Новый файл", { 100, 30 }))
 			{
 				CreateNewFile();
 
@@ -459,17 +460,17 @@ void Main::DrawDangerousWindow()
 		ImGui::SetNextWindowSize({ 290.0f, 100.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 300.0f }, ImGuiCond_Once);
 
-		ImGui::Begin("Use with caution!", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Осторожно!", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 
-			if (ImGui::Button("Wipe world", { 130, 30 }))
+			if (ImGui::Button("Очистить мир", { 130, 30 }))
 			{
 				ClearWorld();
 			}
 
 			ImGui::SameLine();
 
-			if (ImGui::Button("Kill bots", { 130, 30 }))
+			if (ImGui::Button("Убить ботов", { 130, 30 }))
 			{
 				Deselect();
 
@@ -488,14 +489,14 @@ void Main::DrawDangerousWindow()
 				}
 			}
 
-			if (ImGui::Button("CloseApp", { 130, 30 }))
+			if (ImGui::Button("Закрыть игру", { 130, 30 }))
 			{
 				terminate = true;
 			}
 
 			ImGui::SameLine();
 
-			if (ImGui::Button("Zero time", { 130, 30 }))
+			if (ImGui::Button("Обнулить время", { 130, 30 }))
 			{
 				ticknum = 0;
 			}
@@ -512,7 +513,7 @@ void Main::DrawSummaryWindow()
 		ImGui::SetNextWindowSize({ 330.0f, 180.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 150.0f }, ImGuiCond_Once);
 
-		ImGui::Begin("Bot summary", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Сводка бота", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 			if (selectedObject)
 			{
@@ -520,16 +521,16 @@ void Main::DrawSummaryWindow()
 				{
 					auto summ = ((Bot*)selectedObject)->GetNeuronSummary();
 
-					ImGui::Text("Neurons:");
-					ImGui::Text("Simple: %i", summ.simple);
-					ImGui::Text("Radial basis: %i", summ.radialBasis);
-					ImGui::Text("Random: %i", summ.random);
-					ImGui::Text("Memory: %i", summ.memory);
+					ImGui::Text("Нейроны:");
+					ImGui::Text("Простые: %i", summ.simple);
+					ImGui::Text("Радиальные: %i", summ.radialBasis);
+					ImGui::Text("Случайные: %i", summ.random);
+					ImGui::Text("Память: %i", summ.memory);
 
 					ImGui::NewLine();
 
-					ImGui::Text("Total neurons: %i, dead end neurons: %i", summ.neurons, summ.deadend);
-					ImGui::Text("Total connections: %i", summ.connections);
+					ImGui::Text("Всего нейронов: %i, тупиков: %i", summ.neurons, summ.deadend);
+					ImGui::Text("Всего связей: %i", summ.connections);
 				}
 				else
 					goto Nothing;
@@ -538,7 +539,7 @@ void Main::DrawSummaryWindow()
 			else
 			{
 			Nothing:
-				ImGui::Text("Nothing is selected");
+				ImGui::Text("Ничего не выбрано");
 			}
 
 		}
@@ -554,54 +555,54 @@ void Main::DrawAdaptationWindow()
 		ImGui::SetNextWindowSize({ 500.0f, 500.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 250.0f }, ImGuiCond_Once);
 
-		ImGui::Begin("Adaptation", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Условия среды", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
-			if(ImGui::CollapsingHeader("Winds"))			
+			if(ImGui::CollapsingHeader("Ветры"))
 			{
-				ImGui::SliderInt("Phase", &field->params.adaptation_DeathChance_Winds, 0, 1000);
-				ImGui::SliderInt("Steps", &field->params.adaptation_StepsNum_Winds, 0, 20);
+				ImGui::SliderInt("Фаза", &field->params.adaptation_DeathChance_Winds, 0, 1000);
+				ImGui::SliderInt("Шаги", &field->params.adaptation_StepsNum_Winds, 0, 20);
 			}
 
 			ImGui::NewLine();
 			
-			if (ImGui::CollapsingHeader("Divers", ImGuiTreeNodeFlags_DefaultOpen))
+			if (ImGui::CollapsingHeader("Вода и суша", ImGuiTreeNodeFlags_DefaultOpen))
 			{
-				ImGui::SliderInt("Land mulpitly block", &field->params.adaptation_landBirthBlock, 0, 1000);
-				ImGui::SliderInt("Sea mulpitly block", &field->params.adaptation_seaBirthBlock, 0, 1000);
+				ImGui::SliderInt("Запрет размн. на суше", &field->params.adaptation_landBirthBlock, 0, 1000);
+				ImGui::SliderInt("Запрет размн. в море", &field->params.adaptation_seaBirthBlock, 0, 1000);
 
 				ImGui::NewLine();
 
-				ImGui::SliderInt("no PS in ocean", &field->params.adaptation_PSInOceanBlock, 0, 1000, "%d");
-				ImGui::SliderInt("no PS in mud", &field->params.adaptation_PSInMudBlock, 0, 1000, "%d");
-				ImGui::SliderInt("On land at least once", &field->params.adaptation_botShouldBeOnLandOnceToMultiply, 0, 1000, "%d");
-				ImGui::SliderInt("On land PS at least once", &field->params.adaptation_botShouldDoPSOnLandOnceToMultiply, 0, 1000, "%d");
-				ImGui::SliderInt("Force movements Y", &field->params.adaptation_forceBotMovements, 0, 1000);
+				ImGui::SliderInt("Нет ФС в океане", &field->params.adaptation_PSInOceanBlock, 0, 1000, "%d");
+				ImGui::SliderInt("Нет ФС в грязи", &field->params.adaptation_PSInMudBlock, 0, 1000, "%d");
+				ImGui::SliderInt("Был на суше", &field->params.adaptation_botShouldBeOnLandOnceToMultiply, 0, 1000, "%d");
+				ImGui::SliderInt("ФС на суше", &field->params.adaptation_botShouldDoPSOnLandOnceToMultiply, 0, 1000, "%d");
+				ImGui::SliderInt("Движение по Y", &field->params.adaptation_forceBotMovements, 0, 1000);
 
 				ImGui::NewLine();
 
-				ImGui::SliderInt("Ocean level", &field->params.oceanLevel, 0, FieldCellsHeight);
-				ImGui::SliderInt("Mud level", &field->params.mudLevel, 0, FieldCellsHeight);
+				ImGui::SliderInt("Уровень океана", &field->params.oceanLevel, 0, FieldCellsHeight);
+				ImGui::SliderInt("Уровень грязи", &field->params.mudLevel, 0, FieldCellsHeight);
 			}
 
 			ImGui::NewLine();
 
-			if (ImGui::CollapsingHeader("Organics"))
+			if (ImGui::CollapsingHeader("Органика"))
 			{
-				ImGui::SliderInt("Organics spawn rate", &field->params.adaptation_organicSpawnRate, 0, 1000);
+				ImGui::SliderInt("Появление органики", &field->params.adaptation_organicSpawnRate, 0, 1000);
 			}
 
 			ImGui::NewLine();
 
-			if (ImGui::CollapsingHeader("Apples"))
+			if (ImGui::CollapsingHeader("Яблоки"))
 			{
-				ImGui::SliderInt("Apple energy", &field->params.appleEnergy, 1, 200);
+				ImGui::SliderInt("Энергия яблока", &field->params.appleEnergy, 1, 200);
 
-				ImGui::Checkbox("Spawn apples", &field->params.spawnApples);
+				ImGui::Checkbox("Создавать яблоки", &field->params.spawnApples);
 			}
 
 			ImGui::NewLine();
 
-			if (ImGui::Button("Reset", { 70, 20 }))
+			if (ImGui::Button("Сброс", { 70, 20 }))
 			{
 				field->params.Reset();
 			}
@@ -618,29 +619,29 @@ void Main::DrawChartWindow()
 		ImGui::SetNextWindowSize({ 900.0f, 600.0f });
 		ImGui::SetNextWindowPos({ 700.0f, 250.0f }, ImGuiCond_Once);
 
-		ImGui::Begin("Population chart", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("График популяции", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
-			if (ImPlot::BeginPlot("Objects", { 800, 550 }))
+			if (ImPlot::BeginPlot("Объекты", { 800, 550 }))
 			{
 				
 				//Axes
 				ImPlot::SetupAxisLimits(ImAxis_X1, 0.0, 250.0, ImPlotCond_Always);
 				ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 26000.0);
 
-				ImPlot::SetupAxis(ImAxis_X1, "Time");
-				ImPlot::SetupAxis(ImAxis_Y1, "Number");
+				ImPlot::SetupAxis(ImAxis_X1, "Время");
+				ImPlot::SetupAxis(ImAxis_Y1, "Количество");
 
 				//Bots number
 				ImPlot::SetNextLineStyle({ 1, 0, 0, 1 }, ChartLineThickness);
 
-				ImPlot::PlotLine("Bots", chartData_bots, chart_numValues - 1, 1.0f, 0.0f, ImPlotLineFlags_None);
+				ImPlot::PlotLine("Боты", chartData_bots, chart_numValues - 1, 1.0f, 0.0f, ImPlotLineFlags_None);
 
 				//Apples number
 				if(chartShow_apples)
 				{
 					ImPlot::SetNextLineStyle({ 0, 1, 0, 1 }, ChartLineThickness);
 
-					ImPlot::PlotLine("Apples", chartData_apples, chart_numValues - 1, 1.0f, 0.0f, ImPlotLineFlags_None);
+					ImPlot::PlotLine("Яблоки", chartData_apples, chart_numValues - 1, 1.0f, 0.0f, ImPlotLineFlags_None);
 				}
 
 				//Organics number
@@ -648,7 +649,7 @@ void Main::DrawChartWindow()
 				{
 					ImPlot::SetNextLineStyle({ 0, 0, 1, 1 }, ChartLineThickness);
 
-					ImPlot::PlotLine("Organics", chartData_organics, chart_numValues - 1, 1.0f, 0.0f, ImPlotLineFlags_None);
+					ImPlot::PlotLine("Органика", chartData_organics, chart_numValues - 1, 1.0f, 0.0f, ImPlotLineFlags_None);
 				}
 
 				ImPlot::EndPlot();
@@ -658,11 +659,11 @@ void Main::DrawChartWindow()
 
 			ImGui::BeginGroup();			
 
-			if (ImGui::Button("Clear", { 70.0f, 30.0f }))
+			if (ImGui::Button("Очистить", { 80.0f, 30.0f }))
 				ClearChart();
 
-			ImGui::Checkbox("Apples", &chartShow_apples);
-			ImGui::Checkbox("Organics", &chartShow_organics);
+			ImGui::Checkbox("Яблоки", &chartShow_apples);
+			ImGui::Checkbox("Органика", &chartShow_organics);
 
 			ImGui::EndGroup();
 		}
@@ -681,29 +682,29 @@ void Main::DrawBotBrainWindow()
 			ImGui::SetNextWindowSize({ 330.0f, 240.0f });
 			ImGui::SetNextWindowPos({ 650 * 1.0f, 350.0f });
 
-			ImGui::Begin("Bot brain data", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+			ImGui::Begin("Данные мозга", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 			{
 				ImGui::BeginGroup();
 
-				ImGui::RadioButton("Active brain", &brainToShow, 0);
-				ImGui::RadioButton("Initial brain", &brainToShow, 1);
+				ImGui::RadioButton("Текущий мозг", &brainToShow, 0);
+				ImGui::RadioButton("Начальный мозг", &brainToShow, 1);
 
 				ImGui::EndGroup();
 
 				if (nn_renderer.selectedNeuron)
 				{
 					//Show neuron type
-					ImGui::Text("Neuron type:");
+					ImGui::Text("Тип нейрона:");
 					ImGui::SameLine();
 					ImGui::Text(Neuron::GetTextFromType(nn_renderer.selectedNeuron->type));
 
 					//Show bias
-					ImGui::Text("Bias: %f", nn_renderer.selectedNeuron->bias);
+					ImGui::Text("Смещение: %f", nn_renderer.selectedNeuron->bias);
 
 					//Show connections
 					repeat(nn_renderer.selectedNeuron->numConnections)
 					{
-						ImGui::Text("Connection to l: %i, n: %i, weight: %f", nn_renderer.selectedNeuron->allConnections[i].dest_layer,
+						ImGui::Text("Связь к слою: %i, нейрону: %i, вес: %f", nn_renderer.selectedNeuron->allConnections[i].dest_layer,
 							nn_renderer.selectedNeuron->allConnections[i].dest_neuron, nn_renderer.selectedNeuron->allConnections[i].weight);
 					}
 
@@ -713,14 +714,14 @@ void Main::DrawBotBrainWindow()
 					//TODO
 					if((nn_renderer.selectedNeuron->type!=input) && (nn_renderer.selectedNeuron->type != output))
 					{
-						if (ImGui::Button("set random", { 100,30 }))
+						if (ImGui::Button("случайно", { 100,30 }))
 						{
 							nn_renderer.selectedNeuron->SetRandom();
 						}
 
 						ImGui::SameLine();
 
-						if (ImGui::Button("set zero", { 100,30 }))
+						if (ImGui::Button("обнулить", { 100,30 }))
 						{
 							nn_renderer.selectedNeuron->SetZero();
 						}
@@ -728,7 +729,7 @@ void Main::DrawBotBrainWindow()
 				}
 				else
 				{
-					ImGui::Text("Nothing selected");
+					ImGui::Text("Ничего не выбрано");
 				}
 			}
 			ImGui::End();
@@ -848,12 +849,12 @@ void Main::MouseClick()
 
 							if (field->AddObject(obj))
 							{
-								LogPrint("Object loaded\r\n");
+								LogPrint("Объект загружен\r\n");
 							}
 						}
 						else
 						{
-							LogPrint("Error while loading object\r\n");
+							LogPrint("Ошибка загрузки объекта\r\n");
 						}
 					}
 				}				

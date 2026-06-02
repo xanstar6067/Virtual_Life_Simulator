@@ -118,6 +118,7 @@
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalIncludeDirectories>C:\Users\pro\Documents\Libruary\SDL2_devel_2261\include;C:\Users\pro\Documents\Libruary\SDL2_image_205\include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -136,6 +137,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalIncludeDirectories>C:\Users\pro\Documents\Libruary\SDL2_devel_2261\include;C:\Users\pro\Documents\Libruary\SDL2_image_205\include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -154,6 +156,7 @@
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalIncludeDirectories>C:\Users\pro\Documents\Libruary\SDL2_devel_2261\include;C:\Users\pro\Documents\Libruary\SDL2_image_205\include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -172,6 +175,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalIncludeDirectories>C:\Users\pro\Documents\Libruary\SDL2_devel_2261\include;C:\Users\pro\Documents\Libruary\SDL2_image_205\include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
