@@ -60,6 +60,13 @@
     <ClInclude Include="source\SDL.h" />
     <ClInclude Include="source\Settings.h" />
     <ClInclude Include="source\Systems.h" />
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="VirtualLifeSimulator.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="VirtualLifeSimulator.ico" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

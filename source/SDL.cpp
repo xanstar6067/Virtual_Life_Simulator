@@ -1,6 +1,12 @@
 
 #include "SDL.h"
 
+#ifdef _WIN32
+#include <SDL_syswm.h>
+#include <Windows.h>
+#include "../resource.h"
+#endif
+
 
 SDL_Renderer* renderer = NULL;
 SDL_Window* window = NULL;
@@ -8,6 +14,42 @@ SDL_Window* window = NULL;
 ImGuiIO* io = NULL;
 
 MouseState mouseState;
+
+
+#ifdef _WIN32
+static void SetWindowsWindowIcon()
+{
+	SDL_SysWMinfo wmInfo;
+	SDL_VERSION(&wmInfo.version);
+
+	if (!SDL_GetWindowWMInfo(window, &wmInfo))
+		return;
+
+	HICON bigIcon = (HICON)LoadImage(
+		GetModuleHandle(NULL),
+		MAKEINTRESOURCE(IDI_APP_ICON),
+		IMAGE_ICON,
+		GetSystemMetrics(SM_CXICON),
+		GetSystemMetrics(SM_CYICON),
+		LR_DEFAULTCOLOR
+	);
+
+	HICON smallIcon = (HICON)LoadImage(
+		GetModuleHandle(NULL),
+		MAKEINTRESOURCE(IDI_APP_ICON),
+		IMAGE_ICON,
+		GetSystemMetrics(SM_CXSMICON),
+		GetSystemMetrics(SM_CYSMICON),
+		LR_DEFAULTCOLOR
+	);
+
+	if (bigIcon)
+		SendMessage(wmInfo.info.win.window, WM_SETICON, ICON_BIG, (LPARAM)bigIcon);
+
+	if (smallIcon)
+		SendMessage(wmInfo.info.win.window, WM_SETICON, ICON_SMALL, (LPARAM)smallIcon);
+}
+#endif
 
 
 void InitSDL()
@@ -54,6 +96,10 @@ bool CreateWindowSDL()
 
 	if (window == NULL)
 		return false;
+
+#ifdef _WIN32
+	SetWindowsWindowIcon();
+#endif
 
 	//no resize
 	SDL_SetWindowMinimumSize(window, WindowWidth, WindowHeight);
