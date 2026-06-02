@@ -22,8 +22,6 @@ private:
 
 	Clock clock;
 
-	const SDL_Rect screenRect = { 0, 0, WindowWidth, WindowHeight };
-
 	//Save/load object interface
 	ObjectSaver saver;
 
@@ -70,6 +68,7 @@ private:
 	void DrawConsoleWindow();
 	void DrawMouseFunctionWindow();
 	void DrawAdditionalsWindow();
+	void DrawSidePanelWindow();
 
 	//Hidden windows
 	void DrawSaveLoadWindow();

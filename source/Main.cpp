@@ -161,9 +161,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
 		while (SDL_PollEvent(&e) != 0)
 		{
+			ImGui_ImplSDL2_ProcessEvent(&e);
+
 			if (e.type == SDL_QUIT)
 			{
 				goto exitfor;
+			}
+			else if (e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
+			{
+				UpdateWindowSize();
 			}
 			else if (e.type == SDL_MOUSEWHEEL)
 			{
@@ -297,6 +303,8 @@ void Main::HighlightSelection()
 {
 	if (selectionShadowScreen > 0)
 	{
+		SDL_Rect screenRect = { 0, 0, windowWidth, windowHeight };
+
 		SDL_SetRenderDrawColor(renderer, 0, 0, 0, selectionShadowScreen);
 		SDL_RenderFillRect(renderer, &screenRect);
 	}

@@ -6,6 +6,8 @@
 //Window
 extern SDL_Renderer* renderer;
 extern SDL_Window* window;
+extern int windowWidth;
+extern int windowHeight;
 
 //Input output
 extern ImGuiIO* io;
@@ -24,6 +26,7 @@ bool ReadMouseState();
 
 void InitSDL();
 void DeInitSDL();
+void UpdateWindowSize();
 
 bool CreateWindowSDL();
 bool CreateRenderer();

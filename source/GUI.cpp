@@ -355,6 +355,228 @@ void Main::DrawAdditionalsWindow()
 	ImGui::End();
 }
 
+static float GetSidePanelX()
+{
+	float fixedX = (2 * FieldX + FieldWidth) * 1.0f;
+	float maxVisibleX = windowWidth - GUIWindowWidth * 1.0f - InterfaceBorder * 1.0f;
+
+	if (maxVisibleX < InterfaceBorder)
+	{
+		maxVisibleX = InterfaceBorder * 1.0f;
+	}
+
+	return (fixedX < maxVisibleX) ? fixedX : maxVisibleX;
+}
+
+void Main::DrawSidePanelWindow()
+{
+	float panelHeight = windowHeight - InterfaceBorder * 2.0f;
+
+	if (panelHeight < 200.0f)
+	{
+		panelHeight = 200.0f;
+	}
+
+	ImGui::SetNextWindowBgAlpha(1.0f);
+	ImGui::SetNextWindowSize({ GUIWindowWidth * 1.0f, panelHeight });
+	ImGui::SetNextWindowPos({ GetSidePanelX(), InterfaceBorder * 1.0f });
+
+	ImGui::Begin("Панель", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+	{
+		if (ImGui::CollapsingHeader("Главное", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::Text("шаги: %i", ticknum);
+			ImGui::Text("(интервал %i, тиков/с: %i, кадров/с: %i)", limit_interval, realTPS, realFPS);
+			ImGui::Text("Всего объектов: %i", field->GetNumObjects());
+			ImGui::Text("Всего ботов: %i", field->GetNumBots());
+			ImGui::Text("Слоев: %i, нейронов: %i, сдвиг X: %i", NumNeuronLayers, NeuronsInLayer, field->renderX);
+			ImGui::Text("Зерно: %i, id симуляции: %i", seed, id);
+		}
+
+		if (ImGui::CollapsingHeader("Система", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Платформа");
+			ImGui::SameLine();
+			ImGui::Text(" %s", SDL_GetPlatform());
+
+			ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Ядер процессора: %d", SDL_GetCPUCount());
+			ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
+			ImGui::Text(", потоков: %u", field->GetNumThreads());
+		}
+
+		if (ImGui::CollapsingHeader("Управление", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			if (ImGui::Button((simulate) ? "Стоп" : "Старт", { 200, 25 }))
+			{
+				Pause();
+			}
+
+			ImGui::PushItemWidth(200);
+			ImGui::SliderInt("лимит тиков", &limit_ticks_per_second, 0, GUI_Max_tps, "%d");
+			ImGui::SliderInt("лимит кадров", &limitFPS, 0, GUI_Max_fps, "%d");
+			ImGui::SliderInt("энергия ФС", &(field->photosynthesisReward), 0, GUI_Max_food);
+			ImGui::SliderInt("кисть", &brushSize, GUI_Max_brush, 0, "%d");
+			ImGui::PopItemWidth();
+		}
+
+		if (ImGui::CollapsingHeader("Выбор", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			if (selectedObject)
+			{
+				if (field->ValidateObjectExistance(selectedObject))
+				{
+					ImGui::Text("тип: бот	X: %i, Y: %i", selectedObject->x, selectedObject->y);
+					ImGui::Text("возраст: %i / %i", selectedObject->GetLifetime(), MaxBotLifetime);
+					ImGui::Text("энергия: %i (ФС: %i, охота: %i)", selectedObject->energy, ((Bot*)selectedObject)->GetEnergyFromPS(), ((Bot*)selectedObject)->GetEnergyFromKills());
+
+					int m[NumberOfMutationMarkers];
+					memcpy(m, ((Bot*)selectedObject)->GetMarkers(), sizeof(m));
+					ImGui::Text("метки: {");
+
+					repeat(NumberOfMutationMarkers)
+					{
+						ImGui::SameLine();
+						ImGui::Text("%i", m[i]);
+					}
+
+					ImGui::SameLine();
+					ImGui::Text("}");
+
+					Uint8 c[3];
+					memcpy(c, ((Bot*)selectedObject)->GetColor(), sizeof(c));
+					ImGui::Text("цвет: {%i, %i, %i}", c[0], c[1], c[2]);
+
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(((c[0] * 1.0f) / 255.0f), ((c[1] * 1.0f) / 255.0f), ((c[2] * 1.0f) / 255.0f), 1.0f), "*****");
+
+					ImGui::SameLine();
+					if (ImGui::Button("Новый", { 55, 20 }))
+					{
+						field->RepaintBot((Bot*)selectedObject, Bot::GetRandomColor(), 1);
+					}
+
+					if (ImGui::Button("Показать мозг", { 120, 25 }))
+					{
+						showBrain = !showBrain;
+					}
+				}
+				else
+				{
+					Deselect();
+				}
+			}
+		}
+
+		if (ImGui::CollapsingHeader("Вид", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::Text("Режим:");
+
+			if (ImGui::BeginTable("##RenderModesPanel", 2))
+			{
+				ImGui::TableSetupColumn("##RenderModeLeft", ImGuiTableColumnFlags_WidthFixed, 105.0f);
+				ImGui::TableSetupColumn("##RenderModeRight", ImGuiTableColumnFlags_WidthFixed, 105.0f);
+
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::RadioButton("Обычный", (int*)&renderType, 0);
+				ImGui::TableSetColumnIndex(1);
+				ImGui::RadioButton("Охота", (int*)&renderType, 1);
+
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::RadioButton("Энергия", (int*)&renderType, 2);
+				ImGui::TableSetColumnIndex(1);
+				ImGui::RadioButton("Без отрис.", (int*)&renderType, 3);
+
+				ImGui::EndTable();
+			}
+		}
+
+		if (ImGui::CollapsingHeader("Журнал", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(LogBackgroundColor));
+
+			ImGui::BeginChild("scrolling_panel", ImVec2(0, 80), true);
+			{
+				ImGui::TextUnformatted(logText.Buf.Data);
+
+				if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+					ImGui::SetScrollHereY(1.0f);
+			}
+			ImGui::EndChild();
+
+			ImGui::PopStyleColor();
+		}
+
+		if (ImGui::CollapsingHeader("Действие мыши", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			if (ImGui::BeginTable("##MouseFunctionsPanel", 2))
+			{
+				ImGui::TableSetupColumn("##MouseFunctionLeft", ImGuiTableColumnFlags_WidthFixed, 105.0f);
+				ImGui::TableSetupColumn("##MouseFunctionRight", ImGuiTableColumnFlags_WidthFixed, 105.0f);
+
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::RadioButton("Выбрать", (int*)&mouseFunc, 0);
+				ImGui::TableSetColumnIndex(1);
+				ImGui::RadioButton("Удалить", (int*)&mouseFunc, 1);
+
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::RadioButton("Камень", (int*)&mouseFunc, 2);
+				ImGui::TableSetColumnIndex(1);
+				ImGui::RadioButton("Из файла", (int*)&mouseFunc, 3);
+
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::RadioButton("Мутировать", (int*)&mouseFunc, 4);
+
+				ImGui::EndTable();
+			}
+		}
+
+		if (ImGui::CollapsingHeader("Окна", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			const ImVec2 windowButtonSize = { 92, 28 };
+
+			if (ImGui::Button("Файлы", windowButtonSize))
+			{
+				LoadFilenames();
+				showSaveLoad = !showSaveLoad;
+			}
+			ImGui::SameLine();
+
+			if (ImGui::Button("Инструменты", windowButtonSize))
+			{
+				showDangerous = !showDangerous;
+			}
+
+			if (ImGui::Button("Среда", windowButtonSize))
+			{
+				showAdaptation = !showAdaptation;
+			}
+			ImGui::SameLine();
+
+			if (ImGui::Button("График", windowButtonSize))
+			{
+				showChart = !showChart;
+			}
+
+			if (ImGui::Button("Инфо", windowButtonSize))
+			{
+				showInfo = !showInfo;
+			}
+			ImGui::SameLine();
+
+			if (ImGui::Button("Выход", windowButtonSize))
+			{
+				showExitConfirm = true;
+			}
+		}
+	}
+	ImGui::End();
+}
+
 void Main::DrawSaveLoadWindow()
 {
 	if (showSaveLoad)
@@ -867,14 +1089,7 @@ void Main::DrawWindows()
 		DrawDemoWindow();
 	#endif
 
-	DrawMainWindow();
-	DrawSystemWindow();
-	DrawControlsWindow();
-	DrawSelectionWindow();
-	DrawRenderWindow();
-	DrawConsoleWindow();
-	DrawMouseFunctionWindow();
-	DrawAdditionalsWindow();
+	DrawSidePanelWindow();
 
 	//Below windows that are hidden at startup
 
@@ -1038,6 +1253,7 @@ void Main::Render()
 	//Begin frame
 
 	//Clear background
+	UpdateWindowSize();
 	glClearColor(BackgroundColorFloat);
 	glClear(GL_COLOR_BUFFER_BIT);
 

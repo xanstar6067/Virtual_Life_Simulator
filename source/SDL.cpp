@@ -10,6 +10,8 @@
 
 SDL_Renderer* renderer = NULL;
 SDL_Window* window = NULL;
+int windowWidth = WindowWidth;
+int windowHeight = WindowHeight;
 
 ImGuiIO* io = NULL;
 
@@ -83,7 +85,7 @@ void DeInitSDL()
 
 bool CreateWindowSDL()
 {
-	SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI);
+	SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
 
 	window = SDL_CreateWindow(
 		WindowCaption,
@@ -101,10 +103,20 @@ bool CreateWindowSDL()
 	SetWindowsWindowIcon();
 #endif
 
-	//no resize
-	SDL_SetWindowMinimumSize(window, WindowWidth, WindowHeight);
+	UpdateWindowSize();
+	SDL_SetWindowMinimumSize(window, 800, 600);
 
 	return true;
+}
+
+void UpdateWindowSize()
+{
+	SDL_GetWindowSize(window, &windowWidth, &windowHeight);
+
+	if (renderer)
+	{
+		glViewport(0, 0, windowWidth, windowHeight);
+	}
 }
 
 
@@ -117,7 +129,7 @@ bool CreateRenderer()
 	SDL_GL_SetSwapInterval(0);
 
 	//Setup GL
-	glViewport(0, 0, WindowWidth, WindowHeight);
+	UpdateWindowSize();
 
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
