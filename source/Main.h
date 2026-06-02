@@ -78,6 +78,8 @@ private:
 	void DrawAdaptationWindow();
 	void DrawChartWindow();
 	void DrawBotBrainWindow();
+	void DrawInfoWindow();
+	void DrawExitConfirmWindow();
 
 	//Show more windows
 	bool showSaveLoad = false;
@@ -85,6 +87,8 @@ private:
 	bool showBrain = false;
 	bool showAdaptation = false;
 	bool showChart = false;	
+	bool showInfo = false;
+	bool showExitConfirm = false;
 
 	//Chart (TODO)
 	float chartData_bots[ChartNumValues];

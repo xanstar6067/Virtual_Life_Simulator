@@ -291,7 +291,7 @@ void Main::DrawMouseFunctionWindow()
 void Main::DrawAdditionalsWindow()
 {
 	ImGui::SetNextWindowBgAlpha(1.0f);
-	ImGui::SetNextWindowSize({ GUIWindowWidth * 1.0f, 100.0f });
+	ImGui::SetNextWindowSize({ GUIWindowWidth * 1.0f, 140.0f });
 	ImGui::SetNextWindowPos({ (2 * FieldX + FieldWidth) * 1.0f, 970.0f });
 
 	ImGui::Begin("Окна", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
@@ -319,6 +319,19 @@ void Main::DrawAdditionalsWindow()
 		if (ImGui::Button("График", { 75, 30 }))
 		{
 			showChart = !showChart;
+		}
+		ImGui::SameLine();
+
+		if (ImGui::Button("Инфо", { 75, 30 }))
+		{
+			showInfo = !showInfo;
+		}
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("Выход", { 75, 30 }))
+		{
+			showExitConfirm = true;
 		}
 
 	}
@@ -494,7 +507,7 @@ void Main::DrawDangerousWindow()
 	if (showDangerous)
 	{
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::SetNextWindowSize({ 290.0f, 100.0f });
+		ImGui::SetNextWindowSize({ 290.0f, 70.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 300.0f }, ImGuiCond_Once);
 
 		ImGui::Begin("Осторожно!", &showDangerous, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
@@ -525,13 +538,6 @@ void Main::DrawDangerousWindow()
 					}
 				}
 			}
-
-			if (ImGui::Button("Закрыть игру", { 130, 30 }))
-			{
-				terminate = true;
-			}
-
-			ImGui::SameLine();
 
 			if (ImGui::Button("Обнулить время", { 130, 30 }))
 			{
@@ -708,6 +714,100 @@ void Main::DrawChartWindow()
 	}
 }
 
+void Main::DrawInfoWindow()
+{
+	if (showInfo)
+	{
+		ImGui::SetNextWindowBgAlpha(1.0f);
+		ImGui::SetNextWindowSize({ 560.0f, 520.0f });
+		ImGui::SetNextWindowPos({ 140.0f, 120.0f }, ImGuiCond_Once);
+
+		ImGui::Begin("Инфо", &showInfo, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		{
+			ImGui::Text("Горячие клавиши");
+
+			if (ImGui::BeginTable("##Hotkeys", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(540, 465)))
+			{
+				ImGui::TableSetupColumn("Клавиша", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+				ImGui::TableSetupColumn("Действие", ImGuiTableColumnFlags_WidthStretch);
+				ImGui::TableHeadersRow();
+
+				struct hotkey_info
+				{
+					const char* key;
+					const char* action;
+				};
+
+				const hotkey_info hotkeys[] =
+				{
+					{ "Space или Pause", "Старт/стоп симуляции" },
+					{ "Num +", "Один шаг вперед, если симуляция на паузе" },
+					{ "F1", "Создать стартовую группу случайных ботов" },
+					{ "F2", "Поставить вертикальную стену из камней в X=0" },
+					{ "F3", "Насыпать органику в верхней части мира" },
+					{ "Num 1", "Обычный режим вида" },
+					{ "Num 2", "Режим \"Охота\"" },
+					{ "Num 3", "Режим \"Энергия\"" },
+					{ "Num 4", "Без отрисовки поля" },
+					{ "Left / Right", "Двигать камеру по X" },
+					{ "Shift + Left / Right", "Двигать камеру быстрее" },
+					{ "Home", "Сбросить сдвиг камеры к X=0" },
+					{ "PageUp / PageDown", "Прыжок камеры по X" },
+					{ "End", "Прыгнуть к первому найденному боту" },
+					{ "Z", "Окно файлов" },
+					{ "X", "Окно опасных действий" },
+					{ "C", "Окно среды" },
+					{ "V", "Окно графика" },
+					{ "B", "Окно мозга выбранного бота" },
+				};
+
+				for (int i = 0; i < sizeof(hotkeys) / sizeof(hotkeys[0]); ++i)
+				{
+					ImGui::TableNextRow();
+
+					ImGui::TableSetColumnIndex(0);
+					ImGui::TextUnformatted(hotkeys[i].key);
+
+					ImGui::TableSetColumnIndex(1);
+					ImGui::TextUnformatted(hotkeys[i].action);
+				}
+
+				ImGui::EndTable();
+			}
+		}
+		ImGui::End();
+	}
+}
+
+void Main::DrawExitConfirmWindow()
+{
+	if (showExitConfirm)
+	{
+		ImGui::OpenPopup("Подтверждение выхода");
+		showExitConfirm = false;
+	}
+
+	if (ImGui::BeginPopupModal("Подтверждение выхода", NULL, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		ImGui::Text("Выйти из приложения?");
+
+		if (ImGui::Button("Да", { 90, 30 }))
+		{
+			terminate = true;
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("Нет", { 90, 30 }))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
+	}
+}
+
 void Main::DrawBotBrainWindow()
 {	
 	if (showBrain)
@@ -803,6 +903,8 @@ void Main::DrawWindows()
 	DrawAdaptationWindow();
 	DrawChartWindow();
 	DrawBotBrainWindow();
+	DrawInfoWindow();
+	DrawExitConfirmWindow();
 }
 
 void Main::MouseClick()
