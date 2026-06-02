@@ -119,7 +119,17 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
-  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Label="UserMacros">
+    <DependenciesDir>$(ProjectDir)external\</DependenciesDir>
+    <SDL2Dir>$(DependenciesDir)SDL2\</SDL2Dir>
+    <SDL2ImageDir>$(DependenciesDir)SDL2_image\</SDL2ImageDir>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SDLPlatformDir Condition="'$(Platform)'=='Win32'">x86</SDLPlatformDir>
+    <SDLPlatformDir Condition="'$(Platform)'=='x64'">x64</SDLPlatformDir>
+    <SDL2LibDir>$(SDL2Dir)lib\$(SDLPlatformDir)\</SDL2LibDir>
+    <SDL2ImageLibDir>$(SDL2ImageDir)lib\$(SDLPlatformDir)\</SDL2ImageLibDir>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -128,12 +138,12 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Users\pro\Documents\Libruary\SDL2_devel_2261\include;C:\Users\pro\Documents\Libruary\SDL2_image_205\include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SDL2Dir)include;$(SDL2ImageDir)include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x86;C:\Users\pro\Documents\Libruary\SDL2_devel_2261\lib\x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SDL2ImageLibDir);$(SDL2LibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>SDL2_image.lib;SDL2.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -147,14 +157,14 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Users\pro\Documents\Libruary\SDL2_devel_2261\include;C:\Users\pro\Documents\Libruary\SDL2_image_205\include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SDL2Dir)include;$(SDL2ImageDir)include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x86;C:\Users\pro\Documents\Libruary\SDL2_devel_2261\lib\x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SDL2ImageLibDir);$(SDL2LibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>SDL2_image.lib;SDL2.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -166,12 +176,12 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Users\pro\Documents\Libruary\SDL2_devel_2261\include;C:\Users\pro\Documents\Libruary\SDL2_image_205\include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SDL2Dir)include;$(SDL2ImageDir)include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x64;C:\Users\pro\Documents\Libruary\SDL2_devel_2261\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SDL2ImageLibDir);$(SDL2LibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>SDL2_image.lib;SDL2.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -185,37 +195,37 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Users\pro\Documents\Libruary\SDL2_devel_2261\include;C:\Users\pro\Documents\Libruary\SDL2_image_205\include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SDL2Dir)include;$(SDL2ImageDir)include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x64;C:\Users\pro\Documents\Libruary\SDL2_devel_2261\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SDL2ImageLibDir);$(SDL2LibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>SDL2_image.lib;SDL2.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Platform)'=='x64'">
     <PostBuildEvent>
-      <Command>copy /Y "C:\Users\pro\Documents\Libruary\SDL2_devel_2261\lib\x64\SDL2.dll" "$(TargetDir)"
-copy /Y "C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x64\SDL2_image.dll" "$(TargetDir)"
-copy /Y "C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x64\libjpeg-9.dll" "$(TargetDir)"
-copy /Y "C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x64\libpng16-16.dll" "$(TargetDir)"
-copy /Y "C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x64\libtiff-5.dll" "$(TargetDir)"
-copy /Y "C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x64\libwebp-7.dll" "$(TargetDir)"
-copy /Y "C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x64\zlib1.dll" "$(TargetDir)"</Command>
+      <Command>if exist "$(SDL2LibDir)SDL2.dll" (copy /Y "$(SDL2LibDir)SDL2.dll" "$(TargetDir)") else if exist "$(ProjectDir)SDL2.dll" copy /Y "$(ProjectDir)SDL2.dll" "$(TargetDir)"
+if exist "$(SDL2ImageLibDir)SDL2_image.dll" (copy /Y "$(SDL2ImageLibDir)SDL2_image.dll" "$(TargetDir)") else if exist "$(ProjectDir)SDL2_image.dll" copy /Y "$(ProjectDir)SDL2_image.dll" "$(TargetDir)"
+if exist "$(SDL2ImageLibDir)libjpeg-9.dll" (copy /Y "$(SDL2ImageLibDir)libjpeg-9.dll" "$(TargetDir)") else if exist "$(ProjectDir)libjpeg-9.dll" copy /Y "$(ProjectDir)libjpeg-9.dll" "$(TargetDir)"
+if exist "$(SDL2ImageLibDir)libpng16-16.dll" (copy /Y "$(SDL2ImageLibDir)libpng16-16.dll" "$(TargetDir)") else if exist "$(ProjectDir)libpng16-16.dll" copy /Y "$(ProjectDir)libpng16-16.dll" "$(TargetDir)"
+if exist "$(SDL2ImageLibDir)libtiff-5.dll" (copy /Y "$(SDL2ImageLibDir)libtiff-5.dll" "$(TargetDir)") else if exist "$(ProjectDir)libtiff-5.dll" copy /Y "$(ProjectDir)libtiff-5.dll" "$(TargetDir)"
+if exist "$(SDL2ImageLibDir)libwebp-7.dll" (copy /Y "$(SDL2ImageLibDir)libwebp-7.dll" "$(TargetDir)") else if exist "$(ProjectDir)libwebp-7.dll" copy /Y "$(ProjectDir)libwebp-7.dll" "$(TargetDir)"
+if exist "$(SDL2ImageLibDir)zlib1.dll" (copy /Y "$(SDL2ImageLibDir)zlib1.dll" "$(TargetDir)") else if exist "$(ProjectDir)zlib1.dll" copy /Y "$(ProjectDir)zlib1.dll" "$(TargetDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Platform)'=='Win32'">
     <PostBuildEvent>
-      <Command>copy /Y "C:\Users\pro\Documents\Libruary\SDL2_devel_2261\lib\x86\SDL2.dll" "$(TargetDir)"
-copy /Y "C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x86\SDL2_image.dll" "$(TargetDir)"
-copy /Y "C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x86\libjpeg-9.dll" "$(TargetDir)"
-copy /Y "C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x86\libpng16-16.dll" "$(TargetDir)"
-copy /Y "C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x86\libtiff-5.dll" "$(TargetDir)"
-copy /Y "C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x86\libwebp-7.dll" "$(TargetDir)"
-copy /Y "C:\Users\pro\Documents\Libruary\SDL2_image_205\lib\x86\zlib1.dll" "$(TargetDir)"</Command>
+      <Command>if exist "$(SDL2LibDir)SDL2.dll" (copy /Y "$(SDL2LibDir)SDL2.dll" "$(TargetDir)") else if exist "$(ProjectDir)SDL2.dll" copy /Y "$(ProjectDir)SDL2.dll" "$(TargetDir)"
+if exist "$(SDL2ImageLibDir)SDL2_image.dll" (copy /Y "$(SDL2ImageLibDir)SDL2_image.dll" "$(TargetDir)") else if exist "$(ProjectDir)SDL2_image.dll" copy /Y "$(ProjectDir)SDL2_image.dll" "$(TargetDir)"
+if exist "$(SDL2ImageLibDir)libjpeg-9.dll" (copy /Y "$(SDL2ImageLibDir)libjpeg-9.dll" "$(TargetDir)") else if exist "$(ProjectDir)libjpeg-9.dll" copy /Y "$(ProjectDir)libjpeg-9.dll" "$(TargetDir)"
+if exist "$(SDL2ImageLibDir)libpng16-16.dll" (copy /Y "$(SDL2ImageLibDir)libpng16-16.dll" "$(TargetDir)") else if exist "$(ProjectDir)libpng16-16.dll" copy /Y "$(ProjectDir)libpng16-16.dll" "$(TargetDir)"
+if exist "$(SDL2ImageLibDir)libtiff-5.dll" (copy /Y "$(SDL2ImageLibDir)libtiff-5.dll" "$(TargetDir)") else if exist "$(ProjectDir)libtiff-5.dll" copy /Y "$(ProjectDir)libtiff-5.dll" "$(TargetDir)"
+if exist "$(SDL2ImageLibDir)libwebp-7.dll" (copy /Y "$(SDL2ImageLibDir)libwebp-7.dll" "$(TargetDir)") else if exist "$(ProjectDir)libwebp-7.dll" copy /Y "$(ProjectDir)libwebp-7.dll" "$(TargetDir)"
+if exist "$(SDL2ImageLibDir)zlib1.dll" (copy /Y "$(SDL2ImageLibDir)zlib1.dll" "$(TargetDir)") else if exist "$(ProjectDir)zlib1.dll" copy /Y "$(ProjectDir)zlib1.dll" "$(TargetDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
