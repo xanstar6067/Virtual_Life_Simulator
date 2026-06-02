@@ -131,7 +131,9 @@ private:
 		string nameFull;
 		string nameShort;
 		string fileSize;
-		string fullCaption;
+		string fileType;
+		string modifiedTimeText;
+		std::filesystem::file_time_type modifiedTime;
 
 		bool isSelected = false;
 

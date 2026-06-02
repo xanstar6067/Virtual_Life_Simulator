@@ -21,8 +21,50 @@
 
 #include "Main.h"
 
+#include <algorithm>
+#include <ctime>
+
 
 Main simulation;
+
+
+static string FormatFileSize(uintmax_t size)
+{
+	string unit;
+
+	if (size > 1000000)
+	{
+		size /= 1000000;
+		unit += "МБ";
+	}
+	else if (size > 1000)
+	{
+		size /= 1000;
+		unit += "КБ";
+	}
+	else
+	{
+		unit += "б";
+	}
+
+	return std::to_string(size) + unit;
+}
+
+
+static string FormatFileTime(std::filesystem::file_time_type fileTime)
+{
+	auto systemTime = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+		fileTime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
+
+	std::time_t time = std::chrono::system_clock::to_time_t(systemTime);
+	std::tm localTime;
+	localtime_s(&localTime, &time);
+
+	char buffer[32];
+	std::strftime(buffer, sizeof(buffer), "%d.%m.%Y %H:%M", &localTime);
+
+	return buffer;
+}
 
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR    lpCmdLine, _In_ int       nCmdShow)
@@ -313,28 +355,11 @@ void Main::LoadFilenames()
 		//Only file name
 		f.nameShort = entry.path().filename().string();
 
-		//File size
-		uint size = entry.file_size();
-		string unit;		
-
-		//Units
-		if (size > 1000000)
-		{
-			size /= 1000000;
-			unit += "МБ";
-		}
-		else if (size > 1000)
-		{
-			size /= 1000;
-			unit += "КБ";
-		}
-		else
-		{
-			unit += "б";
-		}			
-
-		f.fileSize += std::to_string(size);
-		f.fileSize += unit;
+		//File size and modified time
+		uintmax_t size = entry.file_size();
+		f.fileSize = FormatFileSize(size);
+		f.modifiedTime = entry.last_write_time();
+		f.modifiedTimeText = FormatFileTime(f.modifiedTime);
 
 		//Is world (open file briefly and look for file type)
 		MyInputStream file((char*)f.nameFull.c_str(), std::ios::in | std::ios::binary | std::ios::beg);
@@ -342,25 +367,39 @@ void Main::LoadFilenames()
 		if (!file.is_open())
 			continue;
 
+		int magicNumber = 0;
+
 		if (size > 0)
-			f.isWorld = (file.ReadInt() == MagicNumber_WorldFile);
+			magicNumber = file.ReadInt();
+
+		if (magicNumber == MagicNumber_WorldFile)
+			f.isWorld = true;
 		else
 			f.isWorld = false;
 
-		file.close();		
+		if (f.isWorld)
+			f.fileType = "мир";
+		else if (magicNumber == MagicNumber_ObjectFile)
+			f.fileType = "бот";
+		else
+			f.fileType = "файл";
 
-		//Full file description
-		f.fullCaption = f.nameShort;
-		f.fullCaption.resize(25, ' ');
-		f.fullCaption += f.fileSize;
-		f.fullCaption.resize(40, ' ');
-		f.fullCaption += (f.isWorld) ? ("[мир]") : ("");
+		file.close();
 
 		allFilenames.push_back(f);
+	}
 
-		if (allFilenames.back().nameFull == selectedName)
+	std::sort(allFilenames.begin(), allFilenames.end(), [](const listed_file& left, const listed_file& right)
+	{
+		return left.modifiedTime > right.modifiedTime;
+	});
+
+	for (int i = 0; i < allFilenames.size(); ++i)
+	{
+		if (allFilenames[i].nameFull == selectedName)
 		{
-			selectedIndex = (int)allFilenames.size() - 1;
+			selectedIndex = i;
+			break;
 		}
 	}
 

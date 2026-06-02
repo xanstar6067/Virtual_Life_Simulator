@@ -339,17 +339,36 @@ void Main::DrawSaveLoadWindow()
 			//List of files
 			ImGui::Text("Выберите файл");
 
-			ImGui::ListBoxHeader("##", ImVec2(500, 90));
-
-			for (int i = 0; i < allFilenames.size(); ++i)
+			if (ImGui::BeginTable("##SaveFiles", 4, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(500, 110)))
 			{
-				if (ImGui::Selectable(allFilenames[i].fullCaption.c_str(), &allFilenames[i].isSelected))
-				{
-					SelectFile(i);
-				}
-			}
+				ImGui::TableSetupColumn("Имя", ImGuiTableColumnFlags_WidthStretch);
+				ImGui::TableSetupColumn("Размер", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+				ImGui::TableSetupColumn("Тип", ImGuiTableColumnFlags_WidthFixed, 55.0f);
+				ImGui::TableSetupColumn("Дата", ImGuiTableColumnFlags_WidthFixed, 125.0f);
+				ImGui::TableHeadersRow();
 
-			ImGui::ListBoxFooter();
+				for (int i = 0; i < allFilenames.size(); ++i)
+				{
+					ImGui::TableNextRow();
+
+					ImGui::TableSetColumnIndex(0);
+					if (ImGui::Selectable(allFilenames[i].nameShort.c_str(), allFilenames[i].isSelected, ImGuiSelectableFlags_SpanAllColumns))
+					{
+						SelectFile(i);
+					}
+
+					ImGui::TableSetColumnIndex(1);
+					ImGui::TextUnformatted(allFilenames[i].fileSize.c_str());
+
+					ImGui::TableSetColumnIndex(2);
+					ImGui::TextUnformatted(allFilenames[i].fileType.c_str());
+
+					ImGui::TableSetColumnIndex(3);
+					ImGui::TextUnformatted(allFilenames[i].modifiedTimeText.c_str());
+				}
+
+				ImGui::EndTable();
+			}
 
 			ImGui::Text("Новое имя");
 			ImGui::SameLine();
