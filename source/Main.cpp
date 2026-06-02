@@ -86,7 +86,7 @@ static string TrimFileName(string fileName)
 
 static std::filesystem::path PathFromUtf8(string fileName)
 {
-	int wideSize = MultiByteToWideChar(CP_UTF8, 0, fileName.c_str(), -1, NULL, 0);
+	int wideSize = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, fileName.c_str(), -1, NULL, 0);
 
 	if (wideSize <= 0)
 	{
@@ -94,9 +94,31 @@ static std::filesystem::path PathFromUtf8(string fileName)
 	}
 
 	std::wstring wideName(wideSize - 1, L'\0');
-	MultiByteToWideChar(CP_UTF8, 0, fileName.c_str(), -1, wideName.data(), wideSize);
+	MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, fileName.c_str(), -1, wideName.data(), wideSize);
 
 	return std::filesystem::path(wideName);
+}
+
+static string PathToUtf8(const std::filesystem::path& path)
+{
+	std::wstring wideName = path.wstring();
+
+	if (wideName.empty())
+	{
+		return "";
+	}
+
+	int utf8Size = WideCharToMultiByte(CP_UTF8, 0, wideName.c_str(), (int)wideName.size(), NULL, 0, NULL, NULL);
+
+	if (utf8Size <= 0)
+	{
+		return path.filename().string();
+	}
+
+	string utf8Name(utf8Size, '\0');
+	WideCharToMultiByte(CP_UTF8, 0, wideName.c_str(), (int)wideName.size(), utf8Name.data(), utf8Size, NULL, NULL);
+
+	return utf8Name;
 }
 
 
@@ -397,10 +419,10 @@ void Main::LoadFilenames()
 
 		//Full paths to files
 		f.pathFull = entry.path();
-		f.nameFull = entry.path().string();
+		f.nameFull = PathToUtf8(entry.path());
 
 		//Only file name
-		f.nameShort = entry.path().filename().string();
+		f.nameShort = PathToUtf8(entry.path().filename());
 
 		//File size and modified time
 		uintmax_t size = entry.file_size();
@@ -441,11 +463,11 @@ void Main::LoadFilenames()
 		return left.modifiedTime > right.modifiedTime;
 	});
 
-	for (int i = 0; i < allFilenames.size(); ++i)
+	for (size_t i = 0; i < allFilenames.size(); ++i)
 	{
 		if (allFilenames[i].pathFull == selectedPath)
 		{
-			selectedIndex = i;
+			selectedIndex = (int)i;
 			break;
 		}
 	}
@@ -458,14 +480,14 @@ void Main::LoadFilenames()
 
 void Main::SelectFile(int index)
 {
-	if (index < 0 || index >= allFilenames.size())
+	if (index < 0 || index >= (int)allFilenames.size())
 	{
 		selectedFile = NULL;
 		renameFileName[0] = '\0';
 		return;
 	}
 
-	for (int i = 0; i < allFilenames.size(); ++i)
+	for (size_t i = 0; i < allFilenames.size(); ++i)
 	{
 		allFilenames[i].isSelected = false;
 	}
@@ -529,11 +551,11 @@ void Main::RenameSelectedFile()
 
 		LoadFilenames();
 
-		for (int i = 0; i < allFilenames.size(); ++i)
+		for (size_t i = 0; i < allFilenames.size(); ++i)
 		{
-			if (allFilenames[i].nameFull == newPath.string())
+			if (allFilenames[i].pathFull == newPath)
 			{
-				SelectFile(i);
+				SelectFile((int)i);
 				break;
 			}
 		}
@@ -570,12 +592,12 @@ std::filesystem::path Main::BuildSavePath(const char* defaultPrefix)
 	}
 
 	std::filesystem::path parentPath = savePath.parent_path();
-	string baseName = savePath.stem().string();
-	string extension = savePath.extension().string();
+	std::wstring baseName = savePath.stem().wstring();
+	std::wstring extension = savePath.extension().wstring();
 
 	for (int i = 2;; ++i)
 	{
-		std::filesystem::path candidate = parentPath / (baseName + "_" + std::to_string(i) + extension);
+		std::filesystem::path candidate = parentPath / (baseName + L"_" + std::to_wstring(i) + extension);
 
 		if (!std::filesystem::exists(candidate))
 		{
@@ -587,11 +609,11 @@ std::filesystem::path Main::BuildSavePath(const char* defaultPrefix)
 
 void Main::SelectFileByPath(const std::filesystem::path& filePath)
 {
-	for (int i = 0; i < allFilenames.size(); ++i)
+	for (size_t i = 0; i < allFilenames.size(); ++i)
 	{
 		if (allFilenames[i].pathFull == filePath)
 		{
-			SelectFile(i);
+			SelectFile((int)i);
 			break;
 		}
 	}
