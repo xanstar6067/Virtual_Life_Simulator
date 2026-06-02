@@ -291,13 +291,15 @@ void Main::DrawMouseFunctionWindow()
 void Main::DrawAdditionalsWindow()
 {
 	ImGui::SetNextWindowBgAlpha(1.0f);
-	ImGui::SetNextWindowSize({ GUIWindowWidth * 1.0f, 140.0f });
-	ImGui::SetNextWindowPos({ (2 * FieldX + FieldWidth) * 1.0f, 970.0f });
+	ImGui::SetNextWindowSize({ 320.0f, 115.0f });
+	ImGui::SetNextWindowPos({ (2 * FieldX + FieldWidth) * 1.0f, 945.0f });
 
 	ImGui::Begin("Окна", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 	{
 
-		if (ImGui::Button("Файлы", { 75, 30 }))
+		const ImVec2 windowButtonSize = { 92, 28 };
+
+		if (ImGui::Button("Файлы", windowButtonSize))
 		{
 			LoadFilenames();
 
@@ -305,31 +307,31 @@ void Main::DrawAdditionalsWindow()
 		}
 		ImGui::SameLine();
 
-		if (ImGui::Button("Опасное", { 75, 30 }))
+		if (ImGui::Button("Инструменты", windowButtonSize))
 		{
 			showDangerous = !showDangerous;
 		}
 		ImGui::SameLine();
 
-		if (ImGui::Button("Среда", { 75, 30 }))
+		if (ImGui::Button("Среда", windowButtonSize))
 		{
 			showAdaptation = !showAdaptation;
 		}
 
-		if (ImGui::Button("График", { 75, 30 }))
+		if (ImGui::Button("График", windowButtonSize))
 		{
 			showChart = !showChart;
 		}
 		ImGui::SameLine();
 
-		if (ImGui::Button("Инфо", { 75, 30 }))
+		if (ImGui::Button("Инфо", windowButtonSize))
 		{
 			showInfo = !showInfo;
 		}
 
 		ImGui::SameLine();
 
-		if (ImGui::Button("Выход", { 75, 30 }))
+		if (ImGui::Button("Выход", windowButtonSize))
 		{
 			showExitConfirm = true;
 		}
@@ -507,10 +509,10 @@ void Main::DrawDangerousWindow()
 	if (showDangerous)
 	{
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::SetNextWindowSize({ 290.0f, 70.0f });
+		ImGui::SetNextWindowSize({ 290.0f, 95.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 300.0f }, ImGuiCond_Once);
 
-		ImGui::Begin("Осторожно!", &showDangerous, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Инструменты", &showDangerous, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 
 			if (ImGui::Button("Очистить мир", { 130, 30 }))
