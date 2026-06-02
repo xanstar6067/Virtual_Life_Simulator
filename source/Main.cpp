@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <ctime>
+#include <shellapi.h>
 
 
 Main simulation;
@@ -64,6 +65,51 @@ static string FormatFileTime(std::filesystem::file_time_type fileTime)
 	std::strftime(buffer, sizeof(buffer), "%d.%m.%Y %H:%M", &localTime);
 
 	return buffer;
+}
+
+
+static string TrimFileName(string fileName)
+{
+	while (!fileName.empty() && (fileName.front() == ' ' || fileName.front() == '\t'))
+	{
+		fileName.erase(fileName.begin());
+	}
+
+	while (!fileName.empty() && (fileName.back() == ' ' || fileName.back() == '\t'))
+	{
+		fileName.pop_back();
+	}
+
+	return fileName;
+}
+
+
+static std::filesystem::path PathFromUtf8(string fileName)
+{
+	int wideSize = MultiByteToWideChar(CP_UTF8, 0, fileName.c_str(), -1, NULL, 0);
+
+	if (wideSize <= 0)
+	{
+		return std::filesystem::path(fileName);
+	}
+
+	std::wstring wideName(wideSize - 1, L'\0');
+	MultiByteToWideChar(CP_UTF8, 0, fileName.c_str(), -1, wideName.data(), wideSize);
+
+	return std::filesystem::path(wideName);
+}
+
+
+static string MakeTimestampFileName(const char* prefix)
+{
+	std::time_t time = std::time(NULL);
+	std::tm localTime;
+	localtime_s(&localTime, &time);
+
+	char buffer[64];
+	std::strftime(buffer, sizeof(buffer), "%Y%m%d_%H%M%S", &localTime);
+
+	return string(prefix) + "_" + buffer;
 }
 
 
@@ -322,11 +368,11 @@ void Main::LogPrint(int num, bool newLine)
 
 void Main::LoadFilenames()
 {
-	std::string selectedName;
+	std::filesystem::path selectedPath;
 
 	if (selectedFile)
 	{
-		selectedName = selectedFile->nameFull;
+		selectedPath = selectedFile->pathFull;
 	}
 
 	//Check if folder exists
@@ -350,6 +396,7 @@ void Main::LoadFilenames()
 		listed_file f;
 
 		//Full paths to files
+		f.pathFull = entry.path();
 		f.nameFull = entry.path().string();
 
 		//Only file name
@@ -362,7 +409,7 @@ void Main::LoadFilenames()
 		f.modifiedTimeText = FormatFileTime(f.modifiedTime);
 
 		//Is world (open file briefly and look for file type)
-		MyInputStream file((char*)f.nameFull.c_str(), std::ios::in | std::ios::binary | std::ios::beg);
+		MyInputStream file(f.pathFull, std::ios::in | std::ios::binary | std::ios::beg);
 
 		if (!file.is_open())
 			continue;
@@ -396,7 +443,7 @@ void Main::LoadFilenames()
 
 	for (int i = 0; i < allFilenames.size(); ++i)
 	{
-		if (allFilenames[i].nameFull == selectedName)
+		if (allFilenames[i].pathFull == selectedPath)
 		{
 			selectedIndex = i;
 			break;
@@ -453,15 +500,15 @@ void Main::RenameSelectedFile()
 		return;
 	}
 
-	std::filesystem::path newNamePath(newName);
+	std::filesystem::path newNamePath = PathFromUtf8(newName);
 
-	if (newNamePath.filename().string() != newName)
+	if (newNamePath.filename() != newNamePath)
 	{
 		LogPrint("Имя файла не должно содержать путь\r\n");
 		return;
 	}
 
-	std::filesystem::path oldPath(selectedFile->nameFull);
+	std::filesystem::path oldPath = selectedFile->pathFull;
 	std::filesystem::path newPath = oldPath.parent_path() / newNamePath.filename();
 
 	if (oldPath == newPath)
@@ -498,6 +545,99 @@ void Main::RenameSelectedFile()
 }
 
 
+std::filesystem::path Main::BuildSavePath(const char* defaultPrefix)
+{
+	string fileName = TrimFileName(renameFileName);
+
+	if (fileName.empty())
+	{
+		fileName = MakeTimestampFileName(defaultPrefix);
+	}
+
+	std::filesystem::path fileNamePath = PathFromUtf8(fileName);
+
+	if (fileNamePath.filename() != fileNamePath)
+	{
+		fileName = MakeTimestampFileName(defaultPrefix);
+		fileNamePath = PathFromUtf8(fileName);
+	}
+
+	std::filesystem::path savePath = std::filesystem::path(DirectoryName) / fileNamePath.filename();
+
+	if (!std::filesystem::exists(savePath))
+	{
+		return savePath;
+	}
+
+	std::filesystem::path parentPath = savePath.parent_path();
+	string baseName = savePath.stem().string();
+	string extension = savePath.extension().string();
+
+	for (int i = 2;; ++i)
+	{
+		std::filesystem::path candidate = parentPath / (baseName + "_" + std::to_string(i) + extension);
+
+		if (!std::filesystem::exists(candidate))
+		{
+			return candidate;
+		}
+	}
+}
+
+
+void Main::SelectFileByPath(const std::filesystem::path& filePath)
+{
+	for (int i = 0; i < allFilenames.size(); ++i)
+	{
+		if (allFilenames[i].pathFull == filePath)
+		{
+			SelectFile(i);
+			break;
+		}
+	}
+}
+
+
+void Main::SaveSelectedObjectToNamedFile()
+{
+	if (!selectedObject)
+	{
+		LogPrint("Бот не выбран\r\n");
+		return;
+	}
+
+	std::filesystem::path savePath = BuildSavePath("Bot");
+
+	if (saver.SaveObject(selectedObject, savePath))
+	{
+		LogPrint("Объект сохранен\r\n");
+		LoadFilenames();
+		SelectFileByPath(savePath);
+	}
+	else
+	{
+		LogPrint("Ошибка сохранения объекта\r\n");
+	}
+}
+
+
+void Main::SaveWorldToNamedFile()
+{
+	std::filesystem::path savePath = BuildSavePath("World");
+
+	if (saver.SaveWorld(field, savePath, id, ticknum))
+	{
+		LogPrint("Мир сохранен\r\n");
+		LoadFilenames();
+		SelectFileByPath(savePath);
+	}
+	else
+	{
+		LogPrint("Ошибка сохранения мира\r\n");
+	}
+}
+
+
 void Main::DeleteSelectedFile()
 {
 	if (!selectedFile)
@@ -506,48 +646,25 @@ void Main::DeleteSelectedFile()
 		return;
 	}
 
-	std::filesystem::path filePath(selectedFile->nameFull);
+	std::filesystem::path filePath = selectedFile->pathFull;
 
-	try
+	std::wstring widePath = filePath.wstring();
+	widePath.push_back(L'\0');
+
+	SHFILEOPSTRUCTW fileOperation = {};
+	fileOperation.wFunc = FO_DELETE;
+	fileOperation.pFrom = widePath.c_str();
+	fileOperation.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI;
+
+	if (SHFileOperationW(&fileOperation) == 0 && !fileOperation.fAnyOperationsAborted)
 	{
-		if (std::filesystem::remove(filePath))
-		{
-			LogPrint("Файл удален\r\n");
-			LoadFilenames();
-		}
-		else
-		{
-			LogPrint("Ошибка удаления файла\r\n");
-		}
+		LogPrint("Файл перемещен в корзину\r\n");
+		LoadFilenames();
 	}
-	catch (const std::filesystem::filesystem_error&)
+	else
 	{
 		LogPrint("Ошибка удаления файла\r\n");
 	}
-}
-
-
-void Main::CreateNewFile()
-{
-	std::string fileName = "New1";
-	int fileCounter = 1;
-
-	for (;;)
-	{
-		if (std::filesystem::exists(DirectoryName + fileName))
-		{
-			fileName = "New" + std::to_string(++fileCounter);
-		}
-		else
-		{
-			break;
-		}
-	}
-
-	std::ofstream file(DirectoryName + fileName);
-	file.close();
-
-	LoadFilenames();
 }
 
 

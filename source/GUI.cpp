@@ -411,7 +411,7 @@ void Main::DrawSaveLoadWindow()
 				ImGui::EndTable();
 			}
 
-			ImGui::Text("Новое имя");
+			ImGui::Text("Имя файла");
 			ImGui::SameLine();
 			ImGui::PushItemWidth(295);
 			ImGui::InputText("##RenameFileName", renameFileName, sizeof(renameFileName));
@@ -426,7 +426,7 @@ void Main::DrawSaveLoadWindow()
 
 			//Buttons
 
-			const ImVec2 fileButtonSize = { 96, 26 };
+			const ImVec2 fileButtonSize = { 120, 26 };
 
 			if (ImGui::Button("Загрузить", fileButtonSize))
 			{
@@ -434,7 +434,7 @@ void Main::DrawSaveLoadWindow()
 				{
 					if (selectedFile->isWorld)
 					{
-						ObjectSaver::WorldParams ret = saver.LoadWorld(field, (char*)selectedFile->nameFull.c_str());
+						ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull);
 
 						if (ret.id != -1)
 						{
@@ -459,7 +459,7 @@ void Main::DrawSaveLoadWindow()
 							delete selectedObject;
 						}
 
-						selectedObject = saver.LoadObject((char*)selectedFile->nameFull.c_str());
+						selectedObject = saver.LoadObject(selectedFile->pathFull);
 
 						if (selectedObject)
 							LogPrint("Объект загружен\r\n");
@@ -473,50 +473,14 @@ void Main::DrawSaveLoadWindow()
 
 			if (ImGui::Button("Сохр. бота", fileButtonSize))
 			{
-				if (selectedObject)
-				{
-					if (selectedFile)
-					{
-						if (saver.SaveObject(selectedObject, (char*)selectedFile->nameFull.c_str()))
-						{
-							LogPrint("Объект сохранен\r\n");
-
-							LoadFilenames();
-						}
-						else
-						{
-							LogPrint("Ошибка сохранения объекта\r\n");
-						}
-					}
-				}
+				SaveSelectedObjectToNamedFile();
 			}
 
 			ImGui::SameLine();
 
 			if (ImGui::Button("Сохр. мир", fileButtonSize))
 			{
-				if (selectedFile)
-				{
-					if (saver.SaveWorld(field, (char*)selectedFile->nameFull.c_str(), id, ticknum))
-					{
-						LogPrint("Мир сохранен\r\n");
-
-						LoadFilenames();
-					}
-					else
-					{
-						LogPrint("Ошибка сохранения мира\r\n");
-					}
-				}
-			}
-
-			ImGui::SameLine();
-
-			if (ImGui::Button("Новый файл", fileButtonSize))
-			{
-				CreateNewFile();
-
-				LoadFilenames();
+				SaveWorldToNamedFile();
 			}
 
 			ImGui::SameLine();
@@ -1006,7 +970,7 @@ void Main::MouseClick()
 				{
 					if (selectedFile)
 					{
-						obj = saver.LoadObject((char*)selectedFile->nameFull.c_str());
+						obj = saver.LoadObject(selectedFile->pathFull);
 
 						if (obj)
 						{

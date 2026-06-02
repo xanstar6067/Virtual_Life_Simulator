@@ -132,6 +132,7 @@ private:
 
 	struct listed_file
 	{
+		std::filesystem::path pathFull;
 		string nameFull;
 		string nameShort;
 		string fileSize;
@@ -149,10 +150,13 @@ private:
 	char renameFileName[128] = "";
 
 	void LoadFilenames();
-	void CreateNewFile();
 	void SelectFile(int index);
 	void RenameSelectedFile();
 	void DeleteSelectedFile();
+	void SaveSelectedObjectToNamedFile();
+	void SaveWorldToNamedFile();
+	std::filesystem::path BuildSavePath(const char* defaultPrefix);
+	void SelectFileByPath(const std::filesystem::path& filePath);
 
 	void DrawWindows();
 

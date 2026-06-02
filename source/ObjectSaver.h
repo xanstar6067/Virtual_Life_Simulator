@@ -12,6 +12,7 @@ public:
     void WriteBool(bool);
 
     MyOutStream(char* filename, int flags);
+    MyOutStream(const std::filesystem::path& filename, int flags);
 };
 
 class MyInputStream final : public std::ifstream
@@ -22,6 +23,7 @@ public:
     bool ReadBool();
 
     MyInputStream(char* filename, int flags);
+    MyInputStream(const std::filesystem::path& filename, int flags);
 };
 
 
@@ -38,14 +40,19 @@ private:
 public:
     
     bool SaveObject(Object* obj, char* filename);
+    bool SaveObject(Object* obj, const std::filesystem::path& filename);
     Object* LoadObject(char* filename);
+    Object* LoadObject(const std::filesystem::path& filename);
 
     bool SaveWorld(Field* world, char* filename, int id, int ticknum);
+    bool SaveWorld(Field* world, const std::filesystem::path& filename, int id, int ticknum);
 
     struct WorldParams
     {
         int id, seed, tick, width;
-    }   
-    LoadWorld(Field* world, char* filename);
+    };
+
+    WorldParams LoadWorld(Field* world, char* filename);
+    WorldParams LoadWorld(Field* world, const std::filesystem::path& filename);
 
 };
