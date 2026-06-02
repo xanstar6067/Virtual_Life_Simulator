@@ -331,7 +331,7 @@ void Main::DrawSaveLoadWindow()
 	{
 		//Save/load window
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::SetNextWindowSize({ 520.0f, 285.0f });
+		ImGui::SetNextWindowSize({ 520.0f, 260.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 100.0f }, ImGuiCond_Once);
 
 		ImGui::Begin("Сохранение и загрузка", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
@@ -366,7 +366,9 @@ void Main::DrawSaveLoadWindow()
 
 			//Buttons
 
-			if (ImGui::Button("Загрузить", { 80, 30 }))
+			const ImVec2 fileButtonSize = { 96, 26 };
+
+			if (ImGui::Button("Загрузить", fileButtonSize))
 			{
 				if (selectedFile)
 				{
@@ -409,7 +411,7 @@ void Main::DrawSaveLoadWindow()
 
 			ImGui::SameLine();
 
-			if (ImGui::Button("Сохр. бота", { 90, 30 }))
+			if (ImGui::Button("Сохр. бота", fileButtonSize))
 			{
 				if (selectedObject)
 				{
@@ -431,7 +433,7 @@ void Main::DrawSaveLoadWindow()
 
 			ImGui::SameLine();
 
-			if (ImGui::Button("Сохр. мир", { 90, 30 }))
+			if (ImGui::Button("Сохр. мир", fileButtonSize))
 			{
 				if (selectedFile)
 				{
@@ -448,9 +450,9 @@ void Main::DrawSaveLoadWindow()
 				}
 			}
 
-			ImGui::NewLine();
+			ImGui::SameLine();
 
-			if (ImGui::Button("Новый файл", { 100, 30 }))
+			if (ImGui::Button("Новый файл", fileButtonSize))
 			{
 				CreateNewFile();
 
@@ -459,7 +461,7 @@ void Main::DrawSaveLoadWindow()
 
 			ImGui::SameLine();
 
-			if (ImGui::Button("Удалить", { 100, 30 }))
+			if (ImGui::Button("Удалить", fileButtonSize))
 			{
 				DeleteSelectedFile();
 			}
