@@ -65,7 +65,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 			}
 			else if (e.type == SDL_TEXTINPUT)
 			{
-				io->AddInputCharacter(*e.text.text);
+				io->AddInputCharactersUTF8(e.text.text);
 			}
 		}
 
@@ -280,6 +280,13 @@ void Main::LogPrint(int num, bool newLine)
 
 void Main::LoadFilenames()
 {
+	std::string selectedName;
+
+	if (selectedFile)
+	{
+		selectedName = selectedFile->nameFull;
+	}
+
 	//Check if folder exists
 	if (!std::filesystem::exists(DirectoryName))
 	{
@@ -289,6 +296,8 @@ void Main::LoadFilenames()
 
 	//Load list of filenames
 	allFilenames.clear();
+	selectedFile = NULL;
+	int selectedIndex = -1;
 
 	for (const auto& entry : std::filesystem::directory_iterator(DirectoryName))
 	{
@@ -348,10 +357,135 @@ void Main::LoadFilenames()
 		f.fullCaption += (f.isWorld) ? ("[мир]") : ("");
 
 		allFilenames.push_back(f);
+
+		if (allFilenames.back().nameFull == selectedName)
+		{
+			selectedIndex = (int)allFilenames.size() - 1;
+		}
+	}
+
+	SelectFile(selectedIndex);
+}
+
+
+
+
+void Main::SelectFile(int index)
+{
+	if (index < 0 || index >= allFilenames.size())
+	{
+		selectedFile = NULL;
+		renameFileName[0] = '\0';
+		return;
+	}
+
+	for (int i = 0; i < allFilenames.size(); ++i)
+	{
+		allFilenames[i].isSelected = false;
+	}
+
+	allFilenames[index].isSelected = true;
+	selectedFile = &allFilenames[index];
+
+	size_t len = selectedFile->nameShort.size();
+	if (len >= sizeof(renameFileName))
+	{
+		len = sizeof(renameFileName) - 1;
+	}
+
+	memcpy(renameFileName, selectedFile->nameShort.c_str(), len);
+	renameFileName[len] = '\0';
+}
+
+
+void Main::RenameSelectedFile()
+{
+	if (!selectedFile)
+	{
+		LogPrint("Файл не выбран\r\n");
+		return;
+	}
+
+	std::string newName = renameFileName;
+
+	if (newName.empty())
+	{
+		LogPrint("Имя файла пустое\r\n");
+		return;
+	}
+
+	std::filesystem::path newNamePath(newName);
+
+	if (newNamePath.filename().string() != newName)
+	{
+		LogPrint("Имя файла не должно содержать путь\r\n");
+		return;
+	}
+
+	std::filesystem::path oldPath(selectedFile->nameFull);
+	std::filesystem::path newPath = oldPath.parent_path() / newNamePath.filename();
+
+	if (oldPath == newPath)
+	{
+		return;
+	}
+
+	if (std::filesystem::exists(newPath))
+	{
+		LogPrint("Файл с таким именем уже существует\r\n");
+		return;
+	}
+
+	try
+	{
+		std::filesystem::rename(oldPath, newPath);
+		LogPrint("Файл переименован\r\n");
+
+		LoadFilenames();
+
+		for (int i = 0; i < allFilenames.size(); ++i)
+		{
+			if (allFilenames[i].nameFull == newPath.string())
+			{
+				SelectFile(i);
+				break;
+			}
+		}
+	}
+	catch (const std::filesystem::filesystem_error&)
+	{
+		LogPrint("Ошибка переименования файла\r\n");
 	}
 }
 
 
+void Main::DeleteSelectedFile()
+{
+	if (!selectedFile)
+	{
+		LogPrint("Файл не выбран\r\n");
+		return;
+	}
+
+	std::filesystem::path filePath(selectedFile->nameFull);
+
+	try
+	{
+		if (std::filesystem::remove(filePath))
+		{
+			LogPrint("Файл удален\r\n");
+			LoadFilenames();
+		}
+		else
+		{
+			LogPrint("Ошибка удаления файла\r\n");
+		}
+	}
+	catch (const std::filesystem::filesystem_error&)
+	{
+		LogPrint("Ошибка удаления файла\r\n");
+	}
+}
 
 
 void Main::CreateNewFile()

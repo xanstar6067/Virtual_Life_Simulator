@@ -331,7 +331,7 @@ void Main::DrawSaveLoadWindow()
 	{
 		//Save/load window
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::SetNextWindowSize({ 400.0f, 200.0f });
+		ImGui::SetNextWindowSize({ 520.0f, 285.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 100.0f }, ImGuiCond_Once);
 
 		ImGui::Begin("Сохранение и загрузка", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
@@ -339,21 +339,30 @@ void Main::DrawSaveLoadWindow()
 			//List of files
 			ImGui::Text("Выберите файл");
 
-			ImGui::ListBoxHeader("##", ImVec2(380, 110));
+			ImGui::ListBoxHeader("##", ImVec2(500, 90));
 
 			for (int i = 0; i < allFilenames.size(); ++i)
 			{
 				if (ImGui::Selectable(allFilenames[i].fullCaption.c_str(), &allFilenames[i].isSelected))
 				{
-					for (int b = 0; b < allFilenames.size(); ++b)
-						allFilenames[b].isSelected = false;
-
-					allFilenames[i].isSelected = true;
-					selectedFile = &allFilenames[i];
+					SelectFile(i);
 				}
 			}
 
 			ImGui::ListBoxFooter();
+
+			ImGui::Text("Новое имя");
+			ImGui::SameLine();
+			ImGui::PushItemWidth(295);
+			ImGui::InputText("##RenameFileName", renameFileName, sizeof(renameFileName));
+			ImGui::PopItemWidth();
+
+			ImGui::SameLine();
+
+			if (ImGui::Button("Переименовать", { 120, 25 }))
+			{
+				RenameSelectedFile();
+			}
 
 			//Buttons
 
@@ -439,13 +448,20 @@ void Main::DrawSaveLoadWindow()
 				}
 			}
 
-			ImGui::SameLine();
+			ImGui::NewLine();
 
 			if (ImGui::Button("Новый файл", { 100, 30 }))
 			{
 				CreateNewFile();
 
 				LoadFilenames();
+			}
+
+			ImGui::SameLine();
+
+			if (ImGui::Button("Удалить", { 100, 30 }))
+			{
+				DeleteSelectedFile();
 			}
 		}
 		ImGui::End();

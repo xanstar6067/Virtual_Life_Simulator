@@ -140,9 +140,13 @@ private:
 
 	std::vector<listed_file> allFilenames;
 	listed_file* selectedFile = NULL;
+	char renameFileName[128] = "";
 
 	void LoadFilenames();
 	void CreateNewFile();
+	void SelectFile(int index);
+	void RenameSelectedFile();
+	void DeleteSelectedFile();
 
 	void DrawWindows();
 
