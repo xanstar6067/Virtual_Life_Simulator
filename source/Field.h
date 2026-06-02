@@ -170,6 +170,13 @@ public:
     //Draw simulation field with all its objects
     void draw(RenderTypes render = natural);
 
+    void ClampViewOffset();
+    SDL_Rect GetViewportRect();
+    int GetMaxViewX();
+    int GetMaxViewY();
+    bool NeedHorizontalScrollbar();
+    bool NeedVerticalScrollbar();
+
     //Is cell out if bounds?
     bool IsInBounds(int X, int Y);
     bool IsInBounds(Point p);
@@ -218,6 +225,8 @@ public:
 
     static int seed;
     static int renderX;
+    static int viewX;
+    static int viewY;
 
     FieldDynamicParams params;
 };

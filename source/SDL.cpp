@@ -1,6 +1,8 @@
 
 #include "SDL.h"
 
+#include <algorithm>
+
 #ifdef _WIN32
 #include <SDL_syswm.h>
 #include <Windows.h>
@@ -54,6 +56,27 @@ static void SetWindowsWindowIcon()
 #endif
 
 
+static void GetInitialWindowSize(int& width, int& height, bool& maximize)
+{
+	SDL_Rect usableBounds;
+
+	if (SDL_GetDisplayUsableBounds(0, &usableBounds) != 0)
+	{
+		width = WindowWidth;
+		height = WindowHeight;
+		maximize = false;
+		return;
+	}
+
+	int maxWidth = std::max(320, usableBounds.w - WindowInitialMarginX);
+	int maxHeight = std::max(240, usableBounds.h - WindowInitialMarginY);
+
+	width = std::min(WindowWidth, maxWidth);
+	height = std::min(WindowHeight, maxHeight);
+	maximize = (WindowWidth > maxWidth) || (WindowHeight > maxHeight);
+}
+
+
 void InitSDL()
 {
 	if (SDL_Init(SDL_INIT_VIDEO) != 0)
@@ -86,13 +109,18 @@ void DeInitSDL()
 bool CreateWindowSDL()
 {
 	SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
+	int initialWidth;
+	int initialHeight;
+	bool maximize;
+
+	GetInitialWindowSize(initialWidth, initialHeight, maximize);
 
 	window = SDL_CreateWindow(
 		WindowCaption,
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
-		WindowWidth,
-		WindowHeight,
+		initialWidth,
+		initialHeight,
 		window_flags
 	);
 
@@ -103,8 +131,13 @@ bool CreateWindowSDL()
 	SetWindowsWindowIcon();
 #endif
 
+	if (maximize)
+	{
+		SDL_MaximizeWindow(window);
+	}
+
 	UpdateWindowSize();
-	SDL_SetWindowMinimumSize(window, 800, 600);
+	SDL_SetWindowMinimumSize(window, 640, 480);
 
 	return true;
 }

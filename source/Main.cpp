@@ -312,7 +312,13 @@ void Main::HighlightSelection()
 	if (selectedObject)
 	{
 		if (cursorShow)
+		{
+			SDL_Rect viewport = field->GetViewportRect();
+
+			SDL_RenderSetClipRect(renderer, &viewport);
 			selectedObject->Object::draw();
+			SDL_RenderSetClipRect(renderer, NULL);
+		}
 	}
 }
 

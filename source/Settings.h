@@ -21,6 +21,8 @@
 
 #define WindowWidth 1920
 #define WindowHeight 1080
+#define WindowInitialMarginX 40
+#define WindowInitialMarginY 80
 
 #define BackgroundColorFloat 0.0f,0.0f,0.0f,255.0f
 
@@ -53,6 +55,8 @@
 #define InterfaceBorder 10
 
 #define GUIWindowWidth 284
+#define GUISidePanelWidth 320
+#define FieldScrollbarSize 18
 
 #define LogBackgroundColor 0.1f, 0.1f, 0.3f, 1.0f
 

@@ -31,12 +31,12 @@ void Object::CalcScreenX()
 
 void Object::CalcObjectRect()
 {
-	object_rect = { FieldX + screenX * FieldCellSize, FieldY + y * FieldCellSize, FieldCellSize, FieldCellSize };
+	object_rect = { FieldX + screenX * FieldCellSize - Field::viewX, FieldY + y * FieldCellSize - Field::viewY, FieldCellSize, FieldCellSize };
 }
 
 void Object::CalcObjectRectShrinked(int shrink)
 {
-	object_rect = { FieldX + screenX * FieldCellSize + shrink, FieldY + y * FieldCellSize + shrink,
+	object_rect = { FieldX + screenX * FieldCellSize - Field::viewX + shrink, FieldY + y * FieldCellSize - Field::viewY + shrink,
 		FieldCellSize - 2*shrink, FieldCellSize - 2*shrink };
 }
 

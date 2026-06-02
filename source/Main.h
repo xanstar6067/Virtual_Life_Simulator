@@ -69,6 +69,7 @@ private:
 	void DrawMouseFunctionWindow();
 	void DrawAdditionalsWindow();
 	void DrawSidePanelWindow();
+	void DrawFieldScrollbars();
 
 	//Hidden windows
 	void DrawSaveLoadWindow();

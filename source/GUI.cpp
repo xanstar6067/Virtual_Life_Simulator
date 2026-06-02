@@ -358,7 +358,7 @@ void Main::DrawAdditionalsWindow()
 static float GetSidePanelX()
 {
 	float fixedX = (2 * FieldX + FieldWidth) * 1.0f;
-	float maxVisibleX = windowWidth - GUIWindowWidth * 1.0f - InterfaceBorder * 1.0f;
+	float maxVisibleX = windowWidth - GUISidePanelWidth * 1.0f - InterfaceBorder * 1.0f;
 
 	if (maxVisibleX < InterfaceBorder)
 	{
@@ -378,7 +378,7 @@ void Main::DrawSidePanelWindow()
 	}
 
 	ImGui::SetNextWindowBgAlpha(1.0f);
-	ImGui::SetNextWindowSize({ GUIWindowWidth * 1.0f, panelHeight });
+	ImGui::SetNextWindowSize({ GUISidePanelWidth * 1.0f, panelHeight });
 	ImGui::SetNextWindowPos({ GetSidePanelX(), InterfaceBorder * 1.0f });
 
 	ImGui::Begin("Панель", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
@@ -550,17 +550,18 @@ void Main::DrawSidePanelWindow()
 			{
 				showDangerous = !showDangerous;
 			}
+			ImGui::SameLine();
 
 			if (ImGui::Button("Среда", windowButtonSize))
 			{
 				showAdaptation = !showAdaptation;
 			}
-			ImGui::SameLine();
 
 			if (ImGui::Button("График", windowButtonSize))
 			{
 				showChart = !showChart;
 			}
+			ImGui::SameLine();
 
 			if (ImGui::Button("Инфо", windowButtonSize))
 			{
@@ -575,6 +576,65 @@ void Main::DrawSidePanelWindow()
 		}
 	}
 	ImGui::End();
+}
+
+void Main::DrawFieldScrollbars()
+{
+	field->ClampViewOffset();
+
+	SDL_Rect viewport = field->GetViewportRect();
+	int maxViewX = field->GetMaxViewX();
+	int maxViewY = field->GetMaxViewY();
+
+	if ((maxViewX <= 0) && (maxViewY <= 0))
+	{
+		return;
+	}
+
+	ImGuiWindowFlags flags =
+		ImGuiWindowFlags_NoTitleBar |
+		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoMove |
+		ImGuiWindowFlags_NoCollapse |
+		ImGuiWindowFlags_NoSavedSettings |
+		ImGuiWindowFlags_NoScrollbar |
+		ImGuiWindowFlags_NoScrollWithMouse;
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+
+	if (maxViewX > 0)
+	{
+		ImGui::SetNextWindowBgAlpha(1.0f);
+		ImGui::SetNextWindowPos({ viewport.x * 1.0f, (viewport.y + viewport.h) * 1.0f });
+		ImGui::SetNextWindowSize({ viewport.w * 1.0f, FieldScrollbarSize * 1.0f });
+
+		ImGui::Begin("##FieldScrollXWindow", NULL, flags);
+		{
+			ImGui::PushItemWidth(viewport.w * 1.0f);
+			ImGui::SliderInt("##FieldScrollX", &Field::viewX, 0, maxViewX, "");
+			ImGui::PopItemWidth();
+		}
+		ImGui::End();
+	}
+
+	if (maxViewY > 0)
+	{
+		ImGui::SetNextWindowBgAlpha(1.0f);
+		ImGui::SetNextWindowPos({ (viewport.x + viewport.w) * 1.0f, viewport.y * 1.0f });
+		ImGui::SetNextWindowSize({ FieldScrollbarSize * 1.0f, viewport.h * 1.0f });
+
+		ImGui::Begin("##FieldScrollYWindow", NULL, flags);
+		{
+			ImGui::VSliderInt("##FieldScrollY", { FieldScrollbarSize * 1.0f, viewport.h * 1.0f }, &Field::viewY, 0, maxViewY, "");
+		}
+		ImGui::End();
+	}
+
+	ImGui::PopStyleVar(3);
+
+	field->ClampViewOffset();
 }
 
 void Main::DrawSaveLoadWindow()
@@ -1090,6 +1150,7 @@ void Main::DrawWindows()
 	#endif
 
 	DrawSidePanelWindow();
+	DrawFieldScrollbars();
 
 	//Below windows that are hidden at startup
 
