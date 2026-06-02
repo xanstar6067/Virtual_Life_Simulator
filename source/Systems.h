@@ -8,6 +8,8 @@
 #include <atomic>
 #include <chrono>
 #include <string>
+#include <condition_variable>
+#include <mutex>
 
 //ImGUI
 #include "imgui.h"

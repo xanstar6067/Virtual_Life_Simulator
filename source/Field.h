@@ -109,7 +109,10 @@ class Field final
     std::vector<abool> threadGoMarker;
     std::vector<std::thread> threads;
     std::vector<ThreadCounters> counters;
-    std::vector<abool> threadTerminated;
+    std::mutex threadMutex;
+    std::condition_variable threadStartCondition;
+    std::condition_variable threadDoneCondition;
+    int threadsReady = 0;
     abool terminateThreads = false;
     abool pauseThreads = false;
 
@@ -130,7 +133,7 @@ class Field final
     inline void tick_multiple_threads();
 
     //Wait for a signal 
-    inline void ThreadWait(const uint index);
+    inline bool ThreadWait(const uint index);
     
 
 public:

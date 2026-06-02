@@ -311,21 +311,15 @@ inline void Field::tick_single_thread()
 }
 
 //Wait for a signal 
-inline void Field::ThreadWait(const uint index)
+inline bool Field::ThreadWait(const uint index)
 {
-    for (;;)
+    std::unique_lock<std::mutex> lock(threadMutex);
+    threadStartCondition.wait(lock, [&]()
     {
-        if (threadGoMarker[index])
-            return;
+        return threadGoMarker[index] || terminateThreads;
+    });
 
-        std::this_thread::yield();
-
-        if (pauseThreads)
-        {
-            //Delay so it would not eat too many resourses while on pause
-            SDL_Delay(1);
-        }
-    }
+    return !terminateThreads;
 }
 
 //Process function for multithreaded simulation
@@ -354,7 +348,8 @@ void Field::ProcessPart_MultipleThreads(const uint firstX1, const uint firstX2, 
     for(;;)
     {
         
-        ThreadWait(index);
+        if (!ThreadWait(index))
+            return;
 
         for (uint X = firstX1; X < firstX2; ++X)
         {
@@ -364,9 +359,15 @@ void Field::ProcessPart_MultipleThreads(const uint firstX1, const uint firstX2, 
             }
         }
 
-        threadGoMarker[index] = false;
+        {
+            std::lock_guard<std::mutex> lock(threadMutex);
+            threadGoMarker[index] = false;
+            ++threadsReady;
+        }
+        threadDoneCondition.notify_one();
 
-        ThreadWait(index);
+        if (!ThreadWait(index))
+            return;
 
         for (uint X = secondX1; X < secondX2; ++X)
         {
@@ -376,15 +377,12 @@ void Field::ProcessPart_MultipleThreads(const uint firstX1, const uint firstX2, 
             }
         }
 
-        threadGoMarker[index] = false;
-
-        if (terminateThreads)
         {
-            threadTerminated[index] = true;
-
-            return;
+            std::lock_guard<std::mutex> lock(threadMutex);
+            threadGoMarker[index] = false;
+            ++threadsReady;
         }
-
+        threadDoneCondition.notify_one();
     }
 
 }
@@ -392,34 +390,27 @@ void Field::ProcessPart_MultipleThreads(const uint firstX1, const uint firstX2, 
 //Start all threads
 void Field::StartThreads()
 {
-    repeat(numThreads)
     {
-        threadGoMarker[i] = true;
+        std::lock_guard<std::mutex> lock(threadMutex);
+        threadsReady = 0;
+
+        repeat(numThreads)
+        {
+            threadGoMarker[i] = true;
+        }
     }
+
+    threadStartCondition.notify_all();
 }
 
 //Wait for all threads to finish their calculations
 void Field::WaitForThreads()
 {
-    uint threadsReady;
-
-    for (;;)
+    std::unique_lock<std::mutex> lock(threadMutex);
+    threadDoneCondition.wait(lock, [&]()
     {
-
-        threadsReady = 0;
-
-        repeat(numThreads)
-        {
-            if (threadGoMarker[i] == false)
-                threadsReady++;
-        }
-
-        if (threadsReady == numThreads)
-            break;
-
-        std::this_thread::yield();
-
-    }
+        return (threadsReady >= numThreads) || terminateThreads;
+    });
 }
 
 //Multithreaded tick function
@@ -721,6 +712,8 @@ Field::Field()
 {
     int cpuCount = SDL_GetCPUCount();
     numThreads = (cpuCount > 0) ? cpuCount : 1;
+    if ((MaxSimulationThreads > 0) && (numThreads > MaxSimulationThreads))
+        numThreads = MaxSimulationThreads;
     if (numThreads > (FieldCellsWidth / 2))
         numThreads = FieldCellsWidth / 2;
 
@@ -741,14 +734,12 @@ Field::Field()
     //Start threads
 #ifndef UseOneThread
     threadGoMarker = std::vector<abool>(numThreads);
-    threadTerminated = std::vector<abool>(numThreads);
     counters = std::vector<ThreadCounters>(numThreads);
     threads.reserve(numThreads);
 
     repeat(numThreads)
     {
         threadGoMarker[i] = false;
-        threadTerminated[i] = false;
 
         uint firstChunk = (uint)i * 2;
         uint secondChunk = firstChunk + 1;
@@ -773,35 +764,22 @@ Field::~Field()
     return;
 #endif
 
-    repeat(numThreads)
-        threadTerminated[i] = false;
-
-    terminateThreads = true;
-
-    for (;;)
     {
-        uint tcount = 0;
+        std::lock_guard<std::mutex> lock(threadMutex);
+        terminateThreads = true;
+        pauseThreads = false;
 
         repeat(numThreads)
         {
-            if (threadTerminated[i] == true)
-                ++tcount;
-        }
-
-        if (tcount == numThreads)
-            break;
-
-        repeat(numThreads)
             threadGoMarker[i] = true;
-
-        pauseThreads = false;
-
-        SDL_Delay(1);
+        }
     }
+    threadStartCondition.notify_all();
 
     repeat(numThreads)
     {
-        threads[i].join();
+        if (threads[i].joinable())
+            threads[i].join();
     }
 }
 

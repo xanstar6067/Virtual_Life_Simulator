@@ -39,6 +39,8 @@
 //#define UseOneThread
 //--------------------------
 
+#define MaxSimulationThreads 16 //0 = use all CPU threads
+
 //-----------------------------------------------------------------
 
 
