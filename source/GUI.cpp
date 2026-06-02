@@ -226,13 +226,25 @@ void Main::DrawRenderWindow()
 
 		ImGui::Text("Режим:");
 
-		ImGui::RadioButton("Обычный", (int*)&renderType, 0);
-		ImGui::SameLine();
-		ImGui::RadioButton("Охота", (int*)&renderType, 1);
+		if (ImGui::BeginTable("##RenderModes", 2))
+		{
+			ImGui::TableSetupColumn("##RenderModeLeft", ImGuiTableColumnFlags_WidthFixed, 105.0f);
+			ImGui::TableSetupColumn("##RenderModeRight", ImGuiTableColumnFlags_WidthFixed, 105.0f);
 
-		ImGui::RadioButton("Энергия", (int*)&renderType, 2);
-		ImGui::SameLine();
-		ImGui::RadioButton("Без отрис.", (int*)&renderType, 3);
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::RadioButton("Обычный", (int*)&renderType, 0);
+			ImGui::TableSetColumnIndex(1);
+			ImGui::RadioButton("Охота", (int*)&renderType, 1);
+
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::RadioButton("Энергия", (int*)&renderType, 2);
+			ImGui::TableSetColumnIndex(1);
+			ImGui::RadioButton("Без отрис.", (int*)&renderType, 3);
+
+			ImGui::EndTable();
+		}
 
 		ImGui::EndGroup();
 	}
@@ -273,15 +285,29 @@ void Main::DrawMouseFunctionWindow()
 	{
 		ImGui::BeginGroup();
 
-		ImGui::RadioButton("Выбрать", (int*)&mouseFunc, 0);
-		ImGui::SameLine();
-		ImGui::RadioButton("Удалить", (int*)&mouseFunc, 1);
+		if (ImGui::BeginTable("##MouseFunctions", 2))
+		{
+			ImGui::TableSetupColumn("##MouseFunctionLeft", ImGuiTableColumnFlags_WidthFixed, 105.0f);
+			ImGui::TableSetupColumn("##MouseFunctionRight", ImGuiTableColumnFlags_WidthFixed, 105.0f);
 
-		ImGui::RadioButton("Камень", (int*)&mouseFunc, 2);
-		ImGui::SameLine();
-		ImGui::RadioButton("Из файла", (int*)&mouseFunc, 3);
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::RadioButton("Выбрать", (int*)&mouseFunc, 0);
+			ImGui::TableSetColumnIndex(1);
+			ImGui::RadioButton("Удалить", (int*)&mouseFunc, 1);
 
-		ImGui::RadioButton("Мутировать", (int*)&mouseFunc, 4);
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::RadioButton("Камень", (int*)&mouseFunc, 2);
+			ImGui::TableSetColumnIndex(1);
+			ImGui::RadioButton("Из файла", (int*)&mouseFunc, 3);
+
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::RadioButton("Мутировать", (int*)&mouseFunc, 4);
+
+			ImGui::EndTable();
+		}
 
 		ImGui::EndGroup();
 	}
