@@ -179,10 +179,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 			{
 				simulation.CatchKeyboard();
 			}
-			else if (e.type == SDL_TEXTINPUT)
-			{
-				io->AddInputCharactersUTF8(e.text.text);
-			}
 		}
 
 		//Mouse down event
