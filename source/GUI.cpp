@@ -114,18 +114,7 @@ void Main::DrawSystemWindow()
 
 		ImGui::SameLine();
 
-		//Show number of threads
-		#ifdef UseOneThread
-		ImGui::Text(", 1 поток");
-		#endif
-
-		#ifdef UseFourThreads
-		ImGui::Text(", 4 потока");
-		#endif
-
-		#ifdef UseEightThreads
-		ImGui::Text(", 8 потоков");
-		#endif
+		ImGui::Text(", потоков: %u", field->GetNumThreads());
 	}
 	ImGui::End();
 }

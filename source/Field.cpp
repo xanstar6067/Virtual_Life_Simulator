@@ -268,6 +268,14 @@ void Field::ObjectTick(Object* tmpObj)
     }
 }
 
+void ThreadCounters::Clear()
+{
+    objects = 0;
+    bots = 0;
+    apples = 0;
+    organics = 0;
+}
+
 //tick function for single threaded build
 inline void Field::tick_single_thread()
 {
@@ -320,8 +328,8 @@ inline void Field::ThreadWait(const uint index)
     }
 }
 
-//Process function for 4 or 8 threaded simulation
-void Field::ProcessPart_MultipleThreads(const uint X1, const uint Y1, const uint X2, const uint Y2, const uint index)
+//Process function for multithreaded simulation
+void Field::ProcessPart_MultipleThreads(const uint firstX1, const uint firstX2, const uint secondX1, const uint secondX2, const uint index)
 {
 
     srand(seed + index);
@@ -331,14 +339,14 @@ void Field::ProcessPart_MultipleThreads(const uint X1, const uint Y1, const uint
         if (tmpObj == NULL)
             return;
 
-        ++counters[index][0];
+        ++counters[index].objects;
 
         if (tmpObj->type == bot)
-            ++counters[index][1];
+            ++counters[index].bots;
         else if (tmpObj->type == apple)
-            ++counters[index][2];
+            ++counters[index].apples;
         else if (tmpObj->type == organic_waste)
-            ++counters[index][3];
+            ++counters[index].organics;
 
         ObjectTick(tmpObj);
     };
@@ -348,9 +356,9 @@ void Field::ProcessPart_MultipleThreads(const uint X1, const uint Y1, const uint
         
         ThreadWait(index);
 
-        for (int X = X1; X < X1 + ((X2 - X1) / 2); ++X)
+        for (uint X = firstX1; X < firstX2; ++X)
         {
-            for (int Y = Y1; Y < Y2; ++Y)
+            for (uint Y = 0; Y < FieldCellsHeight; ++Y)
             {
                 obj_cals(allCells[X][Y]);
             }
@@ -360,9 +368,9 @@ void Field::ProcessPart_MultipleThreads(const uint X1, const uint Y1, const uint
 
         ThreadWait(index);
 
-        for (int X = X1 + ((X2 - X1) / 2); X < X2; ++X)
+        for (uint X = secondX1; X < secondX2; ++X)
         {
-            for (int Y = Y1; Y < Y2; ++Y)
+            for (uint Y = 0; Y < FieldCellsHeight; ++Y)
             {
                 obj_cals(allCells[X][Y]);
             }
@@ -384,7 +392,7 @@ void Field::ProcessPart_MultipleThreads(const uint X1, const uint Y1, const uint
 //Start all threads
 void Field::StartThreads()
 {
-    repeat(NumThreads)
+    repeat(numThreads)
     {
         threadGoMarker[i] = true;
     }
@@ -400,13 +408,13 @@ void Field::WaitForThreads()
 
         threadsReady = 0;
 
-        repeat(NumThreads)
+        repeat(numThreads)
         {
             if (threadGoMarker[i] == false)
                 threadsReady++;
         }
 
-        if (threadsReady == NumThreads)
+        if (threadsReady == numThreads)
             break;
 
         std::this_thread::yield();
@@ -419,12 +427,9 @@ inline void Field::tick_multiple_threads()
 {
     auto clear_counters = [&]()
     {
-        repeat(NumThreads)
+        repeat(numThreads)
         {
-            counters[i][0] = 0;
-            counters[i][1] = 0;
-            counters[i][2] = 0;
-            counters[i][3] = 0;
+            counters[i].Clear();
         }
     };
 
@@ -435,12 +440,12 @@ inline void Field::tick_multiple_threads()
 
     auto addToCounters = [&]()
     {
-        repeat(NumThreads)
+        repeat(numThreads)
         {
-            objectsTotal += counters[i][0];
-            botsTotal += counters[i][1];
-            applesTotal += counters[i][2];
-            organicsTotal += counters[i][3];
+            objectsTotal += counters[i].objects;
+            botsTotal += counters[i].bots;
+            applesTotal += counters[i].apples;
+            organicsTotal += counters[i].organics;
         }
     };
 
@@ -653,6 +658,15 @@ uint Field::GetNumOrganics()
     return organicsTotal;
 }
 
+uint Field::GetNumThreads()
+{
+#ifdef UseOneThread
+    return 1;
+#else
+    return (uint)numThreads;
+#endif
+}
+
 
 
 
@@ -705,6 +719,11 @@ void Field::UnpauseThreads()
 //Create field
 Field::Field()
 {
+    int cpuCount = SDL_GetCPUCount();
+    numThreads = (cpuCount > 0) ? cpuCount : 1;
+    if (numThreads > (FieldCellsWidth / 2))
+        numThreads = FieldCellsWidth / 2;
+
     //Clear array
     memset(allCells, 0, sizeof(Point*) * FieldCellsWidth * FieldCellsHeight);
 
@@ -720,33 +739,29 @@ Field::Field()
     #endif
 
     //Start threads
+#ifndef UseOneThread
+    threadGoMarker = std::vector<abool>(numThreads);
+    threadTerminated = std::vector<abool>(numThreads);
+    counters = std::vector<ThreadCounters>(numThreads);
+    threads.reserve(numThreads);
 
-    //4 threads
-    #ifdef UseFourThreads
-    repeat(NumThreads)
+    repeat(numThreads)
+    {
         threadGoMarker[i] = false;
+        threadTerminated[i] = false;
 
-    threads[0] = new std::thread(&Field::ProcessPart_MultipleThreads, this, 0, 0, FieldCellsWidth / 4, FieldCellsHeight, 0);
-    threads[1] = new std::thread(&Field::ProcessPart_MultipleThreads, this, FieldCellsWidth / 2, 0, (FieldCellsWidth / 4) * 3, FieldCellsHeight, 1);
-    threads[2] = new std::thread(&Field::ProcessPart_MultipleThreads, this, FieldCellsWidth / 4, 0, FieldCellsWidth / 2, FieldCellsHeight, 2);
-    threads[3] = new std::thread(&Field::ProcessPart_MultipleThreads, this, (FieldCellsWidth / 4) * 3, 0, FieldCellsWidth, FieldCellsHeight, 3);
+        uint firstChunk = (uint)i * 2;
+        uint secondChunk = firstChunk + 1;
+        uint totalChunks = (uint)numThreads * 2;
 
-    #endif
+        uint firstX1 = (FieldCellsWidth * firstChunk) / totalChunks;
+        uint firstX2 = (FieldCellsWidth * (firstChunk + 1)) / totalChunks;
+        uint secondX1 = (FieldCellsWidth * secondChunk) / totalChunks;
+        uint secondX2 = (FieldCellsWidth * (secondChunk + 1)) / totalChunks;
 
-    //8 threads
-    #ifdef UseEightThreads
-    repeat(NumThreads)
-        threadGoMarker[i] = false;
-
-    threads[0] = new std::thread(&Field::ProcessPart_MultipleThreads, this, 0, 0, FieldCellsWidth / 8, FieldCellsHeight, 0);
-    threads[1] = new std::thread(&Field::ProcessPart_MultipleThreads, this, FieldCellsWidth / 8, 0, FieldCellsWidth / 4, FieldCellsHeight, 1);
-    threads[2] = new std::thread(&Field::ProcessPart_MultipleThreads, this, FieldCellsWidth / 4, 0, (FieldCellsWidth / 8) * 3, FieldCellsHeight, 2);
-    threads[3] = new std::thread(&Field::ProcessPart_MultipleThreads, this, (FieldCellsWidth / 8) * 3, 0, FieldCellsWidth / 2, FieldCellsHeight, 3);
-    threads[4] = new std::thread(&Field::ProcessPart_MultipleThreads, this, FieldCellsWidth / 2, 0, (FieldCellsWidth / 8) * 5, FieldCellsHeight, 4);
-    threads[5] = new std::thread(&Field::ProcessPart_MultipleThreads, this, (FieldCellsWidth / 8) * 5, 0, (FieldCellsWidth / 4) * 3, FieldCellsHeight, 5);
-    threads[6] = new std::thread(&Field::ProcessPart_MultipleThreads, this, (FieldCellsWidth / 4) * 3, 0, (FieldCellsWidth / 8) * 7, FieldCellsHeight, 6);
-    threads[7] = new std::thread(&Field::ProcessPart_MultipleThreads, this, (FieldCellsWidth / 8) * 7, 0, FieldCellsWidth, FieldCellsHeight, 7);
-    #endif
+        threads.emplace_back(&Field::ProcessPart_MultipleThreads, this, firstX1, firstX2, secondX1, secondX2, i);
+    }
+#endif
 
     Object::SetPointers(this, (Object***)allCells);
 
@@ -754,7 +769,11 @@ Field::Field()
 
 Field::~Field()
 {
-    repeat(NumThreads)
+#ifdef UseOneThread
+    return;
+#endif
+
+    repeat(numThreads)
         threadTerminated[i] = false;
 
     terminateThreads = true;
@@ -763,16 +782,16 @@ Field::~Field()
     {
         uint tcount = 0;
 
-        repeat(NumThreads)
+        repeat(numThreads)
         {
             if (threadTerminated[i] == true)
                 ++tcount;
         }
 
-        if (tcount == NumThreads)
+        if (tcount == numThreads)
             break;
 
-        repeat(NumThreads)
+        repeat(numThreads)
             threadGoMarker[i] = true;
 
         pauseThreads = false;
@@ -780,9 +799,9 @@ Field::~Field()
         SDL_Delay(1);
     }
 
-    repeat(NumThreads)
+    repeat(numThreads)
     {
-        threads[i]->join();
+        threads[i].join();
     }
 }
 

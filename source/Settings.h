@@ -37,8 +37,6 @@
 
 //choose only 1 option------
 //#define UseOneThread
-//#define UseFourThreads
-#define UseEightThreads
 //--------------------------
 
 //-----------------------------------------------------------------
@@ -108,7 +106,7 @@
 #define FieldX InterfaceBorder
 #define FieldY InterfaceBorder
 
-#define FieldCellsWidth 13*16*6		//Должно делиться на 8 без остатка если нужны 4 потока! И на 16 без остатка если 8 потоков!
+#define FieldCellsWidth 13*16*6
 #define FieldCellsHeight 133
 
 #define FieldRenderCellsWidth 202

@@ -22,19 +22,6 @@ class ObjectSaver;
 #include "SDL.h"
 
 
-//Don't touch
-#define NumThreads 1
-#ifdef UseFourThreads
-#undef NumThreads
-#define NumThreads 4
-#endif
-#ifdef UseEightThreads
-#undef NumThreads
-#define NumThreads 8
-#endif
-
-
-
 enum RenderTypes
 {
     natural,
@@ -81,6 +68,16 @@ struct FieldDynamicParams
     FieldDynamicParams();
 };
 
+struct ThreadCounters
+{
+    uint objects = 0;
+    uint bots = 0;
+    uint apples = 0;
+    uint organics = 0;
+
+    void Clear();
+};
+
 
 
 //Simulation field class
@@ -108,10 +105,11 @@ class Field final
     uint spawnApplesInterval = 0;
 
     //threads
-    abool threadGoMarker[NumThreads];
-    std::thread* threads[NumThreads];
-    uint counters[NumThreads][4];
-    abool threadTerminated[NumThreads];
+    int numThreads = 1;
+    std::vector<abool> threadGoMarker;
+    std::vector<std::thread> threads;
+    std::vector<ThreadCounters> counters;
+    std::vector<abool> threadTerminated;
     abool terminateThreads = false;
     abool pauseThreads = false;
 
@@ -120,7 +118,7 @@ class Field final
     inline void tick_single_thread();
 
     //Process function for multi threaded simulation
-    void ProcessPart_MultipleThreads(const uint X1, const uint Y1, const uint X2, const uint Y2, const uint index);
+    void ProcessPart_MultipleThreads(const uint firstX1, const uint firstX2, const uint secondX1, const uint secondX2, const uint index);
 
     //Start all threads
     void StartThreads();
@@ -203,6 +201,7 @@ public:
     uint GetNumBots();
     uint GetNumApples();
     uint GetNumOrganics();
+    uint GetNumThreads();
 
     //Spawn group of random bots
     void SpawnControlGroup();
