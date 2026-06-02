@@ -334,7 +334,7 @@ void Main::DrawSaveLoadWindow()
 		ImGui::SetNextWindowSize({ 520.0f, 260.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 100.0f }, ImGuiCond_Once);
 
-		ImGui::Begin("Сохранение и загрузка", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Сохранение и загрузка", &showSaveLoad, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 			//List of files
 			ImGui::Text("Выберите файл");
@@ -497,7 +497,7 @@ void Main::DrawDangerousWindow()
 		ImGui::SetNextWindowSize({ 290.0f, 100.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 300.0f }, ImGuiCond_Once);
 
-		ImGui::Begin("Осторожно!", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Осторожно!", &showDangerous, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 
 			if (ImGui::Button("Очистить мир", { 130, 30 }))
@@ -550,7 +550,7 @@ void Main::DrawSummaryWindow()
 		ImGui::SetNextWindowSize({ 330.0f, 180.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 150.0f }, ImGuiCond_Once);
 
-		ImGui::Begin("Сводка бота", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Сводка бота", &showBrain, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 			if (selectedObject)
 			{
@@ -592,7 +592,7 @@ void Main::DrawAdaptationWindow()
 		ImGui::SetNextWindowSize({ 500.0f, 500.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 250.0f }, ImGuiCond_Once);
 
-		ImGui::Begin("Условия среды", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Условия среды", &showAdaptation, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 			if(ImGui::CollapsingHeader("Ветры"))
 			{
@@ -656,7 +656,7 @@ void Main::DrawChartWindow()
 		ImGui::SetNextWindowSize({ 900.0f, 600.0f });
 		ImGui::SetNextWindowPos({ 700.0f, 250.0f }, ImGuiCond_Once);
 
-		ImGui::Begin("График популяции", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("График популяции", &showChart, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 			if (ImPlot::BeginPlot("Объекты", { 800, 550 }))
 			{
@@ -719,7 +719,7 @@ void Main::DrawBotBrainWindow()
 			ImGui::SetNextWindowSize({ 330.0f, 240.0f });
 			ImGui::SetNextWindowPos({ 650 * 1.0f, 350.0f });
 
-			ImGui::Begin("Данные мозга", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+			ImGui::Begin("Данные мозга", &showBrain, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 			{
 				ImGui::BeginGroup();
 
