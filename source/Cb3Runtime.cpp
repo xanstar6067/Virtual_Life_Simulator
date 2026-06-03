@@ -47,6 +47,11 @@ void Cb3Runtime::HandleMouseClick()
     impl->simulation->HandleMouseClick();
 }
 
+void Cb3Runtime::HandleFieldNavigation()
+{
+    impl->simulation->HandleFieldNavigation();
+}
+
 void Cb3Runtime::Pause()
 {
     impl->simulation->Pause();

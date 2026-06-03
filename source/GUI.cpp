@@ -1268,6 +1268,11 @@ void Main::HandleFieldNavigation()
 {
 	if (!IsClassicMode())
 	{
+		if (cb3Runtime)
+		{
+			cb3Runtime->HandleFieldNavigation();
+			CheckRuntimeRequests();
+		}
 		return;
 	}
 

@@ -21,9 +21,76 @@
 
 #include "Main.h"
 
+#include <algorithm>
+#include <ctime>
+#include <shellapi.h>
 
 namespace cb3
 {
+
+static string FormatFileSize(uintmax_t size)
+{
+	string unit;
+
+	if (size > 1000000)
+	{
+		size /= 1000000;
+		unit += "МБ";
+	}
+	else if (size > 1000)
+	{
+		size /= 1000;
+		unit += "КБ";
+	}
+	else
+	{
+		unit += "б";
+	}
+
+	return std::to_string(size) + unit;
+}
+
+static string FormatFileTime(std::filesystem::file_time_type fileTime)
+{
+	auto systemTime = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+		fileTime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
+
+	std::time_t time = std::chrono::system_clock::to_time_t(systemTime);
+	std::tm localTime;
+	localtime_s(&localTime, &time);
+
+	char buffer[32];
+	std::strftime(buffer, sizeof(buffer), "%d.%m.%Y %H:%M", &localTime);
+
+	return buffer;
+}
+
+static string TrimFileName(string fileName)
+{
+	while (!fileName.empty() && (fileName.front() == ' ' || fileName.front() == '\t'))
+	{
+		fileName.erase(fileName.begin());
+	}
+
+	while (!fileName.empty() && (fileName.back() == ' ' || fileName.back() == '\t'))
+	{
+		fileName.pop_back();
+	}
+
+	return fileName;
+}
+
+static string MakeTimestampFileName(const char* prefix)
+{
+	std::time_t time = std::time(NULL);
+	std::tm localTime;
+	localtime_s(&localTime, &time);
+
+	char buffer[64];
+	std::strftime(buffer, sizeof(buffer), "%Y%m%d_%H%M%S", &localTime);
+
+	return string(prefix) + "_" + buffer;
+}
 
 inline void ValidateThreadsNumber()
 {
@@ -155,7 +222,12 @@ void Main::HighlightSelection()
 	if (selectedObject)
 	{
 		if (cursorShow)
+		{
+			SDL_Rect viewport = field->GetViewportRect();
+			SDL_RenderSetClipRect(renderer, &viewport);
 			selectedObject->Object::draw();
+			SDL_RenderSetClipRect(renderer, NULL);
+		}
 	}
 }
 
@@ -210,6 +282,13 @@ void Main::LogPrint(int num, bool newLine)
 
 void Main::LoadFilenames()
 {
+	std::filesystem::path selectedPath;
+
+	if (selectedFile)
+	{
+		selectedPath = selectedFile->pathFull;
+	}
+
 	//Check if folder exists
 	if (!std::filesystem::exists(DirectoryName))
 	{
@@ -219,6 +298,8 @@ void Main::LoadFilenames()
 
 	//Load list of filenames
 	allFilenames.clear();
+	selectedFile = NULL;
+	int selectedIndex = -1;
 
 	for (const auto& entry : std::filesystem::directory_iterator(DirectoryName))
 	{
@@ -229,34 +310,18 @@ void Main::LoadFilenames()
 		listed_file f;
 
 		//Full paths to files
+		f.pathFull = entry.path();
 		f.nameFull = entry.path().string();
 
 		//Only file name
 		f.nameShort = entry.path().filename().string();
 
-		//File size
+		//File size and modified time
 		auto size = entry.file_size();
 		auto originalSize = size;
-		string unit;		
-
-		//Units
-		if (size > 1000000)
-		{
-			size /= 1000000;
-			unit += "МБ";
-		}
-		else if (size > 1000)
-		{
-			size /= 1000;
-			unit += "КБ";
-		}
-		else
-		{
-			unit += "Б";
-		}			
-
-		f.fileSize += to_string(size);
-		f.fileSize += unit;
+		f.fileSize = FormatFileSize(size);
+		f.modifiedTime = entry.last_write_time();
+		f.modifiedTimeText = FormatFileTime(f.modifiedTime);
 
 		//Is world (open file briefly and look for file type)
 		MyInputStream file((char*)f.nameFull.c_str(), std::ios::in | std::ios::binary | std::ios::beg);
@@ -279,46 +344,229 @@ void Main::LoadFilenames()
 		f.mode = SimulationModeFromId(modeId);
 		f.modeText = (modeId > 0) ? SimulationModeName(f.mode) : "-";
 		f.isWorld = (magicNumber == MagicNumber_WorldFile);
+		f.fileType = f.isWorld ? "мир" : ((magicNumber == MagicNumber_ObjectFile) ? "бот" : "файл");
 
 		file.close();		
 
-		//Full file description
-		f.fullCaption = f.nameShort;
-		f.fullCaption.resize(25, ' ');
-		f.fullCaption += f.fileSize;
-		f.fullCaption.resize(40, ' ');
-		f.fullCaption += (f.isWorld) ? ("[мир]") : ("[бот]");
-		f.fullCaption.resize(52, ' ');
-		f.fullCaption += f.modeText;
-
 		allFilenames.push_back(f);
 	}
+
+	std::sort(allFilenames.begin(), allFilenames.end(), [](const listed_file& left, const listed_file& right)
+	{
+		return left.modifiedTime > right.modifiedTime;
+	});
+
+	for (size_t i = 0; i < allFilenames.size(); ++i)
+	{
+		if (allFilenames[i].pathFull == selectedPath)
+		{
+			selectedIndex = (int)i;
+			break;
+		}
+	}
+
+	SelectFile(selectedIndex);
 }
 
 
 
 
-void Main::CreateNewFile()
+void Main::SelectFile(int index)
 {
-	string fileName = "New1";
-	int fileCounter = 1;
-
-	for (;;)
+	if (index < 0 || index >= (int)allFilenames.size())
 	{
-		if (std::filesystem::exists(DirectoryName + fileName))
+		selectedFile = NULL;
+		renameFileName[0] = '\0';
+		return;
+	}
+
+	for (size_t i = 0; i < allFilenames.size(); ++i)
+	{
+		allFilenames[i].isSelected = false;
+	}
+
+	allFilenames[index].isSelected = true;
+	selectedFile = &allFilenames[index];
+
+	size_t len = selectedFile->nameShort.size();
+	if (len >= sizeof(renameFileName))
+	{
+		len = sizeof(renameFileName) - 1;
+	}
+
+	memcpy(renameFileName, selectedFile->nameShort.c_str(), len);
+	renameFileName[len] = '\0';
+}
+
+void Main::RenameSelectedFile()
+{
+	if (!selectedFile)
+	{
+		LogPrint("Файл не выбран\r\n");
+		return;
+	}
+
+	std::string newName = renameFileName;
+
+	if (newName.empty())
+	{
+		LogPrint("Имя файла пустое\r\n");
+		return;
+	}
+
+	std::filesystem::path newNamePath = newName;
+
+	if (newNamePath.filename() != newNamePath)
+	{
+		LogPrint("Имя файла не должно содержать путь\r\n");
+		return;
+	}
+
+	std::filesystem::path oldPath = selectedFile->pathFull;
+	std::filesystem::path newPath = oldPath.parent_path() / newNamePath.filename();
+
+	if (oldPath == newPath)
+	{
+		return;
+	}
+
+	if (std::filesystem::exists(newPath))
+	{
+		LogPrint("Файл с таким именем уже существует\r\n");
+		return;
+	}
+
+	try
+	{
+		std::filesystem::rename(oldPath, newPath);
+		LogPrint("Файл переименован\r\n");
+
+		LoadFilenames();
+		SelectFileByPath(newPath);
+	}
+	catch (const std::filesystem::filesystem_error&)
+	{
+		LogPrint("Ошибка переименования файла\r\n");
+	}
+}
+
+std::filesystem::path Main::BuildSavePath(const char* defaultPrefix)
+{
+	string fileName = TrimFileName(renameFileName);
+
+	if (fileName.empty())
+	{
+		fileName = MakeTimestampFileName(defaultPrefix);
+	}
+
+	std::filesystem::path fileNamePath = fileName;
+
+	if (fileNamePath.filename() != fileNamePath)
+	{
+		fileName = MakeTimestampFileName(defaultPrefix);
+		fileNamePath = fileName;
+	}
+
+	std::filesystem::path savePath = std::filesystem::path(DirectoryName) / fileNamePath.filename();
+
+	if (!std::filesystem::exists(savePath))
+	{
+		return savePath;
+	}
+
+	std::filesystem::path parentPath = savePath.parent_path();
+	std::wstring baseName = savePath.stem().wstring();
+	std::wstring extension = savePath.extension().wstring();
+
+	for (int i = 2;; ++i)
+	{
+		std::filesystem::path candidate = parentPath / (baseName + L"_" + std::to_wstring(i) + extension);
+
+		if (!std::filesystem::exists(candidate))
 		{
-			fileName = "New" + to_string(++fileCounter);
+			return candidate;
 		}
-		else
+	}
+}
+
+void Main::SelectFileByPath(const std::filesystem::path& filePath)
+{
+	for (size_t i = 0; i < allFilenames.size(); ++i)
+	{
+		if (allFilenames[i].pathFull == filePath)
 		{
+			SelectFile((int)i);
 			break;
 		}
 	}
+}
 
-	std::ofstream file(DirectoryName + fileName);
-	file.close();
+void Main::SaveSelectedObjectToNamedFile()
+{
+	if (!selectedObject)
+	{
+		LogPrint("Бот не выбран\r\n");
+		return;
+	}
 
-	LoadFilenames();
+	std::filesystem::path savePath = BuildSavePath("Bot");
+	string fileName = savePath.string();
+
+	if (saver.SaveObject(selectedObject, (char*)fileName.c_str()))
+	{
+		LogPrint("Объект сохранен\r\n");
+		LoadFilenames();
+		SelectFileByPath(savePath);
+	}
+	else
+	{
+		LogPrint("Ошибка сохранения объекта\r\n");
+	}
+}
+
+void Main::SaveWorldToNamedFile()
+{
+	std::filesystem::path savePath = BuildSavePath("World");
+	string fileName = savePath.string();
+
+	if (saver.SaveWorld(field, (char*)fileName.c_str(), id, ticknum))
+	{
+		LogPrint("Мир сохранен\r\n");
+		LoadFilenames();
+		SelectFileByPath(savePath);
+	}
+	else
+	{
+		LogPrint("Ошибка сохранения мира\r\n");
+	}
+}
+
+void Main::DeleteSelectedFile()
+{
+	if (!selectedFile)
+	{
+		LogPrint("Файл не выбран\r\n");
+		return;
+	}
+
+	std::filesystem::path filePath = selectedFile->pathFull;
+	std::wstring widePath = filePath.wstring();
+	widePath.push_back(L'\0');
+
+	SHFILEOPSTRUCTW fileOperation = {};
+	fileOperation.wFunc = FO_DELETE;
+	fileOperation.pFrom = widePath.c_str();
+	fileOperation.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI;
+
+	if (SHFileOperationW(&fileOperation) == 0 && !fileOperation.fAnyOperationsAborted)
+	{
+		LogPrint("Файл перемещен в корзину\r\n");
+		LoadFilenames();
+	}
+	else
+	{
+		LogPrint("Ошибка удаления файла\r\n");
+	}
 }
 
 void Main::HandleKeyboard()
@@ -329,6 +577,40 @@ void Main::HandleKeyboard()
 void Main::HandleMouseClick()
 {
 	MouseClick();
+}
+
+void Main::HandleFieldNavigation()
+{
+	bool middleDown = (mouseState.buttons & SDL_BUTTON(SDL_BUTTON_MIDDLE)) != 0;
+	bool mouseOverField = field->IsInBoundsScreenCoords(mouseState.mouseX, mouseState.mouseY);
+
+	if ((mouseState.wheel != 0) and mouseOverField and !io->WantCaptureMouse)
+	{
+		field->ZoomAtScreenPoint(mouseState.mouseX, mouseState.mouseY, mouseState.wheel);
+	}
+
+	if (middleDown)
+	{
+		if (!fieldPanActive)
+		{
+			if (mouseOverField and !io->WantCaptureMouse)
+			{
+				fieldPanActive = true;
+				fieldPanMouseX = mouseState.mouseX;
+				fieldPanMouseY = mouseState.mouseY;
+			}
+		}
+		else
+		{
+			field->PanView(mouseState.mouseX - fieldPanMouseX, mouseState.mouseY - fieldPanMouseY);
+			fieldPanMouseX = mouseState.mouseX;
+			fieldPanMouseY = mouseState.mouseY;
+		}
+	}
+	else
+	{
+		fieldPanActive = false;
+	}
 }
 
 bool Main::IsTerminated() const
@@ -366,6 +648,10 @@ Main::Main()
 	LogPrint(seed);
 
 	field = new Field();
+	Field::renderX = 0;
+	Field::viewX = 0;
+	Field::viewY = 0;
+	Field::zoom = 1.0;
 	auto_adapt = new AutomaticAdaptation(field, this);
 
 	Pause();
@@ -447,6 +733,11 @@ void Main::MainLoop()
 
 void Main::CatchKeyboard()
 {
+	if (saveFileNameInputActive)
+	{
+		return;
+	}
+
 	if (keyboard[Keyboard_Pause] || keyboard[Keyboard_Pause2])
 	{
 		SwitchPause();

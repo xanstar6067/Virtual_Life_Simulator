@@ -1,11 +1,251 @@
 #include "Field.h"
 
+#include <algorithm>
+#include <cmath>
+
 
 namespace cb3
 {
 
 int Field::seed;
 int Field::renderX=0;
+int Field::viewX = 0;
+int Field::viewY = 0;
+double Field::zoom = 1.0;
+
+static int GetSidePanelXForField()
+{
+    return 2 * FieldX + FieldWidth;
+}
+
+static void GetFieldViewportLayout(SDL_Rect& viewport, bool& needHorizontal, bool& needVertical)
+{
+    int availableWidth = GetSidePanelXForField() - FieldX - InterfaceBorder;
+    int availableHeight = windowHeight - FieldY;
+
+    if (availableWidth < 1)
+    {
+        availableWidth = 1;
+    }
+
+    if (availableHeight < 1)
+    {
+        availableHeight = 1;
+    }
+
+    needHorizontal = false;
+    needVertical = false;
+
+    int scaledFieldWidth = Field::GetScaledFieldWidth();
+    int scaledFieldHeight = Field::GetScaledFieldHeight();
+
+    for (int i = 0; i < 2; ++i)
+    {
+        bool horizontal = scaledFieldWidth > (availableWidth - (needVertical ? FieldScrollbarSize : 0));
+        bool vertical = scaledFieldHeight > (availableHeight - (horizontal ? FieldScrollbarSize : 0));
+
+        needHorizontal = horizontal;
+        needVertical = vertical;
+    }
+
+    if (needVertical)
+    {
+        availableWidth -= FieldScrollbarSize;
+    }
+
+    if (needHorizontal)
+    {
+        availableHeight -= FieldScrollbarSize;
+    }
+
+    if (availableWidth < 1)
+    {
+        availableWidth = 1;
+    }
+
+    if (availableHeight < 1)
+    {
+        availableHeight = 1;
+    }
+
+    viewport = { FieldX, FieldY, availableWidth, availableHeight };
+}
+
+static double ClampFieldZoom(double value)
+{
+    if (value < FieldZoomMin)
+    {
+        return FieldZoomMin;
+    }
+
+    if (value > FieldZoomMax)
+    {
+        return FieldZoomMax;
+    }
+
+    return value;
+}
+
+static double GetFitScale()
+{
+    int availableWidth = GetSidePanelXForField() - FieldX - InterfaceBorder;
+    int availableHeight = windowHeight - FieldY;
+
+    if (availableWidth < 1)
+    {
+        availableWidth = 1;
+    }
+
+    if (availableHeight < 1)
+    {
+        availableHeight = 1;
+    }
+
+    double scaleX = availableWidth / (FieldWidth * 1.0);
+    double scaleY = availableHeight / (FieldHeight * 1.0);
+    double scale = (scaleX < scaleY) ? scaleX : scaleY;
+
+    return (scale > 0.05) ? scale : 0.05;
+}
+
+double Field::GetViewScale()
+{
+    return GetFitScale() * ClampFieldZoom(zoom);
+}
+
+int Field::GetScaledFieldWidth()
+{
+    return (std::max)(1, (int)std::ceil(FieldWidth * GetViewScale()));
+}
+
+int Field::GetScaledFieldHeight()
+{
+    return (std::max)(1, (int)std::ceil(FieldHeight * GetViewScale()));
+}
+
+void Field::ClampViewOffset()
+{
+    int maxX = GetMaxViewX();
+    int maxY = GetMaxViewY();
+
+    if (viewX < 0)
+    {
+        viewX = 0;
+    }
+    else if (viewX > maxX)
+    {
+        viewX = maxX;
+    }
+
+    if (viewY < 0)
+    {
+        viewY = 0;
+    }
+    else if (viewY > maxY)
+    {
+        viewY = maxY;
+    }
+}
+
+SDL_Rect Field::GetViewportRect()
+{
+    SDL_Rect viewport;
+    bool needHorizontal;
+    bool needVertical;
+
+    GetFieldViewportLayout(viewport, needHorizontal, needVertical);
+
+    return viewport;
+}
+
+int Field::GetMaxViewX()
+{
+    SDL_Rect viewport;
+    bool needHorizontal;
+    bool needVertical;
+
+    GetFieldViewportLayout(viewport, needHorizontal, needVertical);
+
+    int scaledFieldWidth = GetScaledFieldWidth();
+
+    return (scaledFieldWidth > viewport.w) ? scaledFieldWidth - viewport.w : 0;
+}
+
+int Field::GetMaxViewY()
+{
+    SDL_Rect viewport;
+    bool needHorizontal;
+    bool needVertical;
+
+    GetFieldViewportLayout(viewport, needHorizontal, needVertical);
+
+    int scaledFieldHeight = GetScaledFieldHeight();
+
+    return (scaledFieldHeight > viewport.h) ? scaledFieldHeight - viewport.h : 0;
+}
+
+bool Field::NeedHorizontalScrollbar()
+{
+    SDL_Rect viewport;
+    bool needHorizontal;
+    bool needVertical;
+
+    GetFieldViewportLayout(viewport, needHorizontal, needVertical);
+
+    return needHorizontal;
+}
+
+bool Field::NeedVerticalScrollbar()
+{
+    SDL_Rect viewport;
+    bool needHorizontal;
+    bool needVertical;
+
+    GetFieldViewportLayout(viewport, needHorizontal, needVertical);
+
+    return needVertical;
+}
+
+void Field::PanView(int deltaX, int deltaY)
+{
+    viewX -= deltaX;
+    viewY -= deltaY;
+
+    ClampViewOffset();
+}
+
+void Field::ZoomAtScreenPoint(int X, int Y, int wheelDelta)
+{
+    if (wheelDelta == 0)
+    {
+        return;
+    }
+
+    ClampViewOffset();
+
+    SDL_Rect viewport = GetViewportRect();
+    double oldScale = GetViewScale();
+    double fieldX = (viewX + X - viewport.x) / oldScale;
+    double fieldY = (viewY + Y - viewport.y) / oldScale;
+    double factor = std::pow(FieldZoomStep, std::abs(wheelDelta));
+
+    if (wheelDelta > 0)
+    {
+        zoom *= factor;
+    }
+    else
+    {
+        zoom /= factor;
+    }
+
+    zoom = ClampFieldZoom(zoom);
+
+    double newScale = GetViewScale();
+    viewX = (int)std::round(fieldX * newScale - (X - viewport.x));
+    viewY = (int)std::round(fieldY * newScale - (Y - viewport.y));
+
+    ClampViewOffset();
+}
 
 
 void Field::ChangeSeason()
@@ -617,21 +857,35 @@ void Field::tick(uint thisFrame)
 
 void Field::draw(RenderTypes render)
 {
+    ClampViewOffset();
+
+    SDL_Rect viewport = GetViewportRect();
+    int scaledFieldWidth = GetScaledFieldWidth();
+    int scaledFieldHeight = GetScaledFieldHeight();
+    double scale = GetViewScale();
+    SDL_Rect fieldRect = { FieldX - viewX, FieldY - viewY, scaledFieldWidth, scaledFieldHeight };
+
+    SDL_RenderSetClipRect(renderer, &viewport);
+
+    //Clear the whole viewport before drawing the scaled field.
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderFillRect(renderer, &viewport);
+
     //Background
     SDL_SetRenderDrawColor(renderer, FieldBackgroundColor);
-    SDL_RenderFillRect(renderer, &mainRect);
+    SDL_RenderFillRect(renderer, &fieldRect);
 
     //Mud layer
     SDL_SetRenderDrawColor(renderer, MudColor);
-    mudLayerRect.y = (FieldHeight + FieldY) - (params.mudLevel * FieldCellSize);
-    mudLayerRect.h = params.mudLevel * FieldCellSize;
-    SDL_RenderFillRect(renderer, &mudLayerRect);
+    int mudHeight = (int)std::ceil(params.mudLevel * FieldCellSize * scale);
+    SDL_Rect mud = { FieldX - viewX, FieldY - viewY + scaledFieldHeight - mudHeight, scaledFieldWidth, mudHeight };
+    SDL_RenderFillRect(renderer, &mud);
 
     //Ocean
     SDL_SetRenderDrawColor(renderer, OceanColor);
-    oceanRect.y = (FieldHeight + FieldY) - (params.oceanLevel * FieldCellSize);
-    oceanRect.h = (params.oceanLevel * FieldCellSize) - mudLayerRect.h;
-    SDL_RenderFillRect(renderer, &oceanRect);
+    int oceanHeight = (int)std::ceil(params.oceanLevel * FieldCellSize * scale);
+    SDL_Rect ocean = { FieldX - viewX, FieldY - viewY + scaledFieldHeight - oceanHeight, scaledFieldWidth, oceanHeight - mud.h };
+    SDL_RenderFillRect(renderer, &ocean);
 
     //Objects
     Object* tmpObj;
@@ -671,10 +925,12 @@ void Field::draw(RenderTypes render)
     #ifdef DrawUnderwaterMask
     {
         SDL_SetRenderDrawColor(renderer, UnderwaterMaskColor);
-        oceanRect.h = params.oceanLevel * FieldCellSize;
-        SDL_RenderFillRect(renderer, &oceanRect);
+        SDL_Rect underwater = { FieldX - viewX, FieldY - viewY + scaledFieldHeight - oceanHeight, scaledFieldWidth, oceanHeight };
+        SDL_RenderFillRect(renderer, &underwater);
     }
     #endif
+
+    SDL_RenderSetClipRect(renderer, NULL);
 
 }
 
@@ -723,16 +979,30 @@ int Field::FindDistanceX(int X1, int X2)
 
 bool Field::IsInBoundsScreenCoords(int X, int Y)
 {
-    return ((X >= mainRect.x) and (X <= mainRect.x + mainRect.w) and (Y >= mainRect.y) and (Y <= mainRect.y + mainRect.h));
+    ClampViewOffset();
+
+    SDL_Rect viewport = GetViewportRect();
+    SDL_Rect fieldRect = { FieldX - viewX, FieldY - viewY, GetScaledFieldWidth(), GetScaledFieldHeight() };
+
+    return ((X >= viewport.x) and (X < viewport.x + viewport.w) and (Y >= viewport.y) and (Y < viewport.y + viewport.h) and
+        (X >= fieldRect.x) and (X < fieldRect.x + fieldRect.w) and (Y >= fieldRect.y) and (Y < fieldRect.y + fieldRect.h));
 }
 
 Point Field::ScreenCoordsToLocal(int X, int Y)
 {
-    X -= FieldX;
-    Y -= FieldY;
+    ClampViewOffset();
 
-    X /= FieldCellSize;
-    Y /= FieldCellSize;
+    SDL_Rect viewport = GetViewportRect();
+    double scale = GetViewScale();
+
+    X -= viewport.x;
+    Y -= viewport.y;
+
+    X += viewX;
+    Y += viewY;
+
+    X = (int)std::floor((X / scale) / FieldCellSize);
+    Y = (int)std::floor((Y / scale) / FieldCellSize);
 
     X += renderX;
 

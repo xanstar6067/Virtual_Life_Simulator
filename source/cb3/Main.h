@@ -6,6 +6,7 @@
 #include "AutomaticAdaptation.h"
 #include "../SimulationMode.h"
 
+#include <filesystem>
 
 
 namespace cb3
@@ -70,6 +71,7 @@ protected:
 	void DrawLogWindow();
 	void DrawMouseFunctionWindow();
 	void DrawAdditionalsWindow();
+	void DrawFieldScrollbars();
 	void DrawModeSwitchWindow();
 	void DrawModeSwitchConfirmWindow();
 
@@ -92,6 +94,9 @@ protected:
 	bool showModeSwitchConfirm = false;
 	bool modeSwitchRequested = false;
 	SimulationMode requestedMode = SimulationMode::CyberBiology3;
+	bool fieldPanActive = false;
+	int fieldPanMouseX = 0;
+	int fieldPanMouseY = 0;
 
 	//Chart
 	Chart chart;
@@ -124,11 +129,14 @@ protected:
 
 	struct listed_file
 	{
+		std::filesystem::path pathFull;
 		string nameFull;
 		string nameShort;
 		string fileSize;
+		string fileType;
 		string modeText;
-		string fullCaption;
+		string modifiedTimeText;
+		std::filesystem::file_time_type modifiedTime;
 
 		bool isSelected = false;
 		bool isWorld = false;
@@ -137,9 +145,17 @@ protected:
 
 	vector<listed_file> allFilenames;
 	listed_file* selectedFile = NULL;
+	char renameFileName[128] = "";
+	bool saveFileNameInputActive = false;
 
 	void LoadFilenames();
-	void CreateNewFile();
+	void SelectFile(int index);
+	void RenameSelectedFile();
+	void DeleteSelectedFile();
+	void SaveSelectedObjectToNamedFile();
+	void SaveWorldToNamedFile();
+	std::filesystem::path BuildSavePath(const char* defaultPrefix);
+	void SelectFileByPath(const std::filesystem::path& filePath);
 
 	void DrawWindows();
 
@@ -182,6 +198,7 @@ public:
 	void MainLoop();
 	void HandleKeyboard();
 	void HandleMouseClick();
+	void HandleFieldNavigation();
 	bool IsTerminated() const;
 	bool ConsumeModeSwitchRequest(SimulationMode& mode);
 };

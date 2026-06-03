@@ -17,6 +17,7 @@ public:
     void Render();
     void HandleKeyboard();
     void HandleMouseClick();
+    void HandleFieldNavigation();
     void Pause();
 
     bool IsTerminated() const;

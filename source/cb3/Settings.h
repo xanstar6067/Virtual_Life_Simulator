@@ -51,6 +51,7 @@ namespace cb3
 #define InterfaceBorder 10
 
 #define GUIWindowWidth 284
+#define FieldScrollbarSize 18
 
 #define LogBackgroundColor 0.1f, 0.1f, 0.3f, 1.0f
 
@@ -134,6 +135,10 @@ namespace cb3
 
 #define FieldWidth FieldCellSize*FieldRenderCellsWidth
 #define FieldHeight FieldCellSize*FieldCellsHeight
+
+#define FieldZoomMin 1.0
+#define FieldZoomMax 8.0
+#define FieldZoomStep 1.12
 
 //-----------------------------------------------------------------
 

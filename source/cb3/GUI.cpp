@@ -54,6 +54,14 @@ void Main::DrawMainWindow()
 
 	Begin("Главное", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 	{
+		Text("Режим симуляции");
+		if (RadioButton("Classic", false))
+		{
+			showModeSwitchConfirm = true;
+		}
+		SameLine();
+		RadioButton("CyberBiology3", true);
+
 		//FPS text 
 		Text("шаги: %i", ticknum);
 		Text("(интервал %i, тиков/с: %i, кадров/с: %i)", limit_interval, realTPS, realFPS);
@@ -326,24 +334,31 @@ void Main::DrawAdditionalsWindow()
 
 void Main::DrawSaveLoadWindow()
 {
+	if (!showSaveLoad)
+	{
+		saveFileNameInputActive = false;
+		return;
+	}
+
 	if (showSaveLoad)
 	{
 		//Save/load window
 		SetNextWindowBgAlpha(1.0f);
-		SetNextWindowSize({ 650.0f, 230.0f });
+		SetNextWindowSize({ 650.0f, 260.0f });
 		SetNextWindowPos({ 100 * 1.0f, 100.0f }, ImGuiCond_Once);
 
-		Begin("Сохранение и загрузка", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		Begin("Сохранение и загрузка", &showSaveLoad, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 			//List of files
 			Text("Выберите файл");
 
-			if (BeginTable("##SaveFilesCB3", 4, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(630, 110)))
+			if (BeginTable("##SaveFilesCB3", 5, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(630, 110)))
 			{
 				TableSetupColumn("Имя", ImGuiTableColumnFlags_WidthStretch);
 				TableSetupColumn("Размер", ImGuiTableColumnFlags_WidthFixed, 70.0f);
 				TableSetupColumn("Тип", ImGuiTableColumnFlags_WidthFixed, 55.0f);
 				TableSetupColumn("Режим", ImGuiTableColumnFlags_WidthFixed, 115.0f);
+				TableSetupColumn("Дата", ImGuiTableColumnFlags_WidthFixed, 125.0f);
 				TableHeadersRow();
 
 				for (int i = 0; i < allFilenames.size(); ++i)
@@ -354,28 +369,41 @@ void Main::DrawSaveLoadWindow()
 					PushID(i);
 					if (Selectable(allFilenames[i].nameShort.c_str(), allFilenames[i].isSelected, ImGuiSelectableFlags_SpanAllColumns))
 					{
-						for (int b = 0; b < allFilenames.size(); ++b)
-							allFilenames[b].isSelected = false;
-
-						allFilenames[i].isSelected = true;
-						selectedFile = &allFilenames[i];
+						SelectFile(i);
 					}
 					PopID();
 
 					TableSetColumnIndex(1);
 					TextUnformatted(allFilenames[i].fileSize.c_str());
 					TableSetColumnIndex(2);
-					TextUnformatted(allFilenames[i].isWorld ? "мир" : "бот");
+					TextUnformatted(allFilenames[i].fileType.c_str());
 					TableSetColumnIndex(3);
 					TextUnformatted(allFilenames[i].modeText.c_str());
+					TableSetColumnIndex(4);
+					TextUnformatted(allFilenames[i].modifiedTimeText.c_str());
 				}
 
 				EndTable();
 			}
 
-			//Buttons
+			Text("Имя файла");
+			SameLine();
+			PushItemWidth(295);
+			InputText("##RenameFileNameCB3", renameFileName, sizeof(renameFileName));
+			saveFileNameInputActive = IsItemActive();
+			PopItemWidth();
 
-			if (Button("Загрузить", { 100, 30 }))
+			SameLine();
+
+			if (Button("Переименовать", { 120, 25 }))
+			{
+				RenameSelectedFile();
+			}
+
+			//Buttons
+			const ImVec2 fileButtonSize = { 120, 26 };
+
+			if (Button("Загрузить", fileButtonSize))
 			{
 				if (selectedFile)
 				{
@@ -422,52 +450,23 @@ void Main::DrawSaveLoadWindow()
 
 			SameLine();
 
-			if (Button("Сохр. бота", { 100, 30 }))
+			if (Button("Сохр. бота", fileButtonSize))
 			{
-				if (selectedObject)
-				{
-					if (selectedFile)
-					{
-						if (saver.SaveObject(selectedObject, (char*)selectedFile->nameFull.c_str()))
-						{
-							LogPrint("Объект сохранен\r\n");
-
-							LoadFilenames();
-						}
-						else
-						{
-							LogPrint("Ошибка сохранения объекта\r\n");
-						}
-					}
-				}
+				SaveSelectedObjectToNamedFile();
 			}
 
 			SameLine();
 
-			if (Button("Сохр. мир", { 100, 30 }))
+			if (Button("Сохр. мир", fileButtonSize))
 			{
-				if (selectedFile)
-				{
-					if (saver.SaveWorld(field, (char*)selectedFile->nameFull.c_str(), id, ticknum))
-					{
-						LogPrint("Мир сохранен\r\n");
-
-						LoadFilenames();
-					}
-					else
-					{
-						LogPrint("Ошибка сохранения мира\r\n");
-					}
-				}
+				SaveWorldToNamedFile();
 			}
 
 			SameLine();
 
-			if (Button("Новый файл", { 100, 30 }))
+			if (Button("Удалить", fileButtonSize))
 			{
-				CreateNewFile();
-
-				LoadFilenames();
+				DeleteSelectedFile();
 			}
 
 			if (selectedFile)
@@ -817,6 +816,65 @@ void Main::DrawAAWindow()
 	}
 }
 
+void Main::DrawFieldScrollbars()
+{
+	field->ClampViewOffset();
+
+	SDL_Rect viewport = field->GetViewportRect();
+	int maxViewX = field->GetMaxViewX();
+	int maxViewY = field->GetMaxViewY();
+
+	if ((maxViewX <= 0) and (maxViewY <= 0))
+	{
+		return;
+	}
+
+	ImGuiWindowFlags flags =
+		ImGuiWindowFlags_NoTitleBar |
+		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoMove |
+		ImGuiWindowFlags_NoCollapse |
+		ImGuiWindowFlags_NoSavedSettings |
+		ImGuiWindowFlags_NoScrollbar |
+		ImGuiWindowFlags_NoScrollWithMouse;
+
+	PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+	PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+	PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+
+	if (maxViewX > 0)
+	{
+		SetNextWindowBgAlpha(1.0f);
+		SetNextWindowPos({ viewport.x * 1.0f, (viewport.y + viewport.h) * 1.0f });
+		SetNextWindowSize({ viewport.w * 1.0f, FieldScrollbarSize * 1.0f });
+
+		Begin("##FieldScrollXWindowCB3", NULL, flags);
+		{
+			PushItemWidth(viewport.w * 1.0f);
+			SliderInt("##FieldScrollXCB3", &Field::viewX, 0, maxViewX, "");
+			PopItemWidth();
+		}
+		End();
+	}
+
+	if (maxViewY > 0)
+	{
+		SetNextWindowBgAlpha(1.0f);
+		SetNextWindowPos({ (viewport.x + viewport.w) * 1.0f, viewport.y * 1.0f });
+		SetNextWindowSize({ FieldScrollbarSize * 1.0f, viewport.h * 1.0f });
+
+		Begin("##FieldScrollYWindowCB3", NULL, flags);
+		{
+			VSliderInt("##FieldScrollYCB3", { FieldScrollbarSize * 1.0f, viewport.h * 1.0f }, &Field::viewY, 0, maxViewY, "");
+		}
+		End();
+	}
+
+	PopStyleVar(3);
+
+	field->ClampViewOffset();
+}
+
 void Main::DrawModeSwitchWindow()
 {
 }
@@ -859,6 +917,7 @@ void Main::DrawWindows()
 	#endif
 
 	DrawMainWindow();
+	DrawFieldScrollbars();
 	DrawSystemWindow();
 	DrawControlsWindow();
 	DrawSelectionWindow();
@@ -1018,8 +1077,11 @@ void Main::Render()
 	//Begin frame
 
 	//Clear background
+	UpdateWindowSize();
 	glClearColor(BackgroundColorFloat);
 	glClear(GL_COLOR_BUFFER_BIT);
+	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+	SDL_RenderClear(renderer);
 
 	//Render
 	if (renderType != noRender)
