@@ -755,6 +755,10 @@ void Field::draw(RenderTypes render)
 
     SDL_RenderSetClipRect(renderer, &viewport);
 
+    //Clear the whole viewport before drawing the scaled field.
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderFillRect(renderer, &viewport);
+
     //Background
     SDL_SetRenderDrawColor(renderer, FieldBackgroundColor);
     SDL_RenderFillRect(renderer, &fieldRect);

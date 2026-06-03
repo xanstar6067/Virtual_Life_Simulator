@@ -982,16 +982,16 @@ void Main::DrawInfoWindow()
 	if (showInfo)
 	{
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::SetNextWindowSize({ 560.0f, 520.0f });
+		ImGui::SetNextWindowSize({ 640.0f, 620.0f });
 		ImGui::SetNextWindowPos({ 140.0f, 120.0f }, ImGuiCond_Once);
 
 		ImGui::Begin("Инфо", &showInfo, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 			ImGui::Text("Горячие клавиши");
 
-			if (ImGui::BeginTable("##Hotkeys", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(540, 465)))
+			if (ImGui::BeginTable("##Hotkeys", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(620, 380)))
 			{
-				ImGui::TableSetupColumn("Клавиша", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+				ImGui::TableSetupColumn("Клавиша", ImGuiTableColumnFlags_WidthFixed, 165.0f);
 				ImGui::TableSetupColumn("Действие", ImGuiTableColumnFlags_WidthStretch);
 				ImGui::TableHeadersRow();
 
@@ -1024,7 +1024,9 @@ void Main::DrawInfoWindow()
 					{ "B", "Окно мозга выбранного бота" },
 				};
 
-				for (int i = 0; i < sizeof(hotkeys) / sizeof(hotkeys[0]); ++i)
+				const int numHotkeys = (int)(sizeof(hotkeys) / sizeof(hotkeys[0]));
+
+				for (int i = 0; i < numHotkeys; ++i)
 				{
 					ImGui::TableNextRow();
 
@@ -1032,7 +1034,47 @@ void Main::DrawInfoWindow()
 					ImGui::TextUnformatted(hotkeys[i].key);
 
 					ImGui::TableSetColumnIndex(1);
-					ImGui::TextUnformatted(hotkeys[i].action);
+					ImGui::TextWrapped(hotkeys[i].action);
+				}
+
+				ImGui::EndTable();
+			}
+
+			ImGui::Spacing();
+			ImGui::Separator();
+			ImGui::Spacing();
+			ImGui::Text("Мышь");
+
+			if (ImGui::BeginTable("##MouseControlsInfo", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg, ImVec2(620, 0)))
+			{
+				ImGui::TableSetupColumn("Действие", ImGuiTableColumnFlags_WidthFixed, 165.0f);
+				ImGui::TableSetupColumn("Описание", ImGuiTableColumnFlags_WidthStretch);
+				ImGui::TableHeadersRow();
+
+				struct mouse_info
+				{
+					const char* input;
+					const char* action;
+				};
+
+				const mouse_info mouseControls[] =
+				{
+					{ "ЛКМ по клетке", "Выполнить выбранную функцию мыши: выбрать бота, удалить, поставить камень, загрузить объект из файла или мутировать." },
+					{ "Колесико", "Приблизить или отдалить поле относительно курсора. Отдаление ограничено размером области поля в окне." },
+					{ "Зажать СКМ", "Перетаскивать поле для просмотра увеличенного участка." },
+				};
+
+				const int numMouseControls = (int)(sizeof(mouseControls) / sizeof(mouseControls[0]));
+
+				for (int i = 0; i < numMouseControls; ++i)
+				{
+					ImGui::TableNextRow();
+
+					ImGui::TableSetColumnIndex(0);
+					ImGui::TextUnformatted(mouseControls[i].input);
+
+					ImGui::TableSetColumnIndex(1);
+					ImGui::TextWrapped(mouseControls[i].action);
 				}
 
 				ImGui::EndTable();
