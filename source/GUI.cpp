@@ -1164,6 +1164,40 @@ void Main::DrawWindows()
 	DrawExitConfirmWindow();
 }
 
+void Main::HandleFieldNavigation()
+{
+	bool middleDown = (mouseState.buttons & SDL_BUTTON(SDL_BUTTON_MIDDLE)) != 0;
+	bool mouseOverField = field->IsInBoundsScreenCoords(mouseState.mouseX, mouseState.mouseY);
+
+	if ((mouseState.wheel != 0) && mouseOverField && !io->WantCaptureMouse)
+	{
+		field->ZoomAtScreenPoint(mouseState.mouseX, mouseState.mouseY, mouseState.wheel);
+	}
+
+	if (middleDown)
+	{
+		if (!fieldPanActive)
+		{
+			if (mouseOverField && !io->WantCaptureMouse)
+			{
+				fieldPanActive = true;
+				fieldPanMouseX = mouseState.mouseX;
+				fieldPanMouseY = mouseState.mouseY;
+			}
+		}
+		else
+		{
+			field->PanView(mouseState.mouseX - fieldPanMouseX, mouseState.mouseY - fieldPanMouseY);
+			fieldPanMouseX = mouseState.mouseX;
+			fieldPanMouseY = mouseState.mouseY;
+		}
+	}
+	else
+	{
+		fieldPanActive = false;
+	}
+}
+
 void Main::MouseClick()
 {
 	if (!(nn_renderer.MouseClick({ mouseState.mouseX, mouseState.mouseY }) && (showBrain)))

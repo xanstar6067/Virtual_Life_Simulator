@@ -180,6 +180,7 @@ bool ReadMouseState()
 	io->MousePos = ImVec2(static_cast<float>(mouseState.mouseX), static_cast<float>(mouseState.mouseY));
 	io->MouseDown[0] = mouseState.buttons & SDL_BUTTON(SDL_BUTTON_LEFT);
 	io->MouseDown[1] = mouseState.buttons & SDL_BUTTON(SDL_BUTTON_RIGHT);
+	io->MouseDown[2] = mouseState.buttons & SDL_BUTTON(SDL_BUTTON_MIDDLE);
 	io->MouseWheel = static_cast<float>(mouseState.wheel);
 	
 	io->KeyShift = ((SDL_GetModState() & KMOD_SHIFT) != 0);

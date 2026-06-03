@@ -90,6 +90,10 @@ private:
 	bool showInfo = false;
 	bool showExitConfirm = false;
 
+	bool fieldPanActive = false;
+	int fieldPanMouseX = 0;
+	int fieldPanMouseY = 0;
+
 	//Chart (TODO)
 	float chartData_bots[ChartNumValues];
 	float chartData_apples[ChartNumValues];
@@ -180,6 +184,8 @@ public:
 
 
 	void MakeStep();
+
+	void HandleFieldNavigation();
 	
 	void MouseClick();
 

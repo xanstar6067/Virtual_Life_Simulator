@@ -122,6 +122,10 @@
 #define FieldWidth FieldCellSize*FieldRenderCellsWidth
 #define FieldHeight FieldCellSize*FieldCellsHeight
 
+#define FieldZoomMin 0.25
+#define FieldZoomMax 8.0
+#define FieldZoomStep 1.12
+
 //-----------------------------------------------------------------
 
 

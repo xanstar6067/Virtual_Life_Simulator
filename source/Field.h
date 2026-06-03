@@ -176,6 +176,11 @@ public:
     int GetMaxViewY();
     bool NeedHorizontalScrollbar();
     bool NeedVerticalScrollbar();
+    static double GetViewScale();
+    static int GetScaledFieldWidth();
+    static int GetScaledFieldHeight();
+    void PanView(int deltaX, int deltaY);
+    void ZoomAtScreenPoint(int X, int Y, int wheelDelta);
 
     //Is cell out if bounds?
     bool IsInBounds(int X, int Y);
@@ -227,6 +232,7 @@ public:
     static int renderX;
     static int viewX;
     static int viewY;
+    static double zoom;
 
     FieldDynamicParams params;
 };

@@ -173,7 +173,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 			}
 			else if (e.type == SDL_MOUSEWHEEL)
 			{
-				mouseState.wheel = e.wheel.y;
+				mouseState.wheel += e.wheel.y;
 			}
 			else if (e.type == SDL_KEYDOWN)
 			{
@@ -182,7 +182,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 		}
 
 		//Mouse down event
-		if (ReadMouseState())
+		bool mouseClick = ReadMouseState();
+
+		simulation.HandleFieldNavigation();
+
+		if (mouseClick)
 		{
 			simulation.MouseClick();
 		}
