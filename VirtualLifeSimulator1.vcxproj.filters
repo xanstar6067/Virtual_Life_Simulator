@@ -13,6 +13,12 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Исходные файлы\cb3">
+      <UniqueIdentifier>{9B9C8174-61D0-4DD7-9D26-71158BFE64B1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Файлы заголовков\cb3">
+      <UniqueIdentifier>{E530723A-01BC-4764-BAD5-D0CD8FA15E47}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\Apple.cpp">
@@ -56,6 +62,57 @@
     </ClCompile>
     <ClCompile Include="source\SDL.cpp">
       <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Cb3Runtime.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Apple.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\AutomaticAdaptation.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Bot.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\BotNeuralNet.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Chart.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Field.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\GUI.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\ImageFactory.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Main.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\NeuralNetRenderer.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Neuron.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Object.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\ObjectSaver.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Organics.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Rock.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Utils.cpp">
+      <Filter>Исходные файлы\cb3</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -109,6 +166,69 @@
     </ClInclude>
     <ClInclude Include="resource.h">
       <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="source\Cb3Runtime.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="source\SimulationMode.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\Apple.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\AutomaticAdaptation.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\Bot.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\BotNeuralNet.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\Chart.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\Field.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\GUI.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\ImageFactory.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\Main.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\NeuralNetRenderer.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\Neuron.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\Object.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\ObjectSaver.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\Organics.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\Rock.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\SDL.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\Settings.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\Systems.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
+    <ClInclude Include="source\cb3\Utils.h">
+      <Filter>Файлы заголовков\cb3</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

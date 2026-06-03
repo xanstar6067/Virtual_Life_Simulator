@@ -235,6 +235,11 @@ void Main::ChangeSeason()
 
 void Main::Pause()
 {
+	if (!field)
+	{
+		return;
+	}
+
 	simulate = !simulate;
 
 	if (simulate)
@@ -249,6 +254,16 @@ void Main::Pause()
 
 void Main::MakeStep()
 {
+	if (!IsClassicMode())
+	{
+		if (cb3Runtime)
+		{
+			cb3Runtime->MakeStep();
+			CheckRuntimeRequests();
+		}
+		return;
+	}
+
 	//Simulation step
 	currentTick = clock.now();
 
@@ -455,7 +470,17 @@ void Main::LoadFilenames()
 		if (size > 0)
 			magicNumber = file.ReadInt();
 
-		if ((magicNumber == MagicNumber_WorldFile) || (magicNumber == MagicNumber_WorldFileV2))
+		int modeId = 0;
+
+		if ((magicNumber == MagicNumber_WorldFileV2) || (magicNumber == MagicNumber_ObjectFile))
+		{
+			modeId = file.ReadInt();
+		}
+
+		f.mode = SimulationModeFromId(modeId);
+		f.modeText = (modeId > 0) ? SimulationModeName(f.mode) : "-";
+
+		if (magicNumber == MagicNumber_WorldFileV2)
 			f.isWorld = true;
 		else
 			f.isWorld = false;
@@ -738,8 +763,129 @@ Main::~Main()
 	delete field;
 }
 
+bool Main::IsClassicMode() const
+{
+	return activeMode == SimulationMode::Classic;
+}
+
+void Main::ResetClassicWorld()
+{
+	if (field)
+	{
+		delete field;
+		field = NULL;
+	}
+
+	Deselect();
+	ClearChart();
+	Field::renderX = 0;
+	Field::viewX = 0;
+	Field::viewY = 0;
+	Field::zoom = 1.0;
+	ticknum = 0;
+	tpsTickCounter = 0;
+	realTPS = 0;
+	realFPS = 0;
+	fpsCounter = 0;
+	timeBeforeNextDataToChart = AddToChartEvery;
+
+#ifdef RandomSeed
+	seed = GetTickCount();
+#else
+	seed = Seed;
+#endif
+
+	Field::seed = seed;
+	srand(seed);
+	id = rand();
+
+	field = new Field();
+
+#ifdef StartOnPause
+	simulate = true;
+	Pause();
+#else
+	simulate = true;
+#endif
+
+	LoadFilenames();
+}
+
+void Main::RequestSimulationMode(SimulationMode mode)
+{
+	if (mode == activeMode)
+		return;
+
+	pendingMode = mode;
+	showModeSwitchConfirm = true;
+}
+
+void Main::SwitchSimulationMode(SimulationMode mode)
+{
+	if (mode == activeMode)
+		return;
+
+	Deselect();
+	showSaveLoad = false;
+	showDangerous = false;
+	showBrain = false;
+	showAdaptation = false;
+	showChart = false;
+	showInfo = false;
+	saveFileNameInputActive = false;
+	selectedFile = NULL;
+	allFilenames.clear();
+
+	if (mode == SimulationMode::CyberBiology3)
+	{
+		if (field)
+		{
+			delete field;
+			field = NULL;
+		}
+
+		cb3Runtime = std::make_unique<Cb3Runtime>();
+		activeMode = SimulationMode::CyberBiology3;
+		simulate = true;
+	}
+	else
+	{
+		cb3Runtime.reset();
+		activeMode = SimulationMode::Classic;
+		ResetClassicWorld();
+	}
+}
+
+void Main::CheckRuntimeRequests()
+{
+	if (!cb3Runtime)
+		return;
+
+	if (cb3Runtime->IsTerminated())
+	{
+		terminate = true;
+		return;
+	}
+
+	SimulationMode requestedMode;
+	if (cb3Runtime->ConsumeModeSwitchRequest(requestedMode))
+	{
+		SwitchSimulationMode(requestedMode);
+	}
+}
+
 void Main::CatchKeyboard()
 {
+	if (!IsClassicMode())
+	{
+		if (cb3Runtime)
+		{
+			cb3Runtime->HandleKeyboard();
+			CheckRuntimeRequests();
+		}
+		return;
+	}
+
 	if (saveFileNameInputActive)
 	{
 		return;

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -42,6 +42,55 @@
     <ClCompile Include="imgui\backends\imgui_impl_sdlrenderer.cpp" />
     <ClCompile Include="IMplot\implot.cpp" />
     <ClCompile Include="IMplot\implot_items.cpp" />
+    <ClCompile Include="source\Cb3Runtime.cpp" />
+    <ClCompile Include="source\cb3\Apple.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\AutomaticAdaptation.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Bot.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\BotNeuralNet.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Chart.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Field.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\GUI.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\ImageFactory.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Main.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\NeuralNetRenderer.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Neuron.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Object.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\ObjectSaver.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Organics.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Rock.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="source\cb3\Utils.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="source\Apple.h" />
@@ -61,6 +110,27 @@
     <ClInclude Include="source\Settings.h" />
     <ClInclude Include="source\Systems.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="source\Cb3Runtime.h" />
+    <ClInclude Include="source\SimulationMode.h" />
+    <ClInclude Include="source\cb3\Apple.h" />
+    <ClInclude Include="source\cb3\AutomaticAdaptation.h" />
+    <ClInclude Include="source\cb3\Bot.h" />
+    <ClInclude Include="source\cb3\BotNeuralNet.h" />
+    <ClInclude Include="source\cb3\Chart.h" />
+    <ClInclude Include="source\cb3\Field.h" />
+    <ClInclude Include="source\cb3\GUI.h" />
+    <ClInclude Include="source\cb3\ImageFactory.h" />
+    <ClInclude Include="source\cb3\Main.h" />
+    <ClInclude Include="source\cb3\NeuralNetRenderer.h" />
+    <ClInclude Include="source\cb3\Neuron.h" />
+    <ClInclude Include="source\cb3\Object.h" />
+    <ClInclude Include="source\cb3\ObjectSaver.h" />
+    <ClInclude Include="source\cb3\Organics.h" />
+    <ClInclude Include="source\cb3\Rock.h" />
+    <ClInclude Include="source\cb3\SDL.h" />
+    <ClInclude Include="source\cb3\Settings.h" />
+    <ClInclude Include="source\cb3\Systems.h" />
+    <ClInclude Include="source\cb3\Utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="VirtualLifeSimulator.rc" />
@@ -137,7 +207,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(SDL2Dir)include;$(SDL2ImageDir)include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
@@ -156,7 +226,7 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(SDL2Dir)include;$(SDL2ImageDir)include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
@@ -175,7 +245,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(SDL2Dir)include;$(SDL2ImageDir)include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
@@ -194,7 +264,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(SDL2Dir)include;$(SDL2ImageDir)include;$(ProjectDir)imgui;$(ProjectDir)imgui\backends;$(ProjectDir)IMplot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>

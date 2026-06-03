@@ -1,8 +1,10 @@
-
 #include "Field.h"
 
-static constexpr int SaveModeId = static_cast<int>(SimulationMode::Classic);
 
+namespace cb3
+{
+
+static constexpr int SaveModeId = static_cast<int>(SimulationMode::CyberBiology3);
 
 Bot* ObjectSaver::LoadBotFromFile(MyInputStream& file)
 {
@@ -10,19 +12,26 @@ Bot* ObjectSaver::LoadBotFromFile(MyInputStream& file)
 
     if (file.ReadInt() != NumberOfMutationMarkers)
         return NULL;
-
     if (file.ReadInt() != NumNeuronLayers)
         return NULL;
-    if (file.ReadInt() != NeuronsInLayer)
+    if (file.ReadInt() != NumNeuronsInLayerMax)
         return NULL;
-    if (file.ReadInt() != sizeof Neuron)
+    if (file.ReadInt() != sizeof(Neuron))
         return NULL;
 
     Bot* toRet = new Bot(0, 0);
 
     toRet->SetLifetime(lifetime);
 
-    toRet->SetColor( file.ReadInt(), file.ReadInt(), file.ReadInt() );
+    Color c;
+
+    repeat(3)
+    {
+        c.c[i] = file.ReadInt();
+        c.change_vector[i] = file.ReadInt();
+    }
+
+    toRet->SetColor( c );
 
     repeat(NumberOfMutationMarkers)
     {
@@ -30,12 +39,11 @@ Bot* ObjectSaver::LoadBotFromFile(MyInputStream& file)
     }
 
     toRet->energy = file.ReadInt();
+    toRet->SetDirection(file.ReadInt());
 
-    file.read((char*)(toRet->GetActiveBrain()->allNeurons), NumNeuronLayers * NeuronsInLayer * sizeof(Neuron));
-
-    file.read((char*)(toRet->GetInitialBrain()->allNeurons), NumNeuronLayers* NeuronsInLayer * sizeof(Neuron));
-
-    file.read((char*)toRet->GetActiveBrain()->allMemory, NumNeuronLayers* NeuronsInLayer * sizeof(float));
+    file.read((char*)toRet->GetActiveBrain()->allNeurons, NumNeuronLayers * NumNeuronsInLayerMax * sizeof(Neuron));
+    file.read((char*)toRet->GetInitialBrain()->allNeurons, NumNeuronLayers * NumNeuronsInLayerMax * sizeof(Neuron));
+    file.read((char*)toRet->GetActiveBrain()->allMemory, NumNeuronLayers * NumNeuronsInLayerMax);
 
     return toRet;
 }
@@ -76,100 +84,122 @@ Object* ObjectSaver::LoadObjectFromFile(MyInputStream& file)
     return NULL;
 }
 
-ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, char* filename)
+ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, char* filename, bool clearWorld, bool loadParams, bool loadLandscape, bool loadBots)
 {
-    return LoadWorld(world, std::filesystem::path(filename));
-}
+    WorldParams toRet = {-1, -1, -1, -1, -1};
+    Object* tmpObj;
 
-
-ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, const std::filesystem::path& filename)
-{
     //Open file for reading, binary type
     MyInputStream file(filename, std::ios::in | std::ios::binary | std::ios::beg);
 
     if (file.is_open())
     {
-        int magicNumber = file.ReadInt();
+        //Check magic number
+        if (file.ReadInt() != MagicNumber_WorldFile)
+            goto NoSuccess;
 
-        if (magicNumber == MagicNumber_WorldFileV2)
+        if (file.ReadInt() != SaveModeId)
+            goto NoSuccess;
+
+        //Read world size
+        toRet.width = file.ReadInt();
+        toRet.height = file.ReadInt();
+
+        if (toRet.height != FieldCellsHeight)
+            goto NoSuccess;
+                
+        if(loadParams)
         {
-            int modeId = file.ReadInt();
+            //Load world params
+            toRet.id = file.ReadInt();
+            toRet.seed = file.ReadInt();
+            toRet.tick = file.ReadInt();
 
-            if (modeId != SaveModeId)
+            if (file.ReadInt() != sizeof world->params)
+                goto NoSuccess;
+
+            file.read((char*)&world->params, sizeof world->params);
+        }
+        else
+        {
+            //Skip world params
+            file.ignore(4 * 3);
+
+            if (file.ReadInt() != sizeof world->params)
+                goto NoSuccess;
+            
+            file.ignore(sizeof world->params);
+        }
+
+        if (file.ReadInt() != NumberOfMutationMarkers)
+            goto NoSuccess;
+
+        if (file.ReadInt() != NumNeuronLayers)
+            goto NoSuccess;
+
+        if (file.ReadInt() != NumNeuronsInLayerMax)
+            goto NoSuccess;
+
+        int objectCount = file.ReadInt();
+        if (objectCount < 0)
+            goto NoSuccess;
+
+        //Clear world after the header has been validated.
+        if(clearWorld)
+            world->RemoveAllObjects();
+
+        //Load objects
+        for (int i = 0; i < objectCount; ++i)
+        {
+            int x = file.ReadUShort();
+            int y = file.ReadUShort();
+
+            tmpObj = LoadObjectCompact(file);
+
+            if (!tmpObj)
+                goto NoSuccess;
+
+            if ((x >= FieldCellsWidth) || (y >= FieldCellsHeight))
             {
-                file.close();
-                return {-1, -1};
+                delete tmpObj;
+                continue;
             }
 
-            WorldParams result = LoadWorldCompact(world, file);
-            file.close();
-            return result;
+            switch (tmpObj->type())
+            {
+            case rock:
+                if (!loadLandscape)
+                {
+                    delete tmpObj;
+                    continue;
+                }
+                break;
+
+            case bot:
+                if (!loadBots)
+                {
+                    delete tmpObj;
+                    continue;
+                }
+                break;
+            }
+
+            tmpObj->x = x;
+            tmpObj->y = y;
+
+            if (!world->AddObject(tmpObj))
+            {
+                delete tmpObj;
+            }
         }
 
         file.close();
+
+        return toRet;
     }
 
+    NoSuccess:
     return {-1, -1};
-}
-
-ObjectSaver::WorldParams ObjectSaver::LoadWorldCompact(Field* world, MyInputStream& file)
-{
-    WorldParams toRet = {-1, -1, -1, -1};
-    Object* tmpObj;
-
-    int loadWidth = file.ReadInt();
-    toRet.width = loadWidth;
-
-    if (file.ReadInt() != FieldCellsHeight)
-        return {-1, -1};
-
-    toRet.id = file.ReadInt();
-    toRet.seed = file.ReadInt();
-    toRet.tick = file.ReadInt();
-
-    if (file.ReadInt() != sizeof world->params)
-        return {-1, -1};
-
-    file.read((char*)&world->params, sizeof world->params);
-
-    if (file.ReadInt() != NumberOfMutationMarkers)
-        return {-1, -1};
-
-    if (file.ReadInt() != NumNeuronLayers)
-        return {-1, -1};
-
-    if (file.ReadInt() != NeuronsInLayer)
-        return {-1, -1};
-
-    int objectCount = file.ReadInt();
-    if (objectCount < 0)
-        return {-1, -1};
-
-    world->RemoveAllObjects();
-
-    for (int i = 0; i < objectCount; ++i)
-    {
-        int x = file.ReadUShort();
-        int y = file.ReadUShort();
-
-        tmpObj = LoadObjectCompact(file);
-
-        if (!tmpObj)
-            return {-1, -1};
-
-        if ((x >= FieldCellsWidth) || (y >= FieldCellsHeight))
-        {
-            delete tmpObj;
-            continue;
-        }
-
-        tmpObj->x = x;
-        tmpObj->y = y;
-
-        world->AddObject(tmpObj);
-    }
-
-    return toRet;
 }
 
 
@@ -187,27 +217,23 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorldCompact(Field* world, MyInputStre
 */
 bool ObjectSaver::SaveWorld(Field* world, char* filename, int id, int ticknum)
 {
-    return SaveWorld(world, std::filesystem::path(filename), id, ticknum);
-}
-
-
-bool ObjectSaver::SaveWorld(Field* world, const std::filesystem::path& filename, int id, int ticknum)
-{
+    //Open file for writing, binary type
     MyOutStream file(filename, std::ios::in | std::ios::binary | std::ios::trunc);
     Object* tmpObj;
 
     if (file.is_open())
     {
-        file.WriteInt(MagicNumber_WorldFileV2);
+        //Magic number
+        file.WriteInt(MagicNumber_WorldFile);
         file.WriteInt(SaveModeId);
 
+        //World size
         file.WriteInt(FieldCellsWidth);
         file.WriteInt(FieldCellsHeight);
 
+        //World params
         file.WriteInt(id);
-
         file.WriteInt(world->seed);
-
         file.WriteInt(ticknum);
 
         file.WriteInt(sizeof world->params);
@@ -215,7 +241,7 @@ bool ObjectSaver::SaveWorld(Field* world, const std::filesystem::path& filename,
 
         file.WriteInt(NumberOfMutationMarkers);
         file.WriteInt(NumNeuronLayers);
-        file.WriteInt(NeuronsInLayer);
+        file.WriteInt(NumNeuronsInLayerMax);
 
         int objectCount = 0;
 
@@ -230,18 +256,19 @@ bool ObjectSaver::SaveWorld(Field* world, const std::filesystem::path& filename,
 
         file.WriteInt(objectCount);
 
+        //All objects
         for (int x = 0; x < FieldCellsWidth; ++x)
         {
             for (int y = 0; y < FieldCellsHeight; ++y)
             {
                 tmpObj = world->GetObjectLocalCoords(x, y);
 
-                if (!tmpObj)
-                    continue;
-
-                file.WriteUShort((unsigned short)x);
-                file.WriteUShort((unsigned short)y);
-                WriteObjectCompact(file, tmpObj);
+                if (tmpObj)
+                {
+                    file.WriteUShort((unsigned short)x);
+                    file.WriteUShort((unsigned short)y);
+                    WriteObjectCompact(file, tmpObj);
+                }
             }
         }
 
@@ -255,14 +282,14 @@ bool ObjectSaver::SaveWorld(Field* world, const std::filesystem::path& filename,
 
 void ObjectSaver::WriteBrainCompact(MyOutStream& file, BotNeuralNet* brain, bool includeMemory)
 {
-    for (int layer = 0; layer < NumNeuronLayers; ++layer)
+    for (uint layer = 0; layer < NumNeuronLayers; ++layer)
     {
-        for (int neuronIndex = 0; neuronIndex < NeuronsInLayer; ++neuronIndex)
+        for (uint neuronIndex = 0; neuronIndex < NumNeuronsInLayerMax; ++neuronIndex)
         {
             Neuron* neuron = &brain->allNeurons[layer][neuronIndex];
 
             file.WriteByte((byte)neuron->type);
-            file.WriteFloat(neuron->bias);
+            file.WriteByte((byte)neuron->bias);
             file.WriteByte((byte)neuron->numConnections);
 
             for (uint connectionIndex = 0; connectionIndex < neuron->numConnections; ++connectionIndex)
@@ -271,29 +298,29 @@ void ObjectSaver::WriteBrainCompact(MyOutStream& file, BotNeuralNet* brain, bool
 
                 file.WriteByte(connection->dest_layer);
                 file.WriteByte(connection->dest_neuron);
-                file.WriteFloat(connection->weight);
+                file.WriteByte((byte)connection->weight);
             }
         }
     }
 
     if (includeMemory)
-        file.write((char*)brain->allMemory, NumNeuronLayers * NeuronsInLayer * sizeof(float));
+        file.write((char*)brain->allMemory, NumNeuronLayers * NumNeuronsInLayerMax);
 }
 
 bool ObjectSaver::LoadBrainCompact(MyInputStream& file, BotNeuralNet* brain, bool includeMemory)
 {
-    for (int layer = 0; layer < NumNeuronLayers; ++layer)
+    for (uint layer = 0; layer < NumNeuronLayers; ++layer)
     {
-        for (int neuronIndex = 0; neuronIndex < NeuronsInLayer; ++neuronIndex)
+        for (uint neuronIndex = 0; neuronIndex < NumNeuronsInLayerMax; ++neuronIndex)
         {
             Neuron* neuron = &brain->allNeurons[layer][neuronIndex];
 
             neuron->type = (NeuronType)file.ReadByte();
-            neuron->bias = file.ReadFloat();
+            neuron->layer = (byte)layer;
+            neuron->bias = (int8_t)file.ReadByte();
             neuron->numConnections = file.ReadByte();
-            neuron->layer = layer;
 
-            if (neuron->numConnections > NeuronsInLayer)
+            if (neuron->numConnections > NumNeuronsInLayerMax)
                 return false;
 
             for (uint connectionIndex = 0; connectionIndex < neuron->numConnections; ++connectionIndex)
@@ -302,28 +329,30 @@ bool ObjectSaver::LoadBrainCompact(MyInputStream& file, BotNeuralNet* brain, boo
 
                 connection->dest_layer = file.ReadByte();
                 connection->dest_neuron = file.ReadByte();
-                connection->weight = file.ReadFloat();
+                connection->weight = (int8_t)file.ReadByte();
 
-                if ((connection->dest_layer >= NumNeuronLayers) || (connection->dest_neuron >= NeuronsInLayer))
+                if ((connection->dest_layer >= NumNeuronLayers) || (connection->dest_neuron >= NumNeuronsInLayerMax))
                     return false;
             }
         }
     }
 
     if (includeMemory)
-        file.read((char*)brain->allMemory, NumNeuronLayers * NeuronsInLayer * sizeof(float));
+        file.read((char*)brain->allMemory, NumNeuronLayers * NumNeuronsInLayerMax);
 
     return true;
 }
 
 void ObjectSaver::WriteBotCompact(MyOutStream& file, Bot* obj)
 {
-    file.WriteByte((byte)obj->type);
+    file.WriteByte((byte)obj->type());
     file.WriteInt(obj->GetLifetime());
 
-    file.WriteByte((byte)obj->GetColor()->r);
-    file.WriteByte((byte)obj->GetColor()->g);
-    file.WriteByte((byte)obj->GetColor()->b);
+    repeat(3)
+    {
+        file.WriteInt(obj->GetColor()->c[i]);
+        file.WriteInt(obj->GetColor()->change_vector[i]);
+    }
 
     repeat(NumberOfMutationMarkers)
     {
@@ -331,6 +360,7 @@ void ObjectSaver::WriteBotCompact(MyOutStream& file, Bot* obj)
     }
 
     file.WriteInt(obj->energy);
+    file.WriteInt(obj->GetDirection());
 
     WriteBrainCompact(file, obj->GetActiveBrain(), true);
     WriteBrainCompact(file, obj->GetInitialBrain(), false);
@@ -341,7 +371,16 @@ Bot* ObjectSaver::LoadBotCompact(MyInputStream& file)
     Bot* toRet = new Bot(0, 0);
 
     toRet->SetLifetime(file.ReadInt());
-    toRet->SetColor(file.ReadByte(), file.ReadByte(), file.ReadByte());
+
+    Color c;
+
+    repeat(3)
+    {
+        c.c[i] = file.ReadInt();
+        c.change_vector[i] = (char)file.ReadInt();
+    }
+
+    toRet->SetColor(c);
 
     repeat(NumberOfMutationMarkers)
     {
@@ -349,6 +388,7 @@ Bot* ObjectSaver::LoadBotCompact(MyInputStream& file)
     }
 
     toRet->energy = file.ReadInt();
+    toRet->SetDirection(file.ReadInt());
 
     if (!LoadBrainCompact(file, toRet->GetActiveBrain(), true))
     {
@@ -367,7 +407,7 @@ Bot* ObjectSaver::LoadBotCompact(MyInputStream& file)
 
 void ObjectSaver::WriteObjectCompact(MyOutStream& file, Object* obj)
 {
-    switch (obj->type)
+    switch (obj->type())
     {
     case bot:
         WriteBotCompact(file, (Bot*)obj);
@@ -391,7 +431,7 @@ void ObjectSaver::WriteObjectCompact(MyOutStream& file, Object* obj)
         break;
 
     default:
-        throw("TODO save object");
+        throw;
     }
 }
 
@@ -406,25 +446,19 @@ Object* ObjectSaver::LoadObjectCompact(MyInputStream& file)
 
     case rock:
         toRet = new Rock(0, 0);
-
         toRet->SetLifetime(file.ReadInt());
-
         return toRet;
 
     case apple:
         toRet = new Apple(0, 0);
-
         toRet->SetLifetime(file.ReadInt());
         toRet->energy = file.ReadInt();
-
         return toRet;
 
     case organic_waste:
         toRet = new Organics(0, 0, 0);
-
         toRet->SetLifetime(file.ReadInt());
         toRet->energy = file.ReadInt();
-
         return toRet;
     }
 
@@ -434,35 +468,37 @@ Object* ObjectSaver::LoadObjectCompact(MyInputStream& file)
 
 void ObjectSaver::WriteBotToFile(MyOutStream& file, Bot* obj)
 {
-    file.WriteInt(obj->type);
+    file.WriteInt(obj->type());
     file.WriteInt(obj->GetLifetime());
 
     file.WriteInt(NumberOfMutationMarkers);
 
     file.WriteInt(NumNeuronLayers);
-    file.WriteInt(NeuronsInLayer);
-    file.WriteInt(sizeof Neuron);
+    file.WriteInt(NumNeuronsInLayerMax);
+    file.WriteInt(sizeof(Neuron));
 
-    file.WriteInt((obj)->GetColor()->r);
-    file.WriteInt((obj)->GetColor()->g);
-    file.WriteInt((obj)->GetColor()->b);
+    repeat(3)
+    {
+        file.WriteInt(obj->GetColor()->c[i]);
+        file.WriteInt(obj->GetColor()->change_vector[i]);
+    }
 
     repeat(NumberOfMutationMarkers)
     {
-        file.WriteInt((obj)->GetMarkers()[i]);
+        file.WriteInt(obj->GetMarkers()[i]);
     }
 
-    file.WriteInt((obj)->energy);
+    file.WriteInt(obj->energy);
+    file.WriteInt(obj->GetDirection());
 
-    file.write((char*)(obj)->GetActiveBrain()->allNeurons, NumNeuronLayers * NeuronsInLayer * sizeof(Neuron));
-    file.write((char*)(obj)->GetInitialBrain()->allNeurons, NumNeuronLayers * NeuronsInLayer * sizeof(Neuron));
-
-    file.write((char*)(obj)->GetActiveBrain()->allMemory, NumNeuronLayers* NeuronsInLayer * sizeof(float));
+    file.write((char*)(obj)->GetActiveBrain()->allNeurons, NumNeuronLayers * NumNeuronsInLayerMax * sizeof(Neuron));
+    file.write((char*)(obj)->GetInitialBrain()->allNeurons, NumNeuronLayers * NumNeuronsInLayerMax * sizeof(Neuron));
+    file.write((char*)(obj)->GetActiveBrain()->allMemory, NumNeuronLayers * NumNeuronsInLayerMax);
 }
 
 void ObjectSaver::WriteObjectToFile(MyOutStream& file, Object* obj)
 {
-    switch (obj->type)
+    switch (obj->type())
     {
     case bot:
         WriteBotToFile(file, (Bot*)obj);
@@ -486,7 +522,7 @@ void ObjectSaver::WriteObjectToFile(MyOutStream& file, Object* obj)
         break;
 
     default:
-        throw("TODO save object");
+        throw;
     }
 }
 
@@ -509,12 +545,6 @@ File format:
 */
 bool ObjectSaver::SaveObject(Object* obj, char* filename)
 {
-    return SaveObject(obj, std::filesystem::path(filename));
-}
-
-
-bool ObjectSaver::SaveObject(Object* obj, const std::filesystem::path& filename)
-{
 
     //Open file for writing, binary type, all contents to be deleted
     MyOutStream file(filename, std::ios::in | std::ios::binary | std::ios::trunc);
@@ -536,12 +566,6 @@ bool ObjectSaver::SaveObject(Object* obj, const std::filesystem::path& filename)
 }
 
 Object* ObjectSaver::LoadObject(char* filename)
-{
-    return LoadObject(std::filesystem::path(filename));
-}
-
-
-Object* ObjectSaver::LoadObject(const std::filesystem::path& filename)
 {    
     Object* toRet;
 
@@ -570,7 +594,7 @@ Object* ObjectSaver::LoadObject(const std::filesystem::path& filename)
 
 void MyOutStream::WriteInt(int data)
 {
-    write((char*)&data, sizeof(int));
+    write((char*)&data, 4);
 }
 
 void MyOutStream::WriteBool(bool data)
@@ -588,27 +612,22 @@ void MyOutStream::WriteUShort(unsigned short data)
     write((char*)&data, sizeof(unsigned short));
 }
 
-void MyOutStream::WriteFloat(float data)
-{
-    write((char*)&data, sizeof(float));
-}
-
-MyOutStream::MyOutStream(char* filename, int flags) :std::ofstream(filename, flags) {}
-MyOutStream::MyOutStream(const std::filesystem::path& filename, int flags) :std::ofstream(filename, flags) {}
+MyOutStream::MyOutStream(char* filename, int flags) :std::ofstream(filename, flags) 
+{}
 
 
 int MyInputStream::ReadInt()
 {
     int toRet;
 
-    read((char*)&toRet, sizeof(int));
+    read((char*)&toRet, 4);
 
     return toRet;
 }
 
 bool MyInputStream::ReadBool()
 {
-    bool toRet = false;
+    bool toRet;
 
     read((char*)&toRet, 1);
 
@@ -633,14 +652,7 @@ unsigned short MyInputStream::ReadUShort()
     return toRet;
 }
 
-float MyInputStream::ReadFloat()
-{
-    float toRet = 0.0f;
+MyInputStream::MyInputStream(char* filename, int flags) :std::ifstream(filename, flags) 
+{}
 
-    read((char*)&toRet, sizeof(float));
-
-    return toRet;
 }
-
-MyInputStream::MyInputStream(char* filename, int flags) :std::ifstream(filename, flags) {}
-MyInputStream::MyInputStream(const std::filesystem::path& filename, int flags) :std::ifstream(filename, flags) {}

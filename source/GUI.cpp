@@ -385,6 +385,14 @@ void Main::DrawSidePanelWindow()
 	{
 		if (ImGui::CollapsingHeader("Главное", ImGuiTreeNodeFlags_DefaultOpen))
 		{
+			ImGui::Text("Режим симуляции");
+			ImGui::RadioButton("Classic", true);
+			ImGui::SameLine();
+			if (ImGui::RadioButton("CyberBiology3", false))
+			{
+				RequestSimulationMode(SimulationMode::CyberBiology3);
+			}
+
 			ImGui::Text("шаги: %i", ticknum);
 			ImGui::Text("(интервал %i, тиков/с: %i, кадров/с: %i)", limit_interval, realTPS, realFPS);
 			ImGui::Text("Всего объектов: %i", field->GetNumObjects());
@@ -649,7 +657,7 @@ void Main::DrawSaveLoadWindow()
 	{
 		//Save/load window
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::SetNextWindowSize({ 520.0f, 260.0f });
+		ImGui::SetNextWindowSize({ 650.0f, 260.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 100.0f }, ImGuiCond_Once);
 
 		ImGui::Begin("Сохранение и загрузка", &showSaveLoad, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
@@ -657,11 +665,12 @@ void Main::DrawSaveLoadWindow()
 			//List of files
 			ImGui::Text("Выберите файл");
 
-			if (ImGui::BeginTable("##SaveFiles", 4, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(500, 110)))
+			if (ImGui::BeginTable("##SaveFiles", 5, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(630, 110)))
 			{
 				ImGui::TableSetupColumn("Имя", ImGuiTableColumnFlags_WidthStretch);
 				ImGui::TableSetupColumn("Размер", ImGuiTableColumnFlags_WidthFixed, 70.0f);
 				ImGui::TableSetupColumn("Тип", ImGuiTableColumnFlags_WidthFixed, 55.0f);
+				ImGui::TableSetupColumn("Режим", ImGuiTableColumnFlags_WidthFixed, 115.0f);
 				ImGui::TableSetupColumn("Дата", ImGuiTableColumnFlags_WidthFixed, 125.0f);
 				ImGui::TableHeadersRow();
 
@@ -682,6 +691,9 @@ void Main::DrawSaveLoadWindow()
 					ImGui::TextUnformatted(allFilenames[i].fileType.c_str());
 
 					ImGui::TableSetColumnIndex(3);
+					ImGui::TextUnformatted(allFilenames[i].modeText.c_str());
+
+					ImGui::TableSetColumnIndex(4);
 					ImGui::TextUnformatted(allFilenames[i].modifiedTimeText.c_str());
 				}
 
@@ -710,7 +722,15 @@ void Main::DrawSaveLoadWindow()
 			{
 				if (selectedFile)
 				{
-					if (selectedFile->isWorld)
+					if (selectedFile->mode != activeMode)
+					{
+						LogPrint("Файл сохранен в режиме ");
+						LogPrint(SimulationModeName(selectedFile->mode));
+						LogPrint(". Текущий режим: ");
+						LogPrint(SimulationModeName(activeMode));
+						LogPrint(". Загрузка отменена.\r\n");
+					}
+					else if (selectedFile->isWorld)
 					{
 						ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull);
 
@@ -1120,6 +1140,36 @@ void Main::DrawExitConfirmWindow()
 	}
 }
 
+void Main::DrawModeSwitchConfirmWindow()
+{
+	if (showModeSwitchConfirm)
+	{
+		ImGui::OpenPopup("Подтверждение смены режима");
+		showModeSwitchConfirm = false;
+	}
+
+	if (ImGui::BeginPopupModal("Подтверждение смены режима", NULL, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		ImGui::TextWrapped("Переключение режима остановит текущую симуляцию и создаст новый мир %s. Текущий мир не конвертируется.",
+			SimulationModeName(pendingMode));
+
+		if (ImGui::Button("Переключить", { 120, 30 }))
+		{
+			SwitchSimulationMode(pendingMode);
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("Отмена", { 90, 30 }))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
+	}
+}
+
 void Main::DrawBotBrainWindow()
 {	
 	if (showBrain)
@@ -1211,10 +1261,16 @@ void Main::DrawWindows()
 	DrawBotBrainWindow();
 	DrawInfoWindow();
 	DrawExitConfirmWindow();
+	DrawModeSwitchConfirmWindow();
 }
 
 void Main::HandleFieldNavigation()
 {
+	if (!IsClassicMode())
+	{
+		return;
+	}
+
 	bool middleDown = (mouseState.buttons & SDL_BUTTON(SDL_BUTTON_MIDDLE)) != 0;
 	bool mouseOverField = field->IsInBoundsScreenCoords(mouseState.mouseX, mouseState.mouseY);
 
@@ -1249,6 +1305,16 @@ void Main::HandleFieldNavigation()
 
 void Main::MouseClick()
 {
+	if (!IsClassicMode())
+	{
+		if (cb3Runtime)
+		{
+			cb3Runtime->HandleMouseClick();
+			CheckRuntimeRequests();
+		}
+		return;
+	}
+
 	if (!(nn_renderer.MouseClick({ mouseState.mouseX, mouseState.mouseY }) && (showBrain)))
 	{
 		if (field->IsInBoundsScreenCoords(mouseState.mouseX, mouseState.mouseY))
@@ -1318,6 +1384,16 @@ void Main::MouseClick()
 				{
 					if (selectedFile)
 					{
+						if (selectedFile->mode != activeMode)
+						{
+							LogPrint("Файл сохранен в режиме ");
+							LogPrint(SimulationModeName(selectedFile->mode));
+							LogPrint(". Текущий режим: ");
+							LogPrint(SimulationModeName(activeMode));
+							LogPrint(". Загрузка отменена.\r\n");
+							return;
+						}
+
 						obj = saver.LoadObject(selectedFile->pathFull);
 
 						if (obj)
@@ -1365,6 +1441,15 @@ void Main::MouseClick()
 
 void Main::Render()
 {
+	if (!IsClassicMode())
+	{
+		if (cb3Runtime)
+		{
+			cb3Runtime->Render();
+			CheckRuntimeRequests();
+		}
+		return;
+	}
 	
 	//Limit FPS
 	TimePoint currentTickFps = clock.now();
@@ -1437,6 +1522,11 @@ void Main::Render()
 
 void Main::ClearWorld()
 {
+	if (!IsClassicMode() || !field)
+	{
+		return;
+	}
+
 	Deselect();
 
 	field->RemoveAllObjects();

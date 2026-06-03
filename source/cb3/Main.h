@@ -3,8 +3,13 @@
 #include "GUI.h"
 #include "Field.h"
 #include "NeuralNetRenderer.h"
-#include "Cb3Runtime.h"
+#include "AutomaticAdaptation.h"
+#include "../SimulationMode.h"
 
+
+
+namespace cb3
+{
 
 enum MouseFunction
 {
@@ -16,33 +21,33 @@ enum MouseFunction
 };
 
 
-class Main final
+class Main
 {
-
-private:
+protected:
 
 	Clock clock;
 
-	//Save/load object interface
-	ObjectSaver saver;
+	const SDL_Rect screenRect = { 0, 0, WindowWidth, WindowHeight };
+
+	//Automatic adaptation
+	AutomaticAdaptation* auto_adapt;
 
 	//Keyboard
 	const Uint8* keyboard;
 
 	//Simulation
-	int seed, id;
+	uint seed, id;
 	uint realTPS = 0;
 	int limit_interval = 0;
-	int limit_ticks_per_second = FPSLimitAtStart;
-
-	Field* field = NULL;
-
+	int limit_ticks_per_second = TPSLimitAtStart;
 	uint ticknum = 0;
 
 	TimePoint prevTick;
 	TimePoint lastSecondTick;
 	uint tpsTickCounter = 0;
 	TimePoint currentTick;
+
+	Field* field = NULL;			
 
 	//FPS
 	int limitFPS = LimitFPSAtStart;
@@ -52,12 +57,8 @@ private:
 	TimePoint lastTickFps;
 	TimePoint lastSecondTickFps;
 
-	RenderTypes renderType = RenderTypeAtStart;
+	RenderTypes renderType = natural;
 	MouseFunction mouseFunc = mouse_select;
-
-	//Seasons
-	Season season = summer;
-	uint changeSeasonCounter = 0;
 
 	//Windows
 	void DrawDemoWindow();
@@ -65,12 +66,12 @@ private:
 	void DrawSystemWindow();
 	void DrawControlsWindow();
 	void DrawSelectionWindow();
-	void DrawRenderWindow();
-	void DrawConsoleWindow();
+	void DrawDisplayWindow();
+	void DrawLogWindow();
 	void DrawMouseFunctionWindow();
 	void DrawAdditionalsWindow();
-	void DrawSidePanelWindow();
-	void DrawFieldScrollbars();
+	void DrawModeSwitchWindow();
+	void DrawModeSwitchConfirmWindow();
 
 	//Hidden windows
 	void DrawSaveLoadWindow();
@@ -79,9 +80,7 @@ private:
 	void DrawAdaptationWindow();
 	void DrawChartWindow();
 	void DrawBotBrainWindow();
-	void DrawInfoWindow();
-	void DrawExitConfirmWindow();
-	void DrawModeSwitchConfirmWindow();
+	void DrawAAWindow();
 
 	//Show more windows
 	bool showSaveLoad = false;
@@ -89,28 +88,13 @@ private:
 	bool showBrain = false;
 	bool showAdaptation = false;
 	bool showChart = false;	
-	bool showInfo = false;
-	bool showExitConfirm = false;
+	bool showAutomaticAdaptation = false;
 	bool showModeSwitchConfirm = false;
+	bool modeSwitchRequested = false;
+	SimulationMode requestedMode = SimulationMode::CyberBiology3;
 
-	bool fieldPanActive = false;
-	int fieldPanMouseX = 0;
-	int fieldPanMouseY = 0;
-
-	//Chart (TODO)
-	float chartData_bots[ChartNumValues];
-	float chartData_apples[ChartNumValues];
-	float chartData_organics[ChartNumValues];
-	int chart_numValues = 0;
-	int chart_currentPosition = 0;
-
-	int timeBeforeNextDataToChart = AddToChartEvery;
-
-	bool chartShow_apples = false;
-	bool chartShow_organics = false;
-
-	void ClearChart();
-	void AddToChart(float, float, float);
+	//Chart
+	Chart chart;
 
 	//Neural net renderer
 	NeuralNetRenderer nn_renderer;
@@ -136,87 +120,71 @@ private:
 	void LogPrint(int num, bool newLine = true);
 
 	//Save/load
+	ObjectSaver saver;
 
 	struct listed_file
 	{
-		std::filesystem::path pathFull;
 		string nameFull;
 		string nameShort;
 		string fileSize;
-		string fileType;
 		string modeText;
-		string modifiedTimeText;
-		std::filesystem::file_time_type modifiedTime;
+		string fullCaption;
 
 		bool isSelected = false;
-
-		bool isWorld;
+		bool isWorld = false;
 		SimulationMode mode = static_cast<SimulationMode>(0);
 	};
 
-	std::vector<listed_file> allFilenames;
+	vector<listed_file> allFilenames;
 	listed_file* selectedFile = NULL;
-	char renameFileName[128] = "";
-	bool saveFileNameInputActive = false;
 
 	void LoadFilenames();
-	void SelectFile(int index);
-	void RenameSelectedFile();
-	void DeleteSelectedFile();
-	void SaveSelectedObjectToNamedFile();
-	void SaveWorldToNamedFile();
-	std::filesystem::path BuildSavePath(const char* defaultPrefix);
-	void SelectFileByPath(const std::filesystem::path& filePath);
+	void CreateNewFile();
 
 	void DrawWindows();
 
 	void HighlightSelection();
 	void SelectionShadowScreen();
 
-	void ChangeSeason();
+	//Set false to pause
+	bool simulate = true;
+	//Set to true to close the app
+	bool terminate = false;
+	
+	bool windowIsVisible = true;
 
-	void Pause();
+	void SwitchPause();		
 
-	void ClearWorld();
-	void ResetClassicWorld();
-	void RequestSimulationMode(SimulationMode mode);
-	void SwitchSimulationMode(SimulationMode mode);
-	void CheckRuntimeRequests();
-	bool IsClassicMode() const;
+	void BrushIterate(Point p, void (*callback)(uint, uint, Field*));
+
+	void MouseClick();
+	void CatchKeyboard();
 	
 
 public:		
 
-	//Set false to pause
-	bool simulate = true;
-
-	//Set to true to close the app
-	bool terminate = false;
-
-	SimulationMode activeMode = SimulationMode::Classic;
-
+	void ClearWorld();
 
 	void MakeStep();
+	void RunFrameSimulation();
+	void Render();	
 
-	void HandleFieldNavigation();
-	
-	void MouseClick();
+	void Start();
+	void Pause();
+	void RunWithNoRender();
+	void RunWithMinimumRender();
 
-	void Render();
-	
+	void Print(string s);
 
 	Main();
 	~Main();
 
-	void CatchKeyboard();
-
-private:
-
-	std::unique_ptr<Cb3Runtime> cb3Runtime;
-	SimulationMode pendingMode = SimulationMode::Classic;
-
+	void MainLoop();
+	void HandleKeyboard();
+	void HandleMouseClick();
+	bool IsTerminated() const;
+	bool ConsumeModeSwitchRequest(SimulationMode& mode);
 };
 
 
-extern Main simulation;
-
+}
