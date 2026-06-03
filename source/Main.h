@@ -152,6 +152,7 @@ private:
 	std::vector<listed_file> allFilenames;
 	listed_file* selectedFile = NULL;
 	char renameFileName[128] = "";
+	bool saveFileNameInputActive = false;
 
 	void LoadFilenames();
 	void SelectFile(int index);

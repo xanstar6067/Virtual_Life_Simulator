@@ -740,6 +740,11 @@ Main::~Main()
 
 void Main::CatchKeyboard()
 {
+	if (saveFileNameInputActive)
+	{
+		return;
+	}
+
 	if (keyboard[Keyboard_Pause] || keyboard[Keyboard_Pause2])
 	{
 		Pause();

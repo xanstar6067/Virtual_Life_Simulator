@@ -639,6 +639,12 @@ void Main::DrawFieldScrollbars()
 
 void Main::DrawSaveLoadWindow()
 {
+	if (!showSaveLoad)
+	{
+		saveFileNameInputActive = false;
+		return;
+	}
+
 	if (showSaveLoad)
 	{
 		//Save/load window
@@ -686,6 +692,7 @@ void Main::DrawSaveLoadWindow()
 			ImGui::SameLine();
 			ImGui::PushItemWidth(295);
 			ImGui::InputText("##RenameFileName", renameFileName, sizeof(renameFileName));
+			saveFileNameInputActive = ImGui::IsItemActive();
 			ImGui::PopItemWidth();
 
 			ImGui::SameLine();
