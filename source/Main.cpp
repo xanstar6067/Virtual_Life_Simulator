@@ -455,7 +455,7 @@ void Main::LoadFilenames()
 		if (size > 0)
 			magicNumber = file.ReadInt();
 
-		if (magicNumber == MagicNumber_WorldFile)
+		if ((magicNumber == MagicNumber_WorldFile) || (magicNumber == MagicNumber_WorldFileV2))
 			f.isWorld = true;
 		else
 			f.isWorld = false;
