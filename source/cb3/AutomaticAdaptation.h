@@ -101,7 +101,7 @@ private:
 
 public:
 
-	void DrawWindow();
+	void DrawWindow(bool* open);
 	void AdaptationStep(uint frame);
 
 	AutomaticAdaptation(Field*, Main*);

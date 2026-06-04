@@ -764,7 +764,7 @@ void Main::DrawDangerousWindow()
 		SetNextWindowSize({ 290.0f, 100.0f });
 		SetNextWindowPos({ 100 * 1.0f, 300.0f }, ImGuiCond_Once);
 
-		Begin("Опасные действия", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		Begin("Инструменты", &showDangerous, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 			if (Button("Очистить мир", { 130, 30 }))
 			{
@@ -818,7 +818,7 @@ void Main::DrawSummaryWindow()
 		SetNextWindowSize({ 330.0f, 180.0f });
 		SetNextWindowPos({ 100 * 1.0f, 150.0f }, ImGuiCond_Once);
 
-		Begin("Сводка бота", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		Begin("Сводка бота", &showBrain, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 			if (selectedObject)
 			{
@@ -860,7 +860,7 @@ void Main::DrawAdaptationWindow()
 		SetNextWindowSize({ 600.0f, 650.0f });
 		SetNextWindowPos({ 100 * 1.0f, 250.0f }, ImGuiCond_Once);
 
-		Begin("Условия среды", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		Begin("Условия среды", &showAdaptation, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 			if(CollapsingHeader("Ветры"))			
 			{
@@ -942,7 +942,7 @@ void Main::DrawChartWindow()
 		SetNextWindowSize({ 920.0f, 600.0f });
 		SetNextWindowPos({ 700.0f, 250.0f }, ImGuiCond_Once);
 
-		Begin("График популяции", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		Begin("График популяции", &showChart, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 		{
 			chart.Plot();
 		}
@@ -960,7 +960,7 @@ void Main::DrawBotBrainWindow()
 			SetNextWindowSize({ 330.0f, 280.0f });
 			SetNextWindowPos({ 650 * 1.0f, 350.0f });
 
-			Begin("Данные мозга бота", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+			Begin("Данные мозга бота", &showBrain, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 			{
 				BeginGroup();
 
@@ -1048,7 +1048,7 @@ void Main::DrawAAWindow()
 {
 	if (showAutomaticAdaptation)
 	{
-		auto_adapt->DrawWindow();
+		auto_adapt->DrawWindow(&showAutomaticAdaptation);
 	}
 }
 

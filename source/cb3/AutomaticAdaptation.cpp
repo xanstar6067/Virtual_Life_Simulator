@@ -356,7 +356,7 @@ void AutomaticAdaptation::Plot()
 	}
 }
 
-void AutomaticAdaptation::DrawWindow()
+void AutomaticAdaptation::DrawWindow(bool* open)
 {
 	using namespace ImGui;
 
@@ -368,7 +368,7 @@ void AutomaticAdaptation::DrawWindow()
 	SetNextWindowPos({ 700.0f, 250.0f }, ImGuiCond_Once);
 
 
-	Begin("Автоадаптация", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+	Begin("Автоадаптация", open, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 	{
 		PushStyleColor(ImGuiCol_ChildBg, ImVec4(LogBackgroundColor));
 
