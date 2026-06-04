@@ -22,7 +22,10 @@ Bot* ObjectSaver::LoadBotFromFile(MyInputStream& file)
 
     toRet->SetLifetime(lifetime);
 
-    toRet->SetColor( file.ReadInt(), file.ReadInt(), file.ReadInt() );
+    const int red = file.ReadInt();
+    const int green = file.ReadInt();
+    const int blue = file.ReadInt();
+    toRet->SetColor(red, green, blue);
 
     repeat(NumberOfMutationMarkers)
     {
@@ -365,7 +368,10 @@ Bot* ObjectSaver::LoadBotCompact(MyInputStream& file)
     Bot* toRet = new Bot(0, 0);
 
     toRet->SetLifetime(file.ReadInt());
-    toRet->SetColor(file.ReadByte(), file.ReadByte(), file.ReadByte());
+    const byte red = file.ReadByte();
+    const byte green = file.ReadByte();
+    const byte blue = file.ReadByte();
+    toRet->SetColor(red, green, blue);
 
     repeat(NumberOfMutationMarkers)
     {
