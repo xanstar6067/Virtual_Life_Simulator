@@ -6,6 +6,61 @@
 namespace cb3
 {
 
+thread_local std::uint64_t randomState = 0x9e3779b97f4a7c15ULL;
+
+std::uint64_t MixRandomSeed(std::uint64_t value)
+{
+	value += 0x9e3779b97f4a7c15ULL;
+	value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
+	value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
+	return value ^ (value >> 31);
+}
+
+void SetRandomState(std::uint64_t state)
+{
+	randomState = state ? state : 0x9e3779b97f4a7c15ULL;
+}
+
+std::uint64_t GetRandomState()
+{
+	return randomState;
+}
+
+void SetDeterministicRandom(std::uint64_t seed, std::uint64_t tick, std::uint64_t stream)
+{
+	SetRandomState(MixRandomSeed(seed ^ MixRandomSeed(tick) ^ MixRandomSeed(stream)));
+}
+
+std::uint32_t RandomNext()
+{
+	randomState += 0x9e3779b97f4a7c15ULL;
+	std::uint64_t value = randomState;
+	value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
+	value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
+	value ^= value >> 31;
+	return static_cast<std::uint32_t>(value >> 32);
+}
+
+int RandomVal(std::uint64_t max)
+{
+	if (max == 0)
+	{
+		return 0;
+	}
+
+	return static_cast<int>(RandomNext() % max);
+}
+
+bool RandomPercent(int val)
+{
+	return RandomVal(1000) >= (1000 - (val * 10));
+}
+
+bool RandomPercentX10(int val)
+{
+	return RandomVal(1000) >= (1000 - val);
+}
+
 void Color::operator/=(int d)
 {
 	repeat(3)
@@ -144,12 +199,17 @@ bool Rect::IsInBounds(Point p)
 
 int RandomValRange(int min, int max)
 {
-	return min + (rand() % (max - min));
+	if (max <= min)
+	{
+		return min;
+	}
+
+	return min + RandomVal(static_cast<std::uint64_t>(max - min));
 }
 
 float RandomFloatInRange(float min, float max)
 { 
-	return min + static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / (max - min))); 
+	return min + (static_cast<float>(RandomNext()) / static_cast<float>(UINT32_MAX)) * (max - min);
 }
 
 

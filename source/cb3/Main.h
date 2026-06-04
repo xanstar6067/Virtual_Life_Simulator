@@ -37,7 +37,8 @@ protected:
 	const Uint8* keyboard;
 
 	//Simulation
-	uint seed, id;
+	std::uint64_t seed;
+	uint id;
 	uint realTPS = 0;
 	int limit_interval = 0;
 	int limit_ticks_per_second = TPSLimitAtStart;
@@ -75,6 +76,7 @@ protected:
 	void DrawFieldScrollbars();
 	void DrawModeSwitchWindow();
 	void DrawModeSwitchConfirmWindow();
+	void DrawWorldConfigWindow();
 
 	//Hidden windows
 	void DrawSaveLoadWindow();
@@ -93,11 +95,16 @@ protected:
 	bool showChart = false;	
 	bool showAutomaticAdaptation = false;
 	bool showModeSwitchConfirm = false;
+	bool showWorldConfig = true;
 	bool modeSwitchRequested = false;
 	SimulationMode requestedMode = SimulationMode::CyberBiology3;
 	bool fieldPanActive = false;
 	int fieldPanMouseX = 0;
 	int fieldPanMouseY = 0;
+	int worldWidthInput = WorldConfig::DefaultWidth;
+	int worldHeightInput = WorldConfig::DefaultHeight;
+	int worldThreadsInput = 0;
+	string worldConfigError;
 
 	//Chart
 	Chart chart;
@@ -155,6 +162,9 @@ protected:
 	void DeleteSelectedFile();
 	void SaveSelectedObjectToNamedFile();
 	void SaveWorldToNamedFile();
+	bool LoadWorldFromFile(const char* filename);
+	bool ReplaceWorld(const WorldConfig& config, std::uint64_t newSeed);
+	void PrepareWorldConfigDialog();
 	std::filesystem::path BuildSavePath(const char* defaultPrefix);
 	void SelectFileByPath(const std::filesystem::path& filePath);
 
@@ -193,7 +203,7 @@ public:
 
 	void Print(string s);
 
-	Main();
+	explicit Main(const WorldConfig& config = WorldConfig());
 	~Main();
 
 	void MainLoop();

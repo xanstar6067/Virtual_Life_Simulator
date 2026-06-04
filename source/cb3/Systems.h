@@ -12,6 +12,7 @@
 #include <condition_variable>
 #include <filesystem>
 #include <vector>
+#include <unordered_set>
 
 //ImGUI
 #include "imgui.h"

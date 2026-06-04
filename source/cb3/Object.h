@@ -32,9 +32,8 @@ private:
 	//Prev. tick frame number
 	uint lastTickFrame = 0;
 
-	//Static pointers to field class and cells array
+	//Static pointer to the active field.
 	static Field* static_pField;
-	static Object*** static_pCells;
 
 protected:
 
@@ -51,8 +50,7 @@ protected:
 	//Used for drawing
 	SDL_Rect object_rect;
 
-	//Pointers to Field class and cells array
-	Object* (*pCells)[FieldCellsWidth][FieldCellsHeight];
+	//Pointer to field class
 	Field* pField;
 	FieldDynamicParams* pParams;
 
@@ -60,6 +58,7 @@ protected:
 public:
 
 	int x, y;
+	std::uint64_t stableId = 0;
 
 	//If an object stores energy it's here
 	int energy;
@@ -86,10 +85,12 @@ public:
 
 	uint GetLifetime();
 	void SetLifetime(uint);
+	std::uint64_t GetStableId() const;
+	void SetStableId(std::uint64_t id);
 
 
 	static uint currentFrame;
-	static void SetPointers(Field* field, Object*** cells);
+	static void SetField(Field* field);
 
 protected:
 

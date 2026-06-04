@@ -9,7 +9,6 @@ namespace cb3
 
 uint Object::currentFrame = 0;
 Field* Object::static_pField = NULL;
-Object*** Object::static_pCells = NULL;
 
 const Rect Object::image_rect = { 0, 0, FieldCellSize, FieldCellSize };
 
@@ -32,7 +31,6 @@ Object::Object(int X, int Y) :x(X), y(Y)
 	//Set up pointers on field class and cells array
 	pField = static_pField;
 	pParams = &pField->params;
-	pCells = (Object* (*)[FieldCellsWidth][FieldCellsHeight])static_pCells;
 }
 
 
@@ -42,13 +40,13 @@ void Object::CalcScreenX()
 
 	if (screenX < 0)
 	{
-		screenX += FieldCellsWidth;
+		screenX += static_cast<int>(pField->GetWidth());
 	}
 }
 
 void Object::CalcObjectRect()
 {
-	double scale = Field::GetViewScale();
+	double scale = pField->GetViewScale();
 	int left = FieldX + (int)std::floor(screenX * FieldCellSize * scale - Field::viewX);
 	int top = FieldY + (int)std::floor(y * FieldCellSize * scale - Field::viewY);
 	int right = FieldX + (int)std::ceil((screenX + 1) * FieldCellSize * scale - Field::viewX);
@@ -61,7 +59,7 @@ void Object::CalcObjectRectShrinked(int shrink)
 {
 	CalcObjectRect();
 
-	int scaledShrink = (int)std::round(shrink * Field::GetViewScale());
+	int scaledShrink = (int)std::round(shrink * pField->GetViewScale());
 	scaledShrink = (std::min)(scaledShrink, (object_rect.w - 1) / 2);
 	scaledShrink = (std::min)(scaledShrink, (object_rect.h - 1) / 2);
 
@@ -106,10 +104,19 @@ void Object::SetLifetime(uint val)
 	lifetime = val;
 }
 
-void Object::SetPointers(Field* field, Object*** cells)
+std::uint64_t Object::GetStableId() const
+{
+	return stableId;
+}
+
+void Object::SetStableId(std::uint64_t id)
+{
+	stableId = id;
+}
+
+void Object::SetField(Field* field)
 {
 	static_pField = field;
-	static_pCells = cells;
 }
 
 }

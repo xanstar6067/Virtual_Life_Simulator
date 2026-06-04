@@ -88,6 +88,9 @@
     <ClCompile Include="source\cb3\Rock.cpp">
       <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
     </ClCompile>
+    <ClCompile Include="source\cb3\SelfTest.cpp">
+      <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
+    </ClCompile>
     <ClCompile Include="source\cb3\Utils.cpp">
       <ObjectFileName>$(IntDir)cb3\%(Filename).obj</ObjectFileName>
     </ClCompile>
@@ -127,10 +130,12 @@
     <ClInclude Include="source\cb3\ObjectSaver.h" />
     <ClInclude Include="source\cb3\Organics.h" />
     <ClInclude Include="source\cb3\Rock.h" />
+    <ClInclude Include="source\cb3\SelfTest.h" />
     <ClInclude Include="source\cb3\SDL.h" />
     <ClInclude Include="source\cb3\Settings.h" />
     <ClInclude Include="source\cb3\Systems.h" />
     <ClInclude Include="source\cb3\Utils.h" />
+    <ClInclude Include="source\cb3\WorldConfig.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="VirtualLifeSimulator.rc" />

@@ -64,7 +64,7 @@ int Organics::tick()
         //What is underneath?
         if (pField->IsInBounds(x, next_y))
         {
-            if ((*pCells)[x][next_y] == NULL)
+            if (pField->GetCell(x, next_y) == NULL)
             {
                 //Fall
                 pField->MoveObject(this, x, next_y);

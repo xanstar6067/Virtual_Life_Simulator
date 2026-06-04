@@ -7,10 +7,10 @@ struct Cb3Runtime::Impl
 {
     std::unique_ptr<cb3::Main> simulation;
 
-    Impl()
+    explicit Impl(const cb3::WorldConfig& config)
     {
         cb3::ImageFactory::CreateImages();
-        simulation = std::make_unique<cb3::Main>();
+        simulation = std::make_unique<cb3::Main>(config);
     }
 
     ~Impl()
@@ -20,8 +20,8 @@ struct Cb3Runtime::Impl
     }
 };
 
-Cb3Runtime::Cb3Runtime() :
-    impl(std::make_unique<Impl>())
+Cb3Runtime::Cb3Runtime(const cb3::WorldConfig& config) :
+    impl(std::make_unique<Impl>(config))
 {
 }
 
