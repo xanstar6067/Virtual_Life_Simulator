@@ -24,7 +24,7 @@ void Bot::CalculateLookAt()
 
 void Bot::ChangeMutationMarker()
 {
-	mutationMarkers[nextMarker++] = static_cast<int>(RandomNext());
+	mutationMarkers[nextMarker++] = rand();
 
 	if (nextMarker >= NumberOfMutationMarkers)
 	{
@@ -41,7 +41,7 @@ void Bot::RandomizeMarkers()
 {
 	for (uint i = 0; i < NumberOfMutationMarkers; ++i)
 	{
-		mutationMarkers[i] = static_cast<int>(RandomNext());
+		mutationMarkers[i] = rand();
 	}
 	nextMarker = 0;
 }
@@ -76,7 +76,7 @@ void Bot::Mutate()
 	//Mutate brain
 	constexpr uint MaxMutate = MutateNeuronsMaximum;
 
-	for (uint i = 0; i < static_cast<uint>(1 + RandomVal(MaxMutate + 1)); ++i)
+	for (uint i = 0; i < (1 + RandomVal(MaxMutate + 1)); ++i)
 		initialBrain.Mutate();
 
 	//Change color
@@ -118,7 +118,7 @@ BrainInput Bot::FillBrainInput()
 
 	//input.rotation = (tmpOut.desired_rotation == (direction * .1f))?1.0f:0.0f;
 	input.rotation = (direction * 1.0f) / 7.0f;
-	input.height = (y * 1.0f) / (pField->GetHeight() * 1.0f);
+	input.height = (y * 1.0f) / (FieldCellsHeight * 1.0f);
 
 	if(pField->IsInMud(y))
 		input.area = 1.0f;
@@ -133,13 +133,13 @@ BrainInput Bot::FillBrainInput()
 
 	if (pField->IsInBounds(lookAt))
 	{
-		Object* tmpDest = pField->GetCell(lookAt.x, lookAt.y);
+		Object* tmpDest = (*pCells)[lookAt.x][lookAt.y];
 
 		if (tmpDest)
 		{
-			if (pField->GetObjectTypeAt(lookAt.x, lookAt.y) == bot)
+			if (tmpDest->type() == bot)
 			{
-				int d = pField->GetSnapshotDirection(lookAt.x, lookAt.y);
+				int d = ((Bot*)tmpDest)->GetDirection();
 
 				d += 4;
 
@@ -182,17 +182,17 @@ void Bot::FillSightNeurons(Point at, float& n1, float& n2)
 	}
 	else
 	{
-		Object* tmpDest = pField->GetCell(at.x, at.y);
+		Object* tmpDest = (*pCells)[at.x][at.y];
 
 		//Destination not empty
 		if (tmpDest)
 		{
 			n1 = tmpDest->image_sensor_val();
 
-			if (pField->GetObjectTypeAt(at.x, at.y) == bot)
+			if (tmpDest->type() == bot)
 			{
 				//Calculate how close they are as relatives, based on mutation markers
-				n2 = (pField->GetSnapshotKinship(this, at.x, at.y) * 1.0f) / (NumberOfMutationMarkers * 1.0f);
+				n2 = (FindKinship((Bot*)tmpDest) * 1.0f) / (NumberOfMutationMarkers * 1.0f);
 			}
 		}
 		else
@@ -235,10 +235,10 @@ void Bot::Multiply(int numChildren, float energy_to_pass)
 
 			if (freeSpace.x != -1)
 			{
-				//The child and energy transfer are committed after all workers finish.
-				pField->QueueBirth(this,
-					new Bot(freeSpace.x, freeSpace.y, toGive, this, RandomPercent(MutationChancePercent)),
-					freeSpace.x, freeSpace.y, GiveBirthCost + toGive);
+				TakeEnergy(GiveBirthCost + toGive);
+
+				//Adaptation check
+				pField->AddObject(new Bot(freeSpace.x, freeSpace.y, toGive, this, RandomPercent(MutationChancePercent)));
 
 				return;
 			}
@@ -250,7 +250,37 @@ void Bot::Attack()
 {
 	if (pField->IsInBounds(lookAt_x, lookAt_y))
 	{
-		pField->QueueAttack(this, lookAt_x, lookAt_y, false);
+		//If there is an object
+		Object* obj = (*pCells)[lookAt_x][lookAt_y];
+
+		if (obj)
+		{
+			if (obj->type() == bot)
+			{
+				#ifdef BotCanEatBot
+				{
+					//Eat a bot
+					GiveEnergy(obj->energy, predation);
+					pField->RemoveBot(lookAt_x, lookAt_y);
+
+					++numAttacks;
+				}
+				#endif
+			}
+			else if (obj->type() == apple)
+			{
+				//Eat apple
+				GiveEnergy(obj->energy, organics);
+				pField->RemoveObject(lookAt_x, lookAt_y);
+			}
+			#ifdef BotCanEatRock
+			else if (obj->type() == rock)
+			{
+				//Eat rock, it gives no energy
+				RemoveObject(lookAt_x, lookAt_y);
+			}
+			#endif
+		}
 	}
 }
 
@@ -258,7 +288,18 @@ void Bot::EatOrganics()
 {
 	if (pField->IsInBounds(lookAt_x, lookAt_y))
 	{		
-		pField->QueueAttack(this, lookAt_x, lookAt_y, true);
+		Object* obj = (*pCells)[lookAt_x][lookAt_y];
+
+		//If there is an object
+		if (obj)
+		{
+			if (obj->type() == organic_waste)
+			{
+				//Eat organics
+				GiveEnergy(obj->energy, organics);
+				pField->RemoveObject(lookAt_x, lookAt_y);
+			}
+		}
 	}
 }
 
@@ -385,14 +426,13 @@ bool Bot::ArtificialSelectionWatcher_OnDivide()
 	}
 
 	//Is on land
-	if (y < static_cast<int>(pField->GetHeight()) - params.oceanLevel)
+	if (y < FieldCellsHeight - params.oceanLevel)
 	{
 		if (RandomPercentX10(params.adaptation_landBirthBlock))
 			return true;
 	}
 	//Is in ocean
-	else if ((y >= static_cast<int>(pField->GetHeight()) - params.oceanLevel) &&
-		(y < static_cast<int>(pField->GetHeight()) - params.mudLevel))
+	else if ((y >= FieldCellsHeight - params.oceanLevel) && (y < FieldCellsHeight - params.mudLevel))
 	{
 		if (RandomPercentX10(params.adaptation_seaBirthBlock))
 			return true;
@@ -506,8 +546,21 @@ int Bot::tick()
 			if (TakeEnergy(MoveCost))
 				return 1;
 
-			//Movement counters are committed only if the command wins its cell conflict.
-			pField->MoveObject(this, lookAt_x, lookAt_y);
+			//Move object to a new place
+			int tmpY = y;
+			int tmpX = x;
+
+			if (pField->MoveObject(this, lookAt_x, lookAt_y) == 0)
+			{
+				if(lookAt_y!=tmpY)
+				{
+					++numMovesY;
+				}
+				if (lookAt_x != tmpX)
+				{
+					++numMovesX;
+				}				
+			}
 
 		}
 		//Photosynthesis
@@ -527,8 +580,7 @@ void Bot::draw()
 	CalcObjectRect();
 
 	//Draw body
-	SDL_SetTextureColorMod(sprite_body, static_cast<Uint8>(color.c[0]), static_cast<Uint8>(color.c[1]),
-		static_cast<Uint8>(color.c[2]));
+	SDL_SetTextureColorMod(sprite_body, color.c[0], color.c[1], color.c[2]);
 	SDL_RenderCopy(renderer, sprite_body, &image_rect, &object_rect);
 
 	//Draw outlines

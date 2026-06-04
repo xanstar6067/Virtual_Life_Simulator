@@ -61,22 +61,17 @@ struct Rect final: public SDL_Rect
 };
 
 
-std::uint64_t MixRandomSeed(std::uint64_t value);
-void SetRandomState(std::uint64_t state);
-std::uint64_t GetRandomState();
-void SetDeterministicRandom(std::uint64_t seed, std::uint64_t tick, std::uint64_t stream);
-std::uint32_t RandomNext();
-
+//TODO
 //Get random number (0 to max-1)
-int RandomVal(std::uint64_t max);
+#define RandomVal(max) (rand()%(max))
 int RandomValRange(int min, int max);
 float RandomFloatInRange(float min, float max);
 
 //Roll (chance in percents)
-bool RandomPercent(int val);
+#define RandomPercent(val) ((rand()%1000)>=(1000 - (val * 10)))
 
 //Roll (chance in 1/10 percent)
-bool RandomPercentX10(int val);
+#define RandomPercentX10(val) ((rand()%1000)>=(1000 - (val)))
 
 //Simple loop
 #define repeat(times) for(int i=0;i<times;++i)

@@ -70,7 +70,6 @@ const int RotationsReverse[3][3] =
 
 class Bot : public Object
 {
-    friend class Field;
 
 protected:
 

@@ -4,13 +4,12 @@
 namespace cb3
 {
 
-Neuron::Neuron() :
-	type(basic),
-	layer(0),
-	bias(0),
-	numConnections(0)
+Neuron::Neuron()
 {
-	memset(allConnections, 0, sizeof(allConnections));
+	SetRandomType();
+
+	type = basic;
+	numConnections = 0u;
 }
 
 void Neuron::Clone(Neuron* source)

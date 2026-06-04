@@ -1,4 +1,5 @@
 #pragma once
+//#pragma message("   Field_h")
 
 namespace cb3
 {
@@ -10,9 +11,10 @@ class Organics;
 class ObjectSaver;
 }
 
+
+
 #include "Settings.h"
 #include "Utils.h"
-#include "WorldConfig.h"
 
 #include "Object.h"
 #include "Bot.h"
@@ -23,6 +25,8 @@ class ObjectSaver;
 #include "ObjectSaver.h"
 #include "Chart.h"
 #include "ImageFactory.h"
+
+
 
 namespace cb3
 {
@@ -51,6 +55,8 @@ constexpr const char* SeasonNames[] =
     "spring"
 };
 
+
+
 struct FieldDynamicParams
 {
     int botMaxLifetime;
@@ -58,7 +64,7 @@ struct FieldDynamicParams
     int fertility_delay;
 
     int oceanLevel;
-    int mudLevel;
+    int mudLevel;    
 
     bool spawnApples;
     int appleEnergy;
@@ -69,7 +75,7 @@ struct FieldDynamicParams
     int adaptation_seaBirthBlock;
     int adaptation_PSInOceanBlock;
     int adaptation_PSInMudBlock;
-    int adaptation_botShouldDoPSOnLandOnceToMultiply;
+    int adaptation_botShouldDoPSOnLandOnceToMultiply;    
 
     int adaptation_organicSpawnRate;
 
@@ -86,57 +92,46 @@ struct FieldDynamicParams
 
     int reserved[31];
 
+
     void Reset();
+
     FieldDynamicParams();
 };
 
+struct ThreadCounters
+{
+    uint objects = 0;
+    uint bots = 0;
+    uint apples = 0;
+    uint organics = 0;
+    uint predators = 0;
+    uint lifetime = 0;
+
+    void Clear();
+};
+
+
+
+//Simulation field class
 class Field final
 {
+
 private:
-    struct CellSnapshot
-    {
-        Object* object = NULL;
-        ObjectTypes type = abstract;
-        int energy = 0;
-        int direction = 0;
-        int markers[NumberOfMutationMarkers] = {};
-    };
 
-    enum class CommandType
-    {
-        move,
-        attack,
-        digest,
-        birth,
-        remove
-    };
+    //All cells as 2d array
+    Object* allCells[FieldCellsWidth][FieldCellsHeight];
 
-    struct Command
-    {
-        CommandType type = CommandType::move;
-        Object* actor = NULL;
-        Object* target = NULL;
-        Object* created = NULL;
-        std::uint64_t actorId = 0;
-        std::uint64_t targetId = 0;
-        ObjectTypes targetType = abstract;
-        int fromX = 0;
-        int fromY = 0;
-        int toX = 0;
-        int toY = 0;
-        int value = 0;
-        std::size_t sourceIndex = 0;
-        std::uint32_t sequence = 0;
-        bool spawnOrganics = false;
-    };
+    //Rectangles
+    const SDL_Rect mainRect = { FieldX , FieldY, FieldWidth, FieldHeight };
 
-    WorldConfig config;
-    std::size_t cellCount = 0;
-    std::vector<Object*> allCells;
-    std::unordered_set<Object*> liveObjects;
-    std::vector<CellSnapshot> snapshotCells;
-    std::vector<Object*> stableObjects;
+    SDL_Rect oceanRect = { FieldX , FieldY + (FieldHeight - (InitialOceanHeight * FieldCellSize)),
+        FieldWidth, InitialOceanHeight * FieldCellSize };
 
+    SDL_Rect mudLayerRect = { FieldX , FieldY + (FieldHeight - (InitialMudLayerHeight * FieldCellSize)),
+        FieldWidth, InitialMudLayerHeight * FieldCellSize };
+
+
+    //Needed to calculate number of active objects (calculated on every frame)
     uint objectsTotal = 0;
     uint botsTotal = 0;
     uint applesTotal = 0;
@@ -145,61 +140,46 @@ private:
     uint averageLifetime = 0;
 
     uint spawnApplesCounter = 0;
+
+    //Seasons
     Season season = summer;
     uint changeSeasonCounter = 0;
 
-    std::vector<std::thread> workers;
-    std::vector<std::vector<Command>> workerCommands;
-    std::mutex workerMutex;
-    std::condition_variable workerStartCondition;
-    std::condition_variable workerDoneCondition;
-    std::uint64_t workerGeneration = 0;
-    std::size_t workersDone = 0;
-    std::size_t activeWorkers = 0;
-    bool terminateWorkers = false;
-    std::atomic<bool> planningPhase = false;
-    uint planningTick = 0;
-
-    static thread_local std::size_t currentWorker;
-    static thread_local Object* currentObject;
-    static thread_local std::uint32_t currentSequence;
-
-    std::uint64_t nextObjectId = 1;
-    std::uint64_t generatorState = 0;
-
-    std::size_t Index(int X, int Y) const;
-    void StartWorkers();
-    void StopWorkers();
-    void WorkerLoop(std::size_t index);
-    void ProcessObjectRange(std::size_t workerIndex, std::size_t begin, std::size_t end);
-    void BuildSnapshot();
-    void QueueCommand(Command command);
-    void ApplyCommands();
-    void ApplyCommand(Command& command);
-    void RecalculateStatistics();
-    void ObjectTick(Object* tmpObj);
-    bool IsCurrentObjectAt(Object* object, int X, int Y) const;
-    bool IsLiveIdentity(Object* object, std::uint64_t id) const;
-    int MoveObjectDirect(Object* obj, int toX, int toY);
-    bool AddObjectDirect(Object* obj);
-    void RemoveObjectDirect(int X, int Y);
-    void BeginGeneratorTask(std::uint64_t stream);
-    void EndGeneratorTask();
-    int GetVisibleColumns() const;
-    int GetFieldPixelWidth() const;
-    int GetFieldPixelHeight() const;
-    void ClampDynamicParams();
     void SeasonTick();
     void ChangeSeason();
 
+    //Multithreading
+    ThreadCounters objectCounters[NumThreads];
+    std::thread threads[NumThreads];
+    std::mutex threadMutex;
+    std::condition_variable threadStartCondition;
+    std::condition_variable threadDoneCondition;
+    bool threadGoMarker[NumThreads] = {};
+    int threadsReady = 0;
+    bool terminateThreads = false;
+
+    void StartThreads();
+    void SignalThreads();
+    void WaitForThreads();
+    inline bool ThreadWait(const uint index);
+
+    inline void tick_single_thread();
+    inline void tick_multiple_threads();
+
+    //Process function for multi threaded simulation
+    void ProcessPart_MultipleThreads(const uint X1, const uint X2, const uint index);  
+
+    //Tick function for every object
+    void ObjectTick(Object* tmpObj);
+    
+
 public:
+
     struct PersistentState
     {
         uint spawnApplesCounter;
         Season season;
         uint changeSeasonCounter;
-        std::uint64_t nextObjectId;
-        std::uint64_t generatorState;
     };
 
     FieldDynamicParams params;
@@ -209,20 +189,27 @@ public:
     void mutateWorld();
     void placeWall(uint width = 2);
 
+    //Move objects from one cell to another
     int MoveObject(int fromX, int fromY, int toX, int toY);
     int MoveObject(Object* obj, int toX, int toY);
 
     bool AddObject(Object* obj);
     void ObjectAddOrReplace(Object* obj);
-    bool QueueBirth(Bot* parent, Object* child, int X, int Y, int energyCost);
-    bool QueueAttack(Bot* attacker, int X, int Y, bool digestOrganics);
 
+    //Remove object and delete object class
     void RemoveObject(int X, int Y);
     void RemoveAllObjects();
+
+    //Remove a bot (same as remove object but for a bot)
     void RemoveBot(int X, int Y, int energyVal = 0);
+
+    //Repaint bot
     void RepaintBot(Bot* b, Color newColor, int differs = 1);
 
+    //Tick function
     void tick(uint thisFrame);
+
+    //Draw simulation field with all its objects
     void draw(RenderTypes render = natural);
 
     void ClampViewOffset();
@@ -231,43 +218,39 @@ public:
     int GetMaxViewY();
     bool NeedHorizontalScrollbar();
     bool NeedVerticalScrollbar();
-    double GetViewScale() const;
-    int GetScaledFieldWidth() const;
-    int GetScaledFieldHeight() const;
+    static double GetViewScale();
+    static int GetScaledFieldWidth();
+    static int GetScaledFieldHeight();
     void PanView(int deltaX, int deltaY);
     void ZoomAtScreenPoint(int X, int Y, int wheelDelta);
 
-    bool IsInBounds(int X, int Y) const;
-    bool IsInBounds(Point p) const;
-    bool IsInWater(int Y) const;
-    bool IsInMud(int Y) const;
+    //Is cell out if bounds?
+    bool IsInBounds(int X, int Y);
+    bool IsInBounds(Point p);
 
+    bool IsInWater(int Y);
+    bool IsInMud(int Y);
+
+    //Find empty cell nearby, otherwise return {-1, -1}
     Point FindFreeNeighbourCell(int X, int Y);
     Point FindRandomNeighbourBot(int X, int Y);
+
+    //How may free cells are available around a given one
     int FindHowManyFreeCellsAround(int X, int Y);
 
-    int ValidateX(int X) const;
-    int FindDistanceX(int X1, int X2) const;
+    //This function is needed to tile world horizontally (change X = -1 to X = FieldCellsWidth etc.)
+    int ValidateX(int X);
+    int FindDistanceX(int X1, int X2);
+
+    //Is cell out of bounds, given absolute screen space coordinates
     bool IsInBoundsScreenCoords(int X, int Y);
+
+    //Transform absolute screen coords to cell position on field
     Point ScreenCoordsToLocal(int X, int Y);
 
     Object* GetObjectLocalCoords(int X, int Y);
-    Object* GetCell(int X, int Y) const;
-    ObjectTypes GetObjectTypeAt(int X, int Y) const;
-    int GetSnapshotEnergy(int X, int Y) const;
-    int GetSnapshotDirection(int X, int Y) const;
-    int GetSnapshotKinship(const Bot* observer, int X, int Y) const;
-    bool ValidateObjectExistance(Object* obj);
 
-    std::uint32_t GetWidth() const;
-    std::uint32_t GetHeight() const;
-    std::uint32_t GetWorkerCount() const;
-    const WorldConfig& GetConfig() const;
-    std::uint64_t GetNextObjectId() const;
-    std::uint64_t GetGeneratorState() const;
-    std::uint64_t CalculateStateHash() const;
-    void SetIdentityState(std::uint64_t nextId, std::uint64_t randomState);
-    int RandomWorldValue(int max, std::uint64_t stream = 0);
+    bool ValidateObjectExistance(Object* obj);
 
     uint GetNumObjects();
     uint GetNumBots();
@@ -278,20 +261,25 @@ public:
     PersistentState GetPersistentState() const;
     void SetPersistentState(const PersistentState& state);
 
+    //Spawn group of random bots
     void SpawnControlGroup();
     void SpawnApples();
-
+        
     Season GetSeason();
     uint GetSeasonCounter();
 
-    Field(const WorldConfig& config = WorldConfig(), std::uint64_t seed = 0);
+    Field();
     ~Field();
 
-    std::uint64_t seed;
+
+    static int seed;
     static int renderX;
     static int viewX;
     static int viewY;
     static double zoom;
 };
 
+
+
 }
+

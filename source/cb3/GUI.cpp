@@ -76,10 +76,10 @@ void Main::DrawMainWindow()
 		Text("Слоев: %i, нейронов: %i, сдвиг X: %i", NumNeuronLayers, NumHiddenNeurons, field->renderX);
 
 		//Simulation seed and unique id
-		Text("Зерно: %llu, id симуляции: %i", static_cast<unsigned long long>(seed), id);
+		Text("Зерно: %i, id симуляции: %i", seed, id);
 
 		//World size and avg lifetime
-		Text("Размер мира: %u x %u", field->GetWidth(), field->GetHeight());
+		Text("Размер мира: %i (%i экранов)", FieldCellsWidth, (FieldCellsWidth) / (ScreenCellsWidth));
 
 		Text("Средний возраст ботов: %i (макс.: %i)", field->GetAverageLifetime(), field->params.botMaxLifetime);
 
@@ -107,7 +107,16 @@ void Main::DrawSystemWindow()
 		
 		SameLine();
 
-		Text(", рабочих потоков: %u", field->GetWorkerCount());
+		#if NumThreads == 1
+		{
+			Text(", один поток");
+	}
+		#else
+		{
+			uint threads = NumThreads;
+			Text(", потоков: %i", threads);
+		}
+		#endif
 	}
 	End();
 }
@@ -372,8 +381,8 @@ void Main::DrawSidePanelWindow()
 			}
 
 			Text("Слоев: %i, нейронов: %i, сдвиг X: %i", NumNeuronLayers, NumHiddenNeurons, field->renderX);
-			Text("Зерно: %llu, id симуляции: %i", static_cast<unsigned long long>(seed), id);
-			Text("Размер мира: %u x %u", field->GetWidth(), field->GetHeight());
+			Text("Зерно: %i, id симуляции: %i", seed, id);
+			Text("Размер мира: %i (%i экранов)", FieldCellsWidth, FieldCellsWidth / ScreenCellsWidth);
 			Text("Средний возраст: %i (макс.: %i)", field->GetAverageLifetime(), field->params.botMaxLifetime);
 		}
 
@@ -386,9 +395,9 @@ void Main::DrawSidePanelWindow()
 			int logicalProcessors = SDL_GetCPUCount();
 			TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Логических процессоров: %d", logicalProcessors);
 			TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
-			Text("Рабочих потоков симуляции: %u", field->GetWorkerCount());
+			Text("Рабочих потоков симуляции: %u", (uint)NumThreads);
 
-			if (field->GetWorkerCount() > static_cast<uint>(logicalProcessors))
+			if (NumThreads > logicalProcessors)
 			{
 				TextColored(ImVec4(1.0f, 0.65f, 0.15f, 1.0f), "Потоков больше, чем логических процессоров");
 			}
@@ -642,16 +651,27 @@ void Main::DrawSaveLoadWindow()
 					}
 					else if (selectedFile->isWorld)
 					{
-						if (LoadWorldFromFile(selectedFile->nameFull.c_str()))
+						ObjectSaver::WorldParams ret = saver.LoadWorld(field, (char*)selectedFile->nameFull.c_str());
+
+						if (ret.id != -1)
 						{
-							LogPrint("Мир загружен\r\n");
+							if (ret.width != FieldCellsWidth)
+								LogPrint("Мир загружен (ширина не совпадает)\r\n");
+							else
+								LogPrint("Мир загружен\r\n");
+
+							seed = ret.seed;
+							ticknum = ret.tick;
+							id = ret.id;
+
+							field->seed = seed;
 						}
 						else
 							LogPrint("Ошибка загрузки мира\r\n");
 					}
 					else
 					{
-						if (selectedObject && !field->ValidateObjectExistance(selectedObject))
+						if (selectedObject)
 							delete selectedObject;
 
 						selectedObject = saver.LoadObject((char*)selectedFile->nameFull.c_str());
@@ -700,7 +720,10 @@ void Main::DrawSaveLoadWindow()
 
 						if (ret.id != -1)
 						{
-							LogPrint("Ландшафт загружен\r\n");
+							if (ret.width != FieldCellsWidth)
+								LogPrint("Ландшафт загружен (ширина не совпадает)\r\n");
+							else
+								LogPrint("Ландшафт загружен\r\n");
 						}
 						else
 							LogPrint("Ошибка загрузки ландшафта\r\n");
@@ -717,7 +740,10 @@ void Main::DrawSaveLoadWindow()
 
 							if (ret.id != -1)
 							{
-								LogPrint("Ландшафт загружен\r\n");
+								if (ret.width != FieldCellsWidth)
+									LogPrint("Ландшафт загружен (ширина не совпадает)\r\n");
+								else
+									LogPrint("Ландшафт загружен\r\n");
 							}
 							else
 								LogPrint("Ошибка загрузки ландшафта\r\n");
@@ -735,7 +761,7 @@ void Main::DrawDangerousWindow()
 	if (showDangerous)
 	{
 		SetNextWindowBgAlpha(1.0f);
-		SetNextWindowSize({ 290.0f, 140.0f });
+		SetNextWindowSize({ 290.0f, 100.0f });
 		SetNextWindowPos({ 100 * 1.0f, 300.0f }, ImGuiCond_Once);
 
 		Begin("Инструменты", &showDangerous, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
@@ -749,18 +775,13 @@ void Main::DrawDangerousWindow()
 
 			SameLine();
 
-			if (Button("Новый мир", { 130, 30 }))
-			{
-				PrepareWorldConfigDialog();
-			}
-
 			if (Button("Убить ботов", { 130, 30 }))
 			{
 				Deselect();
 
-				for (int cx = 0; cx < static_cast<int>(field->GetWidth()); ++cx)
+				for (int cx = 0; cx < FieldCellsWidth; ++cx)
 				{
-					for (int cy = 0; cy < static_cast<int>(field->GetHeight()); ++cy)
+					for (int cy = 0; cy < FieldCellsHeight; ++cy)
 					{
 						Object* o = field->GetObjectLocalCoords(cx, cy);
 
@@ -863,8 +884,8 @@ void Main::DrawAdaptationWindow()
 
 				NewLine();
 
-				SliderInt("Уровень океана", &field->params.oceanLevel, 0, static_cast<int>(field->GetHeight()));
-				SliderInt("Уровень ила", &field->params.mudLevel, 0, static_cast<int>(field->GetHeight()));
+				SliderInt("Уровень океана", &field->params.oceanLevel, 0, FieldCellsHeight);
+				SliderInt("Уровень ила", &field->params.mudLevel, 0, FieldCellsHeight);
 			}
 
 			NewLine();
@@ -1124,50 +1145,6 @@ void Main::DrawModeSwitchConfirmWindow()
 	}
 }
 
-void Main::DrawWorldConfigWindow()
-{
-	if (showWorldConfig)
-	{
-		OpenPopup("Новый мир CyberBiology3");
-		showWorldConfig = false;
-	}
-
-	if (BeginPopupModal("Новый мир CyberBiology3", NULL, ImGuiWindowFlags_AlwaysAutoResize))
-	{
-		TextWrapped("Размер активного мира неизменяем. Применение параметров создаст новый пустой мир.");
-		InputInt("Ширина", &worldWidthInput);
-		InputInt("Высота", &worldHeightInput);
-		InputInt("Лимит рабочих потоков (0 = авто)", &worldThreadsInput);
-
-		if (!worldConfigError.empty())
-		{
-			TextWrapped("%s", worldConfigError.c_str());
-		}
-
-		if (Button("Создать", { 100, 30 }))
-		{
-			WorldConfig config;
-			config.width = static_cast<std::uint32_t>((std::max)(worldWidthInput, 0));
-			config.height = static_cast<std::uint32_t>((std::max)(worldHeightInput, 0));
-			config.maxWorkerThreads = static_cast<std::uint32_t>((std::max)(worldThreadsInput, 0));
-
-			if (ReplaceWorld(config, GetTickCount64()))
-			{
-				CloseCurrentPopup();
-			}
-		}
-
-		SameLine();
-		if (Button("Оставить текущий", { 140, 30 }))
-		{
-			worldConfigError.clear();
-			CloseCurrentPopup();
-		}
-
-		EndPopup();
-	}
-}
-
 void Main::DrawWindows()
 {
 	//ImGUI demo window
@@ -1178,7 +1155,6 @@ void Main::DrawWindows()
 	DrawSidePanelWindow();
 	DrawFieldScrollbars();
 	DrawModeSwitchWindow();
-	DrawWorldConfigWindow();
 
 	//Below windows that are hidden at startup
 
@@ -1204,9 +1180,9 @@ void Main::MouseClick()
 			{
 				fieldCoords.x = 0;
 			}
-			else if (fieldCoords.x >= static_cast<int>(field->GetWidth()))
+			else if (fieldCoords.x >= FieldCellsWidth)
 			{
-				fieldCoords.x = static_cast<int>(field->GetWidth()) - 1;
+				fieldCoords.x = FieldCellsWidth - 1;
 			}
 
 			Object* obj = field->GetObjectLocalCoords(fieldCoords.x, fieldCoords.y);

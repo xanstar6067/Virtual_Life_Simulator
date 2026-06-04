@@ -1,14 +1,13 @@
 #pragma once
 
 #include "SimulationMode.h"
-#include "cb3/WorldConfig.h"
 
 #include <memory>
 
 class Cb3Runtime final
 {
 public:
-    explicit Cb3Runtime(const cb3::WorldConfig& config = cb3::WorldConfig());
+    Cb3Runtime();
     ~Cb3Runtime();
 
     Cb3Runtime(const Cb3Runtime&) = delete;

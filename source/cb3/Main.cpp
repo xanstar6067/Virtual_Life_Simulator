@@ -92,6 +92,32 @@ static string MakeTimestampFileName(const char* prefix)
 	return string(prefix) + "_" + buffer;
 }
 
+inline void ValidateThreadsNumber()
+{
+	if ((FieldCellsWidth % (NumThreads * 2)) != 0)
+	{
+		//Ширина поля должна делиться на (число потоков х2) без остатка!
+		ErrorMessage(L"Ширина поля должна делиться на (NumThreads * 2) без остатка!", L"Неверные параметры!");
+		exit(0);
+	}
+
+	if ((FieldCellsWidth / (NumThreads * 2)) < 4)
+	{
+		//Поле должно быть шире или потоков должно быть меньше
+		ErrorMessage(L"Участок поля слишком мал для выбранного числа потоков!", L"Неверные параметры!");
+		exit(0);
+	}
+	
+	for (uint n : {1, 4, 8, 16, 24, 48})
+	{
+		if (n == NumThreads)
+			return;	// Параметры корректны
+	}
+
+	ErrorMessage(L"Недопустимое число потоков!", L"Неверные параметры!");
+	exit(0);
+}
+
 void Main::SwitchPause()
 {
 	simulate = !simulate;
@@ -515,127 +541,6 @@ void Main::SaveWorldToNamedFile()
 	}
 }
 
-void Main::PrepareWorldConfigDialog()
-{
-	if (field)
-	{
-		worldWidthInput = static_cast<int>(field->GetWidth());
-		worldHeightInput = static_cast<int>(field->GetHeight());
-		worldThreadsInput = static_cast<int>(field->GetConfig().maxWorkerThreads);
-	}
-	worldConfigError.clear();
-	showWorldConfig = true;
-}
-
-bool Main::ReplaceWorld(const WorldConfig& config, std::uint64_t newSeed)
-{
-	std::wstring validationError;
-	if (!config.Validate(&validationError))
-	{
-		worldConfigError.clear();
-		for (wchar_t character : validationError)
-		{
-			worldConfigError.push_back(character <= 0x7f ? static_cast<char>(character) : '?');
-		}
-		return false;
-	}
-
-	Field* replacement = NULL;
-	try
-	{
-		replacement = new Field(config, newSeed);
-	}
-	catch (const std::exception&)
-	{
-		worldConfigError = "Failed to allocate the new world.";
-		Object::SetField(field);
-		return false;
-	}
-
-	Deselect();
-	delete auto_adapt;
-	delete field;
-	field = replacement;
-	auto_adapt = new AutomaticAdaptation(field, this);
-
-	seed = newSeed;
-	SetDeterministicRandom(seed, 0, 0x6d61696eULL);
-	id = RandomNext() & 0x7fffffffU;
-	ticknum = 0;
-	tpsTickCounter = 0;
-	realTPS = 0;
-	Field::renderX = 0;
-	Field::viewX = 0;
-	Field::viewY = 0;
-	Field::zoom = 1.0;
-	chart.ClearChart();
-	Pause();
-	worldConfigError.clear();
-	return true;
-}
-
-bool Main::LoadWorldFromFile(const char* filename)
-{
-	ObjectSaver::WorldParams header;
-	if (!saver.ReadWorldHeader(const_cast<char*>(filename), header))
-	{
-		return false;
-	}
-
-	WorldConfig config;
-	config.width = static_cast<std::uint32_t>(header.width);
-	config.height = static_cast<std::uint32_t>(header.height);
-	config.maxWorkerThreads = static_cast<std::uint32_t>(header.maxWorkerThreads);
-
-	Field* replacement = NULL;
-	try
-	{
-		replacement = new Field(config, header.seed);
-	}
-	catch (const std::exception&)
-	{
-		worldConfigError = "Failed to allocate the world from the save file.";
-		Object::SetField(field);
-		return false;
-	}
-
-	ObjectSaver::WorldParams loaded;
-	try
-	{
-		loaded = saver.LoadWorld(replacement, const_cast<char*>(filename));
-	}
-	catch (const std::exception&)
-	{
-		delete replacement;
-		Object::SetField(field);
-		worldConfigError = "Not enough memory to load objects from the save file.";
-		LogPrint(worldConfigError.c_str(), true);
-		return false;
-	}
-	if (loaded.id == -1)
-	{
-		delete replacement;
-		Object::SetField(field);
-		return false;
-	}
-
-	Deselect();
-	delete auto_adapt;
-	delete field;
-	field = replacement;
-	auto_adapt = new AutomaticAdaptation(field, this);
-	seed = loaded.seed;
-	ticknum = loaded.tick;
-	id = loaded.id;
-	Field::renderX = 0;
-	Field::viewX = 0;
-	Field::viewY = 0;
-	Field::zoom = 1.0;
-	chart.ClearChart();
-	Pause();
-	return true;
-}
-
 void Main::DeleteSelectedFile()
 {
 	if (!selectedFile)
@@ -724,29 +629,30 @@ bool Main::ConsumeModeSwitchRequest(SimulationMode& mode)
 }
 
 
-Main::Main(const WorldConfig& config)
+Main::Main()
 {
 	LogPrint((char*)"Запущено. Зерно:\r\n");
 
 	//Set seed and id
 	#ifdef RandomSeed		
-		seed = GetTickCount64();
+		seed = (uint)GetTickCount64();
 	#else
 		seed = Seed;
 	#endif
 
-	SetDeterministicRandom(seed, 0, 0x6d61696eULL);
-	id = RandomNext() & 0x7fffffffU;
+	Field::seed = seed;
+	srand(seed);
 
-	LogPrint(static_cast<int>(seed));
+	id = rand();
 
-	field = new Field(config, seed);
+	LogPrint(seed);
+
+	field = new Field();
 	Field::renderX = 0;
 	Field::viewX = 0;
 	Field::viewY = 0;
 	Field::zoom = 1.0;
 	auto_adapt = new AutomaticAdaptation(field, this);
-	PrepareWorldConfigDialog();
 
 	Pause();
 
@@ -757,8 +663,8 @@ Main::Main(const WorldConfig& config)
 
 Main::~Main()
 {
-	delete auto_adapt;
 	delete field;
+	delete auto_adapt;
 }
 
 void Main::MainLoop()
@@ -846,23 +752,19 @@ void Main::CatchKeyboard()
 	}
 	else if (keyboard[Keyboard_DropOrganics])
 	{
-		for (int X = 0; X < static_cast<int>(field->GetWidth()); ++X)
+		for (int X = 0; X < FieldCellsWidth; ++X)
 		{
-			for (int Y = 0; Y < 25 + field->RandomWorldValue(20, X); ++Y)
+			for (int Y = 0; Y < 25 + RandomVal(20); ++Y)
 			{
-				if (field->IsInBounds(X, Y))
-				{
-					field->AddObject(new Organics(X, Y, BotMaxEnergyInitial/2));
-				}
+				field->AddObject(new Organics(X, Y, BotMaxEnergyInitial/2));
 			}
 		}
 	}
 	else if (keyboard[Keyboard_SpawnRocks])
 	{
-		for (int i = 0; i < static_cast<int>(field->GetWidth()); ++i)
+		for (int i = 0; i < SpawnRocksSize; ++i)
 		{
-			Rock* tmp = new Rock(field->RandomWorldValue(field->GetWidth(), i * 2),
-				field->RandomWorldValue(field->GetHeight(), i * 2 + 1));
+			Rock* tmp = new Rock(RandomVal(FieldCellsWidth), RandomVal(FieldCellsHeight));
 
 			if (!field->AddObject(tmp))
 				delete tmp;
@@ -889,9 +791,20 @@ void Main::CatchKeyboard()
 	}
 	else if (keyboard[Keyboard_Quickload])
 	{
-		if (LoadWorldFromFile(OuicksaveFilename))
+		ObjectSaver::WorldParams ret = saver.LoadWorld(field, (char*)OuicksaveFilename);
+
+		if (ret.id != -1)
 		{
-			LogPrint("Мир загружен\r\n");
+			if (ret.width != FieldCellsWidth)
+				LogPrint("Мир загружен (ширина не совпадает)\r\n");
+			else
+				LogPrint("Мир загружен\r\n");
+
+			seed = ret.seed;
+			ticknum = ret.tick;
+			id = ret.id;
+
+			field->seed = seed;
 		}
 		else
 			LogPrint("Ошибка загрузки мира\r\n");

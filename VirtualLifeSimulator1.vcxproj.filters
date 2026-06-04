@@ -111,9 +111,6 @@
     <ClCompile Include="source\cb3\Rock.cpp">
       <Filter>Исходные файлы\cb3</Filter>
     </ClCompile>
-    <ClCompile Include="source\cb3\SelfTest.cpp">
-      <Filter>Исходные файлы\cb3</Filter>
-    </ClCompile>
     <ClCompile Include="source\cb3\Utils.cpp">
       <Filter>Исходные файлы\cb3</Filter>
     </ClCompile>
@@ -221,9 +218,6 @@
     <ClInclude Include="source\cb3\Rock.h">
       <Filter>Файлы заголовков\cb3</Filter>
     </ClInclude>
-    <ClInclude Include="source\cb3\SelfTest.h">
-      <Filter>Файлы заголовков\cb3</Filter>
-    </ClInclude>
     <ClInclude Include="source\cb3\SDL.h">
       <Filter>Файлы заголовков\cb3</Filter>
     </ClInclude>
@@ -234,9 +228,6 @@
       <Filter>Файлы заголовков\cb3</Filter>
     </ClInclude>
     <ClInclude Include="source\cb3\Utils.h">
-      <Filter>Файлы заголовков\cb3</Filter>
-    </ClInclude>
-    <ClInclude Include="source\cb3\WorldConfig.h">
       <Filter>Файлы заголовков\cb3</Filter>
     </ClInclude>
   </ItemGroup>

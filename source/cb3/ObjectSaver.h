@@ -18,7 +18,6 @@ public:
     void WriteBool(bool);
     void WriteByte(byte);
     void WriteUShort(unsigned short);
-    void WriteUInt64(std::uint64_t);
 
     MyOutStream(char* filename, int flags);
 };
@@ -31,7 +30,6 @@ public:
     bool ReadBool();
     byte ReadByte();
     unsigned short ReadUShort();
-    std::uint64_t ReadUInt64();
 
     MyInputStream(char* filename, int flags);
 };
@@ -63,17 +61,14 @@ public:
 
     struct WorldParams
     {
-        int id = -1;
-        std::uint64_t seed = 0;
-        int tick = -1;
-        int width = -1;
-        int height = -1;
-        int maxWorkerThreads = 0;
-        std::uint64_t nextObjectId = 1;
-        std::uint64_t generatorState = 0;
+        int
+        id,
+        seed,
+        tick,
+        width,
+        height;
     };
 
-    bool ReadWorldHeader(char* filename, WorldParams& params);
     WorldParams LoadWorld(Field* world, char* filename, bool clearWorld = true, bool loadParams = true, bool loadLandscape = true, bool loadBots = true);
 
 };

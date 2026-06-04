@@ -514,7 +514,7 @@ void AutomaticAdaptation::BeginDivers()
 		return;
 	}
 
-	if (field->GetWidth() < 4000)
+	if (FieldCellsWidth < 4000)
 	{
 		PrintInLog("Ширина поля должна быть больше 4000!");
 
@@ -538,7 +538,7 @@ void AutomaticAdaptation::BeginDivers()
 
 void AutomaticAdaptation::BeginWinds()
 {
-	if (field->GetWidth() < 350)
+	if (FieldCellsWidth < 350)
 	{
 		PrintInLog("Ширина поля должна быть больше 350!");
 
@@ -550,7 +550,7 @@ void AutomaticAdaptation::BeginWinds()
 	PrintInLog("[Ветры] Запущено...");
 
 	params->mudLevel = 0;
-	params->oceanLevel = static_cast<int>(field->GetHeight());
+	params->oceanLevel = FieldCellsHeight;
 	params->noPredators = true;
 	params->PSreward = 12;
 

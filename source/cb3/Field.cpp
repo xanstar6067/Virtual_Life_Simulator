@@ -2,19 +2,16 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
+
 
 namespace cb3
 {
 
-int Field::renderX = 0;
+int Field::seed;
+int Field::renderX=0;
 int Field::viewX = 0;
 int Field::viewY = 0;
 double Field::zoom = 1.0;
-
-thread_local std::size_t Field::currentWorker = 0;
-thread_local Object* Field::currentObject = NULL;
-thread_local std::uint32_t Field::currentSequence = 0;
 
 static int GetSidePanelXForField()
 {
@@ -27,6 +24,59 @@ static int GetSidePanelXForField()
     }
 
     return (fixedX < maxVisibleX) ? fixedX : maxVisibleX;
+}
+
+static void GetFieldViewportLayout(SDL_Rect& viewport, bool& needHorizontal, bool& needVertical)
+{
+    int availableWidth = GetSidePanelXForField() - FieldX - InterfaceBorder;
+    int availableHeight = windowHeight - FieldY;
+
+    if (availableWidth < 1)
+    {
+        availableWidth = 1;
+    }
+
+    if (availableHeight < 1)
+    {
+        availableHeight = 1;
+    }
+
+    needHorizontal = false;
+    needVertical = false;
+
+    int scaledFieldWidth = Field::GetScaledFieldWidth();
+    int scaledFieldHeight = Field::GetScaledFieldHeight();
+
+    for (int i = 0; i < 2; ++i)
+    {
+        bool horizontal = scaledFieldWidth > (availableWidth - (needVertical ? FieldScrollbarSize : 0));
+        bool vertical = scaledFieldHeight > (availableHeight - (horizontal ? FieldScrollbarSize : 0));
+
+        needHorizontal = horizontal;
+        needVertical = vertical;
+    }
+
+    if (needVertical)
+    {
+        availableWidth -= FieldScrollbarSize;
+    }
+
+    if (needHorizontal)
+    {
+        availableHeight -= FieldScrollbarSize;
+    }
+
+    if (availableWidth < 1)
+    {
+        availableWidth = 1;
+    }
+
+    if (availableHeight < 1)
+    {
+        availableHeight = 1;
+    }
+
+    viewport = { FieldX, FieldY, availableWidth, availableHeight };
 }
 
 static double ClampFieldZoom(double value)
@@ -44,212 +94,65 @@ static double ClampFieldZoom(double value)
     return value;
 }
 
-std::size_t Field::Index(int X, int Y) const
-{
-    return static_cast<std::size_t>(Y) * config.width + static_cast<std::size_t>(X);
-}
-
-std::uint32_t Field::GetWidth() const
-{
-    return config.width;
-}
-
-std::uint32_t Field::GetHeight() const
-{
-    return config.height;
-}
-
-std::uint32_t Field::GetWorkerCount() const
-{
-    return static_cast<std::uint32_t>(workers.size());
-}
-
-const WorldConfig& Field::GetConfig() const
-{
-    return config;
-}
-
-std::uint64_t Field::GetNextObjectId() const
-{
-    return nextObjectId;
-}
-
-std::uint64_t Field::GetGeneratorState() const
-{
-    return generatorState;
-}
-
-std::uint64_t Field::CalculateStateHash() const
-{
-    std::uint64_t hash = 1469598103934665603ULL;
-    auto addBytes = [&](const void* data, std::size_t size)
-    {
-        const byte* bytes = static_cast<const byte*>(data);
-        for (std::size_t i = 0; i < size; ++i)
-        {
-            hash ^= bytes[i];
-            hash *= 1099511628211ULL;
-        }
-    };
-    auto addBrain = [&](BotNeuralNet* brain, bool includeMemory)
-    {
-        for (uint layer = 0; layer < NumNeuronLayers; ++layer)
-        {
-            for (uint neuronIndex = 0; neuronIndex < neuronsInLayer[layer]; ++neuronIndex)
-            {
-                Neuron& neuron = brain->allNeurons[layer][neuronIndex];
-                byte neuronType = static_cast<byte>(neuron.type);
-                int8_t bias = neuron.bias;
-                byte connections = neuron.numConnections;
-                addBytes(&neuronType, sizeof(neuronType));
-                addBytes(&bias, sizeof(bias));
-                addBytes(&connections, sizeof(connections));
-                for (uint connection = 0; connection < neuron.numConnections; ++connection)
-                {
-                    addBytes(&neuron.allConnections[connection], sizeof(NeuronConnection));
-                }
-            }
-
-            if (includeMemory)
-            {
-                addBytes(brain->allMemory[layer], neuronsInLayer[layer]);
-            }
-        }
-    };
-
-    addBytes(&seed, sizeof(seed));
-    addBytes(&nextObjectId, sizeof(nextObjectId));
-    addBytes(&generatorState, sizeof(generatorState));
-    addBytes(&spawnApplesCounter, sizeof(spawnApplesCounter));
-    addBytes(&season, sizeof(season));
-    addBytes(&changeSeasonCounter, sizeof(changeSeasonCounter));
-    addBytes(&params, sizeof(params));
-
-    for (Object* object : allCells)
-    {
-        byte occupied = object ? 1 : 0;
-        addBytes(&occupied, sizeof(occupied));
-        if (!object)
-        {
-            continue;
-        }
-
-        ObjectTypes type = object->type();
-        std::uint64_t id = object->GetStableId();
-        uint lifetime = object->GetLifetime();
-        addBytes(&type, sizeof(type));
-        addBytes(&id, sizeof(id));
-        addBytes(&object->x, sizeof(object->x));
-        addBytes(&object->y, sizeof(object->y));
-        addBytes(&object->energy, sizeof(object->energy));
-        addBytes(&lifetime, sizeof(lifetime));
-
-        if (type == bot)
-        {
-            Bot* creature = static_cast<Bot*>(object);
-            Bot::PersistentState state = creature->GetPersistentState();
-            addBytes(&state.direction, sizeof(state.direction));
-            addBytes(&state.stunned, sizeof(state.stunned));
-            addBytes(&state.fertilityDelay, sizeof(state.fertilityDelay));
-            addBytes(&state.energyFromPS, sizeof(state.energyFromPS));
-            addBytes(&state.energyFromPredation, sizeof(state.energyFromPredation));
-            addBytes(&state.energyFromOrganics, sizeof(state.energyFromOrganics));
-            addBytes(&state.nextMarker, sizeof(state.nextMarker));
-            addBytes(&state.addaptation_birthX, sizeof(state.addaptation_birthX));
-            addBytes(&state.numAttacks, sizeof(state.numAttacks));
-            addBytes(&state.numMovesX, sizeof(state.numMovesX));
-            addBytes(&state.numMovesY, sizeof(state.numMovesY));
-            addBytes(&state.numPSonLand, sizeof(state.numPSonLand));
-            addBytes(creature->GetMarkers(), sizeof(int) * NumberOfMutationMarkers);
-            addBytes(creature->GetColor()->c, sizeof(creature->GetColor()->c));
-            addBytes(creature->GetColor()->change_vector, sizeof(creature->GetColor()->change_vector));
-            addBrain(creature->GetActiveBrain(), true);
-            addBrain(creature->GetInitialBrain(), false);
-        }
-    }
-
-    return hash;
-}
-
-void Field::SetIdentityState(std::uint64_t nextId, std::uint64_t randomState)
-{
-    nextObjectId = (nextId > 0) ? nextId : 1;
-    generatorState = randomState ? randomState : MixRandomSeed(seed);
-}
-
-int Field::GetVisibleColumns() const
-{
-    return (std::min)(static_cast<int>(config.width), static_cast<int>(FieldRenderCellsWidth));
-}
-
-int Field::GetFieldPixelWidth() const
-{
-    return GetVisibleColumns() * FieldCellSize;
-}
-
-int Field::GetFieldPixelHeight() const
-{
-    const std::uint64_t height = static_cast<std::uint64_t>(config.height) * FieldCellSize;
-    return static_cast<int>((std::min)(height, static_cast<std::uint64_t>(INT_MAX)));
-}
-
-static void GetFieldViewportLayout(const Field& field, SDL_Rect& viewport, bool& needHorizontal, bool& needVertical)
+static double GetFitScale()
 {
     int availableWidth = GetSidePanelXForField() - FieldX - InterfaceBorder;
     int availableHeight = windowHeight - FieldY;
 
-    availableWidth = (std::max)(availableWidth, 1);
-    availableHeight = (std::max)(availableHeight, 1);
-    needHorizontal = false;
-    needVertical = false;
-
-    int scaledFieldWidth = field.GetScaledFieldWidth();
-    int scaledFieldHeight = field.GetScaledFieldHeight();
-
-    for (int i = 0; i < 2; ++i)
+    if (availableWidth < 1)
     {
-        needHorizontal = scaledFieldWidth > (availableWidth - (needVertical ? FieldScrollbarSize : 0));
-        needVertical = scaledFieldHeight > (availableHeight - (needHorizontal ? FieldScrollbarSize : 0));
+        availableWidth = 1;
     }
 
-    if (needVertical)
+    if (availableHeight < 1)
     {
-        availableWidth -= FieldScrollbarSize;
+        availableHeight = 1;
     }
 
-    if (needHorizontal)
-    {
-        availableHeight -= FieldScrollbarSize;
-    }
+    double scaleX = availableWidth / (FieldWidth * 1.0);
+    double scaleY = availableHeight / (FieldHeight * 1.0);
+    double scale = (scaleX < scaleY) ? scaleX : scaleY;
 
-    viewport = {FieldX, FieldY, (std::max)(availableWidth, 1), (std::max)(availableHeight, 1)};
+    return (scale > 0.05) ? scale : 0.05;
 }
 
-double Field::GetViewScale() const
+double Field::GetViewScale()
 {
-    int availableWidth = (std::max)(GetSidePanelXForField() - FieldX - InterfaceBorder, 1);
-    int availableHeight = (std::max)(windowHeight - FieldY, 1);
-    double scaleX = availableWidth / (GetFieldPixelWidth() * 1.0);
-    double scaleY = availableHeight / (GetFieldPixelHeight() * 1.0);
-    double scale = (std::min)(scaleX, scaleY);
-    return (std::max)(scale, 0.05) * ClampFieldZoom(zoom);
+    return GetFitScale() * ClampFieldZoom(zoom);
 }
 
-int Field::GetScaledFieldWidth() const
+int Field::GetScaledFieldWidth()
 {
-    return (std::max)(1, static_cast<int>(std::ceil(GetFieldPixelWidth() * GetViewScale())));
+    return (std::max)(1, (int)std::ceil(FieldWidth * GetViewScale()));
 }
 
-int Field::GetScaledFieldHeight() const
+int Field::GetScaledFieldHeight()
 {
-    const double value = GetFieldPixelHeight() * GetViewScale();
-    return (std::max)(1, static_cast<int>((std::min)(value, static_cast<double>(INT_MAX))));
+    return (std::max)(1, (int)std::ceil(FieldHeight * GetViewScale()));
 }
 
 void Field::ClampViewOffset()
 {
-    viewX = (std::max)(0, (std::min)(viewX, GetMaxViewX()));
-    viewY = (std::max)(0, (std::min)(viewY, GetMaxViewY()));
+    int maxX = GetMaxViewX();
+    int maxY = GetMaxViewY();
+
+    if (viewX < 0)
+    {
+        viewX = 0;
+    }
+    else if (viewX > maxX)
+    {
+        viewX = maxX;
+    }
+
+    if (viewY < 0)
+    {
+        viewY = 0;
+    }
+    else if (viewY > maxY)
+    {
+        viewY = maxY;
+    }
 }
 
 SDL_Rect Field::GetViewportRect()
@@ -257,7 +160,9 @@ SDL_Rect Field::GetViewportRect()
     SDL_Rect viewport;
     bool needHorizontal;
     bool needVertical;
-    GetFieldViewportLayout(*this, viewport, needHorizontal, needVertical);
+
+    GetFieldViewportLayout(viewport, needHorizontal, needVertical);
+
     return viewport;
 }
 
@@ -266,8 +171,12 @@ int Field::GetMaxViewX()
     SDL_Rect viewport;
     bool needHorizontal;
     bool needVertical;
-    GetFieldViewportLayout(*this, viewport, needHorizontal, needVertical);
-    return (std::max)(GetScaledFieldWidth() - viewport.w, 0);
+
+    GetFieldViewportLayout(viewport, needHorizontal, needVertical);
+
+    int scaledFieldWidth = GetScaledFieldWidth();
+
+    return (scaledFieldWidth > viewport.w) ? scaledFieldWidth - viewport.w : 0;
 }
 
 int Field::GetMaxViewY()
@@ -275,8 +184,12 @@ int Field::GetMaxViewY()
     SDL_Rect viewport;
     bool needHorizontal;
     bool needVertical;
-    GetFieldViewportLayout(*this, viewport, needHorizontal, needVertical);
-    return (std::max)(GetScaledFieldHeight() - viewport.h, 0);
+
+    GetFieldViewportLayout(viewport, needHorizontal, needVertical);
+
+    int scaledFieldHeight = GetScaledFieldHeight();
+
+    return (scaledFieldHeight > viewport.h) ? scaledFieldHeight - viewport.h : 0;
 }
 
 bool Field::NeedHorizontalScrollbar()
@@ -284,7 +197,9 @@ bool Field::NeedHorizontalScrollbar()
     SDL_Rect viewport;
     bool needHorizontal;
     bool needVertical;
-    GetFieldViewportLayout(*this, viewport, needHorizontal, needVertical);
+
+    GetFieldViewportLayout(viewport, needHorizontal, needVertical);
+
     return needHorizontal;
 }
 
@@ -293,7 +208,9 @@ bool Field::NeedVerticalScrollbar()
     SDL_Rect viewport;
     bool needHorizontal;
     bool needVertical;
-    GetFieldViewportLayout(*this, viewport, needHorizontal, needVertical);
+
+    GetFieldViewportLayout(viewport, needHorizontal, needVertical);
+
     return needVertical;
 }
 
@@ -301,6 +218,7 @@ void Field::PanView(int deltaX, int deltaY)
 {
     viewX -= deltaX;
     viewY -= deltaY;
+
     ClampViewOffset();
 }
 
@@ -312,22 +230,36 @@ void Field::ZoomAtScreenPoint(int X, int Y, int wheelDelta)
     }
 
     ClampViewOffset();
+
     SDL_Rect viewport = GetViewportRect();
     double oldScale = GetViewScale();
     double fieldX = (viewX + X - viewport.x) / oldScale;
     double fieldY = (viewY + Y - viewport.y) / oldScale;
     double factor = std::pow(FieldZoomStep, std::abs(wheelDelta));
-    zoom = ClampFieldZoom((wheelDelta > 0) ? zoom * factor : zoom / factor);
+
+    if (wheelDelta > 0)
+    {
+        zoom *= factor;
+    }
+    else
+    {
+        zoom /= factor;
+    }
+
+    zoom = ClampFieldZoom(zoom);
 
     double newScale = GetViewScale();
-    viewX = static_cast<int>(std::round(fieldX * newScale - (X - viewport.x)));
-    viewY = static_cast<int>(std::round(fieldY * newScale - (Y - viewport.y)));
+    viewX = (int)std::round(fieldX * newScale - (X - viewport.x));
+    viewY = (int)std::round(fieldY * newScale - (Y - viewport.y));
+
     ClampViewOffset();
 }
 
+
 void Field::ChangeSeason()
 {
-    season = static_cast<Season>(static_cast<int>(season) + 1);
+    season = (Season)((int)season + 1);
+
     if (season > spring)
     {
         season = summer;
@@ -336,9 +268,10 @@ void Field::ChangeSeason()
 
 void Field::SeasonTick()
 {
-    if (++changeSeasonCounter >= static_cast<uint>(params.seasonInterval))
+    if (++changeSeasonCounter >= (uint)params.seasonInterval)
     {
         ChangeSeason();
+
         changeSeasonCounter = 0;
     }
 }
@@ -355,7 +288,7 @@ uint Field::GetSeasonCounter()
 
 Field::PersistentState Field::GetPersistentState() const
 {
-    return {spawnApplesCounter, season, changeSeasonCounter, nextObjectId, generatorState};
+    return {spawnApplesCounter, season, changeSeasonCounter};
 }
 
 void Field::SetPersistentState(const PersistentState& state)
@@ -363,758 +296,353 @@ void Field::SetPersistentState(const PersistentState& state)
     spawnApplesCounter = state.spawnApplesCounter;
     season = state.season <= spring ? state.season : summer;
     changeSeasonCounter = state.changeSeasonCounter;
-    SetIdentityState(state.nextObjectId, state.generatorState);
 }
 
 void Field::shiftRenderPoint(int cx)
 {
-    const int width = static_cast<int>(config.width);
-    if (width <= 0)
-    {
-        renderX = 0;
-        return;
-    }
+    renderX += cx;
 
-    renderX = (renderX + cx) % width;
     if (renderX < 0)
     {
-        renderX += width;
+        renderX = FieldCellsWidth - 1;
+    }
+    else if (renderX >= FieldCellsWidth)
+    {
+        renderX = 0;
     }
 }
 
 void Field::jumpToFirstBot()
 {
-    for (std::size_t index = 0; index < allCells.size(); ++index)
+    Object* obj;
+
+    for (int X = 0; X < FieldCellsWidth; ++X)
     {
-        Object* object = allCells[index];
-        if (object && object->type() == bot)
+        for (int Y = 0; Y < FieldCellsHeight; ++Y)
         {
-            renderX = object->x;
-            return;
+            obj = allCells[X][Y];
+
+            if (obj)
+            {
+                if (obj->type() == bot)
+                {
+                    renderX = X;
+
+                    return;
+                }
+            }
         }
     }
 }
 
-Object* Field::GetCell(int X, int Y) const
-{
-    if (!IsInBounds(X, Y))
-    {
-        return NULL;
-    }
-
-    const std::size_t index = Index(X, Y);
-    if (planningPhase.load(std::memory_order_relaxed))
-    {
-        return snapshotCells[index].object;
-    }
-
-    return allCells[index];
-}
-
-ObjectTypes Field::GetObjectTypeAt(int X, int Y) const
-{
-    if (!IsInBounds(X, Y))
-    {
-        return abstract;
-    }
-
-    if (planningPhase.load(std::memory_order_relaxed))
-    {
-        return snapshotCells[Index(X, Y)].type;
-    }
-
-    Object* object = allCells[Index(X, Y)];
-    return object ? object->type() : abstract;
-}
-
-int Field::GetSnapshotEnergy(int X, int Y) const
-{
-    if (!IsInBounds(X, Y))
-    {
-        return 0;
-    }
-
-    if (planningPhase.load(std::memory_order_relaxed))
-    {
-        return snapshotCells[Index(X, Y)].energy;
-    }
-
-    Object* object = allCells[Index(X, Y)];
-    return object ? object->energy : 0;
-}
-
-int Field::GetSnapshotDirection(int X, int Y) const
-{
-    if (!IsInBounds(X, Y))
-    {
-        return 0;
-    }
-
-    if (planningPhase.load(std::memory_order_relaxed))
-    {
-        return snapshotCells[Index(X, Y)].direction;
-    }
-
-    Object* object = allCells[Index(X, Y)];
-    return (object && object->type() == bot) ? static_cast<Bot*>(object)->GetDirection() : 0;
-}
-
-int Field::GetSnapshotKinship(const Bot* observer, int X, int Y) const
-{
-    if (!observer || !IsInBounds(X, Y))
-    {
-        return 0;
-    }
-
-    if (!planningPhase.load(std::memory_order_relaxed))
-    {
-        Object* object = allCells[Index(X, Y)];
-        return (object && object->type() == bot) ? const_cast<Bot*>(observer)->FindKinship(static_cast<Bot*>(object)) : 0;
-    }
-
-    const CellSnapshot& snapshot = snapshotCells[Index(X, Y)];
-    if (!snapshot.object || snapshot.type != bot)
-    {
-        return 0;
-    }
-
-    int matching = 0;
-    int* markers = const_cast<Bot*>(observer)->GetMarkers();
-    for (uint i = 0; i < NumberOfMutationMarkers; ++i)
-    {
-        if (markers[i] == snapshot.markers[i])
-        {
-            ++matching;
-        }
-    }
-
-    if (matching >= NumberOfMutationMarkers - HowMuchDifferenseCantBeTold)
-    {
-        matching = NumberOfMutationMarkers;
-    }
-    return matching;
-}
 
 Point Field::FindFreeNeighbourCell(int X, int Y)
 {
-    if (GetCell(X, Y) == NULL)
+    //If this cell is empty
+    if (allCells[X][Y] == NULL)
     {
-        return {X, Y};
+        return { X,Y };
     }
 
-    Point freeCells[9];
-    int count = 0;
-    for (int cx = -1; cx <= 1; ++cx)
+    //Form an array of nearby free cells
+
+    int tx;
+    Point tmpArray[9];
+    int i = 0;
+
+    for (int cx = -1; cx < 2; ++cx)
     {
-        for (int cy = -1; cy <= 1; ++cy)
+        for (int cy = -1; cy < 2; ++cy)
         {
-            int targetX = ValidateX(X + cx);
-            int targetY = Y + cy;
-            if (IsInBounds(targetX, targetY) && GetCell(targetX, targetY) == NULL)
+            tx = ValidateX(X + cx);
+
+            if (IsInBounds(tx, Y + cy))
             {
-                freeCells[count++].Set(targetX, targetY);
+                if (allCells[tx][Y + cy] == NULL)
+                {
+                    tmpArray[i++].Set(tx, Y + cy);
+                }
             }
         }
     }
 
-    return count > 0 ? freeCells[RandomVal(count)] : Point(-1, -1);
+    //Get random free cell from array
+    if (i > 0)
+    {
+        return tmpArray[RandomVal(i)];
+    }
+
+    //No free cells nearby
+    return { -1, -1 };
 }
 
 Point Field::FindRandomNeighbourBot(int X, int Y)
 {
-    Point bots[9];
-    int count = 0;
-    for (int cx = -1; cx <= 1; ++cx)
+    int tx;
+    Point tmpArray[9];
+    int i = 0;
+
+    for (int cx = -1; cx < 2; ++cx)
     {
-        for (int cy = -1; cy <= 1; ++cy)
+        for (int cy = -1; cy < 2; ++cy)
         {
-            int targetX = ValidateX(X + cx);
-            int targetY = Y + cy;
-            if (IsInBounds(targetX, targetY) && GetObjectTypeAt(targetX, targetY) == bot)
+            tx = ValidateX(X + cx);
+
+            if (IsInBounds(tx, Y + cy))
             {
-                bots[count++].Set(targetX, targetY);
+                if (allCells[tx][Y + cy] != NULL)
+                {
+                    if(allCells[tx][Y + cy]->type() == bot)
+                        tmpArray[i++].Set(tx, Y + cy);
+                }
             }
         }
     }
 
-    return count > 0 ? bots[RandomVal(count)] : Point(-1, -1);
+    //Get random bot from array
+    if (i > 0)
+    {
+        return tmpArray[RandomVal(i)];
+    }
+
+    //No free cells nearby
+    return { -1, -1 };
 }
 
 int Field::FindHowManyFreeCellsAround(int X, int Y)
 {
-    int count = 0;
-    for (int cx = -1; cx <= 1; ++cx)
+    int toRet = 0;
+
+    //If cell itself is empty
+    if (allCells[X][Y] == NULL)
     {
-        for (int cy = -1; cy <= 1; ++cy)
+        ++toRet;
+    }
+
+    //Parse all cells
+    int tx;
+
+    for (int cx = -1; cx < 2; ++cx)
+    {
+        for (int cy = -1; cy < 2; ++cy)
         {
-            int targetX = ValidateX(X + cx);
-            int targetY = Y + cy;
-            if (IsInBounds(targetX, targetY) && GetCell(targetX, targetY) == NULL)
+            tx = ValidateX(X + cx);
+
+            if (IsInBounds(tx, Y + cy))
             {
-                ++count;
+                if (allCells[tx][Y + cy] == NULL)
+                {
+                    ++toRet;
+                }
             }
         }
     }
-    return count;
+
+    return toRet;
 }
 
-bool Field::IsCurrentObjectAt(Object* object, int X, int Y) const
-{
-    return object && IsInBounds(X, Y) && allCells[Index(X, Y)] == object;
-}
-
-bool Field::IsLiveIdentity(Object* object, std::uint64_t id) const
-{
-    return object && liveObjects.find(object) != liveObjects.end() && object->GetStableId() == id;
-}
-
-int Field::MoveObjectDirect(Object* obj, int toX, int toY)
-{
-    if (!obj || !IsInBounds(toX, toY))
-    {
-        return -2;
-    }
-
-    if (allCells[Index(toX, toY)])
-    {
-        return -1;
-    }
-
-    if (!IsCurrentObjectAt(obj, obj->x, obj->y))
-    {
-        return -3;
-    }
-
-    allCells[Index(obj->x, obj->y)] = NULL;
-    allCells[Index(toX, toY)] = obj;
-    obj->x = toX;
-    obj->y = toY;
-    return 0;
-}
-
-void Field::QueueCommand(Command command)
-{
-    command.actorId = command.actor ? command.actor->GetStableId() : 0;
-    command.targetId = command.target ? command.target->GetStableId() : 0;
-    command.sourceIndex = currentObject ? Index(currentObject->x, currentObject->y) : 0;
-    command.sequence = currentSequence++;
-    workerCommands[currentWorker].push_back(command);
-}
 
 int Field::MoveObject(int fromX, int fromY, int toX, int toY)
 {
     if (!IsInBounds(toX, toY))
-    {
         return -2;
-    }
 
-    if (planningPhase.load(std::memory_order_relaxed))
+    if (allCells[toX][toY])
+        return -1;
+
+    Object* tmpObj = allCells[fromX][fromY];
+
+    if (tmpObj)
     {
-        Object* object = GetCell(fromX, fromY);
-        if (!object)
-        {
-            return -3;
-        }
-        if (GetCell(toX, toY))
-        {
-            return -1;
-        }
+        allCells[toX][toY] = tmpObj;
+        allCells[fromX][fromY] = NULL;
 
-        Command command;
-        command.type = CommandType::move;
-        command.actor = object;
-        command.fromX = fromX;
-        command.fromY = fromY;
-        command.toX = toX;
-        command.toY = toY;
-        QueueCommand(command);
+        tmpObj->x = toX;
+        tmpObj->y = toY;
+
         return 0;
     }
 
-    Object* object = IsInBounds(fromX, fromY) ? allCells[Index(fromX, fromY)] : NULL;
-    return MoveObjectDirect(object, toX, toY);
+    return -3;
 }
 
 int Field::MoveObject(Object* obj, int toX, int toY)
 {
-    return obj ? MoveObject(obj->x, obj->y, toX, toY) : -3;
-}
-
-bool Field::AddObjectDirect(Object* obj)
-{
-    if (!obj || !IsInBounds(obj->x, obj->y))
-    {
-        return false;
-    }
-
-    Object*& cell = allCells[Index(obj->x, obj->y)];
-    if (cell)
-    {
-        return false;
-    }
-
-    if (obj->GetStableId() == 0)
-    {
-        obj->SetStableId(nextObjectId++);
-    }
-    else if (obj->GetStableId() >= nextObjectId)
-    {
-        nextObjectId = obj->GetStableId() + 1;
-    }
-
-    cell = obj;
-    liveObjects.insert(obj);
-    return true;
+    return MoveObject(obj->x, obj->y, toX, toY);
 }
 
 bool Field::AddObject(Object* obj)
 {
-    return AddObjectDirect(obj);
+    Object** cell = &allCells[obj->x][obj->y];
+
+    if (*cell)
+        return false;
+
+    *cell = obj;
+
+    return true;
 }
 
 void Field::ObjectAddOrReplace(Object* obj)
 {
-    if (!obj || !IsInBounds(obj->x, obj->y))
-    {
-        delete obj;
-        return;
-    }
+    Object** cell = &allCells[obj->x][obj->y];
 
-    RemoveObjectDirect(obj->x, obj->y);
-    AddObjectDirect(obj);
+    if (*cell)
+        delete *cell;
+
+    *cell = obj;
 }
 
-bool Field::QueueBirth(Bot* parent, Object* child, int X, int Y, int energyCost)
+void Field::mutateWorld()
 {
-    if (!planningPhase.load(std::memory_order_relaxed) || !parent || !child || !IsInBounds(X, Y) || GetCell(X, Y))
+    for (int cx = 0; cx < FieldCellsWidth; ++cx)
     {
-        delete child;
-        return false;
-    }
-
-    Command command;
-    command.type = CommandType::birth;
-    command.actor = parent;
-    command.created = child;
-    command.toX = X;
-    command.toY = Y;
-    command.value = energyCost;
-    QueueCommand(command);
-    return true;
-}
-
-bool Field::QueueAttack(Bot* attacker, int X, int Y, bool digestOrganics)
-{
-    if (!planningPhase.load(std::memory_order_relaxed) || !attacker || !IsInBounds(X, Y))
-    {
-        return false;
-    }
-
-    Object* target = GetCell(X, Y);
-    ObjectTypes targetType = GetObjectTypeAt(X, Y);
-    if (!target)
-    {
-        return false;
-    }
-
-    if (digestOrganics)
-    {
-        if (targetType != organic_waste)
+        for (int cy = 0; cy < FieldCellsHeight; ++cy)
         {
-            return false;
+            Object* o = allCells[cx][cy];
+
+            if(o)
+            {
+                if (o->type() == bot)
+                {
+                    ((Bot*)o)->Mutagen();
+                }
+            }
         }
     }
-    else if (targetType != bot && targetType != apple
-#ifdef BotCanEatRock
-        && targetType != rock
-#endif
-        )
-    {
-        return false;
-    }
-
-    Command command;
-    command.type = digestOrganics ? CommandType::digest : CommandType::attack;
-    command.actor = attacker;
-    command.target = target;
-    command.targetType = targetType;
-    command.toX = X;
-    command.toY = Y;
-    command.value = GetSnapshotEnergy(X, Y);
-    QueueCommand(command);
-    return true;
-}
-
-void Field::RemoveObjectDirect(int X, int Y)
-{
-    if (!IsInBounds(X, Y))
-    {
-        return;
-    }
-
-    Object*& object = allCells[Index(X, Y)];
-    liveObjects.erase(object);
-    delete object;
-    object = NULL;
 }
 
 void Field::RemoveObject(int X, int Y)
 {
-    if (planningPhase.load(std::memory_order_relaxed))
-    {
-        Object* object = GetCell(X, Y);
-        if (object)
-        {
-            Command command;
-            command.type = CommandType::remove;
-            command.actor = object;
-            command.fromX = X;
-            command.fromY = Y;
-            QueueCommand(command);
-        }
-        return;
-    }
+    Object* tmpO = allCells[X][Y];
 
-    RemoveObjectDirect(X, Y);
+    if (tmpO)
+    {
+        delete tmpO;
+
+        allCells[X][Y] = NULL;
+    }
 }
 
-void Field::RemoveBot(int X, int Y, int energyVal)
+void Field::placeWall(uint width)
 {
-    if (planningPhase.load(std::memory_order_relaxed))
+    Object* o = allCells[0][0];
+
+    //If there is a wall
+    if (o)
     {
-        Object* object = GetCell(X, Y);
-        if (object)
+        if (o->type() == rock)
         {
-            Command command;
-            command.type = CommandType::remove;
-            command.actor = object;
-            command.fromX = X;
-            command.fromY = Y;
-            command.value = energyVal;
-            command.spawnOrganics = energyVal > 0 && RandomPercentX10(params.adaptation_organicSpawnRate);
-            QueueCommand(command);
+            repeat(FieldCellsHeight)
+            {
+                for (uint b = 0; b < width; ++b)
+                {
+                    o = allCells[b][i];
+
+                    if (o)
+                    {
+                        if (o->type() == rock)
+                        {
+                            RemoveObject(b, i);
+                        }
+                    }
+                }
+            }
+
+            return;
         }
-        return;
     }
 
-    RemoveObjectDirect(X, Y);
-    if (energyVal > 0 && RandomPercentX10(params.adaptation_organicSpawnRate))
+    //Otherwise create a new one
+    repeat(FieldCellsHeight)
     {
-        AddObjectDirect(new Organics(X, Y, energyVal));
+        for(uint b = 0; b < width; ++b)
+        {
+            ObjectAddOrReplace(new Rock(b, i));
+        }
     }
 }
 
 void Field::RemoveAllObjects()
 {
-    for (Object*& object : allCells)
+    for (int cx = 0; cx < FieldCellsWidth; ++cx)
     {
-        liveObjects.erase(object);
-        delete object;
-        object = NULL;
-    }
-    liveObjects.clear();
-}
-
-void Field::mutateWorld()
-{
-    BeginGeneratorTask(0x6d7574617465ULL);
-    for (Object* object : allCells)
-    {
-        if (object && object->type() == bot)
+        for (int cy = 0; cy < FieldCellsHeight; ++cy)
         {
-            static_cast<Bot*>(object)->Mutagen();
+            RemoveObject(cx, cy);
         }
     }
-    EndGeneratorTask();
 }
 
-void Field::placeWall(uint wallWidth)
+void Field::RemoveBot(int X, int Y, int energyVal)
 {
-    wallWidth = (std::min)(wallWidth, config.width);
-    Object* first = GetCell(0, 0);
-    bool remove = first && first->type() == rock;
+    RemoveObject(X, Y);
 
-    for (uint y = 0; y < config.height; ++y)
+    if(RandomPercentX10(params.adaptation_organicSpawnRate))
     {
-        for (uint x = 0; x < wallWidth; ++x)
+        if (energyVal > 0)
+            AddObject(new Organics(X, Y, energyVal));
+    }
+}
+
+void Field::RepaintBot(Bot* b, Color newColor, int differs)
+{
+    Object* tmpObj;
+
+    for (uint ix = 0; ix < FieldCellsWidth; ++ix)
+    {
+        for (uint iy = 0; iy < FieldCellsHeight; ++iy)
         {
-            if (remove)
+            tmpObj = allCells[ix][iy];
+
+            if (tmpObj)
             {
-                if (GetObjectTypeAt(x, y) == rock)
+                if (tmpObj->type() == bot)
                 {
-                    RemoveObjectDirect(x, y);
+                    if (((Bot*)tmpObj)->FindKinship(b) >= (NumberOfMutationMarkers - differs))
+                    {
+                        ((Bot*)tmpObj)->SetColor(newColor);
+                    }
                 }
             }
-            else
-            {
-                ObjectAddOrReplace(new Rock(x, y));
-            }
         }
+
     }
 }
 
-void Field::RepaintBot(Bot* source, Color newColor, int differs)
-{
-    for (Object* object : allCells)
-    {
-        if (object && object->type() == bot && static_cast<Bot*>(object)->FindKinship(source) >= NumberOfMutationMarkers - differs)
-        {
-            static_cast<Bot*>(object)->SetColor(newColor);
-        }
-    }
-}
 
-void Field::ObjectTick(Object* object)
+void Field::ObjectTick(Object* tmpObj)
 {
-    int result = object->tick();
-    if (result == 1)
+    int t = tmpObj->tick();
+
+    if (t == 1)
     {
-        if (object->type() == bot)
-        {
-            RemoveBot(object->x, object->y, object->energy);
-        }
+        //Object destroyed
+        if (tmpObj->type() == bot)
+            RemoveBot(tmpObj->x, tmpObj->y, tmpObj->energy);
         else
-        {
-            RemoveObject(object->x, object->y);
-        }
+            RemoveObject(tmpObj->x, tmpObj->y);
+
+        return;
     }
 }
 
-void Field::BuildSnapshot()
+
+void ThreadCounters::Clear()
 {
-    stableObjects.clear();
-    stableObjects.reserve(objectsTotal > 0 ? objectsTotal : 1024);
-
-    for (std::size_t index = 0; index < allCells.size(); ++index)
-    {
-        Object* object = allCells[index];
-        CellSnapshot& snapshot = snapshotCells[index];
-        snapshot.object = object;
-        snapshot.type = object ? object->type() : abstract;
-        snapshot.energy = object ? object->energy : 0;
-        snapshot.direction = 0;
-        std::fill(std::begin(snapshot.markers), std::end(snapshot.markers), 0);
-
-        if (object)
-        {
-            stableObjects.push_back(object);
-            if (snapshot.type == bot)
-            {
-                Bot* creature = static_cast<Bot*>(object);
-                snapshot.direction = creature->GetDirection();
-                std::copy(creature->GetMarkers(), creature->GetMarkers() + NumberOfMutationMarkers, snapshot.markers);
-            }
-        }
-    }
+    objects = 0;
+    bots = 0;
+    apples = 0;
+    organics = 0;
+    predators = 0;
+    lifetime = 0;
 }
 
-void Field::ProcessObjectRange(std::size_t workerIndex, std::size_t begin, std::size_t end)
+
+inline void Field::tick_single_thread()
 {
-    currentWorker = workerIndex;
-    for (std::size_t index = begin; index < end; ++index)
-    {
-        Object* object = stableObjects[index];
-        currentObject = object;
-        currentSequence = 0;
-        SetDeterministicRandom(seed, planningTick, object->GetStableId());
-        ObjectTick(object);
-    }
-    currentObject = NULL;
-}
+    Object* tmpObj;
 
-void Field::WorkerLoop(std::size_t index)
-{
-    std::uint64_t observedGeneration = 0;
-    for (;;)
-    {
-        std::size_t begin = 0;
-        std::size_t end = 0;
-        {
-            std::unique_lock<std::mutex> lock(workerMutex);
-            workerStartCondition.wait(lock, [&]()
-            {
-                return terminateWorkers || workerGeneration != observedGeneration;
-            });
-
-            if (terminateWorkers)
-            {
-                return;
-            }
-
-            observedGeneration = workerGeneration;
-            if (index < activeWorkers)
-            {
-                begin = stableObjects.size() * index / activeWorkers;
-                end = stableObjects.size() * (index + 1) / activeWorkers;
-            }
-        }
-
-        if (begin < end)
-        {
-            ProcessObjectRange(index, begin, end);
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(workerMutex);
-            ++workersDone;
-        }
-        workerDoneCondition.notify_one();
-    }
-}
-
-void Field::StartWorkers()
-{
-    std::uint32_t cpuCount = static_cast<std::uint32_t>((std::max)(SDL_GetCPUCount(), 1));
-    std::uint32_t limit = config.maxWorkerThreads == 0 ? cpuCount : (std::min)(config.maxWorkerThreads, cpuCount);
-    std::size_t desired = (std::min)(static_cast<std::size_t>((std::max)(limit, 1u)), cellCount);
-    workerCommands.resize(desired);
-    workers.reserve(desired);
-
-    try
-    {
-        for (std::size_t index = 0; index < desired; ++index)
-        {
-            workers.emplace_back(&Field::WorkerLoop, this, index);
-        }
-    }
-    catch (...)
-    {
-        StopWorkers();
-        throw;
-    }
-}
-
-void Field::StopWorkers()
-{
-    {
-        std::lock_guard<std::mutex> lock(workerMutex);
-        terminateWorkers = true;
-    }
-    workerStartCondition.notify_all();
-
-    for (std::thread& worker : workers)
-    {
-        if (worker.joinable())
-        {
-            worker.join();
-        }
-    }
-    workers.clear();
-}
-
-void Field::ApplyCommand(Command& command)
-{
-    switch (command.type)
-    {
-    case CommandType::move:
-        if (IsLiveIdentity(command.actor, command.actorId) && IsCurrentObjectAt(command.actor, command.fromX, command.fromY))
-        {
-            if (MoveObjectDirect(command.actor, command.toX, command.toY) == 0 && command.actor->type() == bot)
-            {
-                Bot* creature = static_cast<Bot*>(command.actor);
-                creature->numMovesX += command.fromX != command.toX ? 1 : 0;
-                creature->numMovesY += command.fromY != command.toY ? 1 : 0;
-            }
-        }
-        break;
-
-    case CommandType::attack:
-    case CommandType::digest:
-        if (IsLiveIdentity(command.actor, command.actorId) && IsLiveIdentity(command.target, command.targetId) &&
-            IsCurrentObjectAt(command.target, command.toX, command.toY) &&
-            command.target->type() == command.targetType)
-        {
-            Bot* attacker = static_cast<Bot*>(command.actor);
-            bool valid = command.type == CommandType::digest ? command.targetType == organic_waste :
-                (command.targetType == bot || command.targetType == apple
-#ifdef BotCanEatRock
-                    || command.targetType == rock
-#endif
-                );
-
-            if (valid)
-            {
-                RemoveObjectDirect(command.toX, command.toY);
-                if (command.targetType == bot)
-                {
-                    attacker->GiveEnergy(command.value, predation);
-                    ++attacker->numAttacks;
-                }
-                else if (command.targetType == apple || command.targetType == organic_waste)
-                {
-                    attacker->GiveEnergy(command.value, organics);
-                }
-            }
-        }
-        break;
-
-    case CommandType::birth:
-        if (IsLiveIdentity(command.actor, command.actorId) && !GetCell(command.toX, command.toY))
-        {
-            Bot* parent = static_cast<Bot*>(command.actor);
-            if (parent->energy > command.value)
-            {
-                parent->energy -= command.value;
-                command.created->x = command.toX;
-                command.created->y = command.toY;
-                if (AddObjectDirect(command.created))
-                {
-                    command.created = NULL;
-                }
-            }
-        }
-        break;
-
-    case CommandType::remove:
-        if (IsLiveIdentity(command.actor, command.actorId))
-        {
-            int X = command.actor->x;
-            int Y = command.actor->y;
-            RemoveObjectDirect(X, Y);
-            if (command.spawnOrganics && !GetCell(X, Y))
-            {
-                AddObjectDirect(new Organics(X, Y, command.value));
-            }
-        }
-        break;
-    }
-}
-
-void Field::ApplyCommands()
-{
-    std::vector<Command> commands;
-    std::size_t total = 0;
-    for (const auto& worker : workerCommands)
-    {
-        total += worker.size();
-    }
-    commands.reserve(total);
-
-    for (auto& worker : workerCommands)
-    {
-        std::move(worker.begin(), worker.end(), std::back_inserter(commands));
-        worker.clear();
-    }
-
-    std::stable_sort(commands.begin(), commands.end(), [](const Command& left, const Command& right)
-    {
-        if (left.sourceIndex != right.sourceIndex)
-        {
-            return left.sourceIndex < right.sourceIndex;
-        }
-        return left.sequence < right.sequence;
-    });
-
-    for (Command& command : commands)
-    {
-        ApplyCommand(command);
-        delete command.created;
-        command.created = NULL;
-    }
-}
-
-void Field::RecalculateStatistics()
-{
     objectsTotal = 0;
     botsTotal = 0;
     applesTotal = 0;
@@ -1122,322 +650,536 @@ void Field::RecalculateStatistics()
     predatorsTotal = 0;
     averageLifetime = 0;
 
-    for (Object* object : allCells)
+    for (uint ix = 0; ix < FieldCellsWidth; ++ix)
     {
-        if (!object)
+        for (uint iy = 0; iy < FieldCellsHeight; ++iy)
         {
-            continue;
+            tmpObj = allCells[ix][iy];
+
+            if (tmpObj)
+            {
+                ++objectsTotal;
+
+                if (tmpObj->type() == bot)
+                {
+                    ++botsTotal;
+
+                    if (((Bot*)tmpObj)->isPredator())
+                    {
+                        ++predatorsTotal;
+                    }
+
+                    averageLifetime += tmpObj->GetLifetime();
+                }
+                else if (tmpObj->type() == apple)
+                    ++applesTotal;
+                else if (tmpObj->type() == organic_waste)
+                    ++organicsTotal;
+
+                ObjectTick(tmpObj);
+            }
         }
 
-        ++objectsTotal;
-        if (object->type() == bot)
+    }
+
+    if(botsTotal > 0)
+        averageLifetime /= botsTotal;
+}
+
+
+inline bool Field::ThreadWait(const uint index)
+{
+    std::unique_lock<std::mutex> lock(threadMutex);
+    threadStartCondition.wait(lock, [&]()
+    {
+        return threadGoMarker[index] || terminateThreads;
+    });
+
+    return !terminateThreads;
+}
+
+
+void Field::ProcessPart_MultipleThreads(const uint X1, const uint X2, const uint index)
+{
+    srand(seed + index);    
+
+    auto obj_calc = [&](Object* tmpObj)
+    {
+        if (tmpObj == NULL)
+            return;
+
+        ++objectCounters[index].objects;
+
+        if (tmpObj->type() == bot)
         {
-            ++botsTotal;
-            Bot* creature = static_cast<Bot*>(object);
-            predatorsTotal += creature->isPredator() ? 1 : 0;
-            averageLifetime += object->GetLifetime();
+            ++objectCounters[index].bots;
+
+            if (((Bot*)tmpObj)->isPredator())
+            {
+                ++objectCounters[index].predators;
+            }
+
+            objectCounters[index].lifetime += tmpObj->GetLifetime();
         }
-        else if (object->type() == apple)
+        else if (tmpObj->type() == apple)
+            ++objectCounters[index].apples;
+        else if (tmpObj->type() == organic_waste)
+            ++objectCounters[index].organics;
+
+        ObjectTick(tmpObj);
+    };
+
+    const uint chunkWidth = ((X2 - X1) / 2);
+    const uint _X[2] = {X1, X1 + chunkWidth};
+
+    for(;;)
+    {
+        for(uint pass = 0; pass < 2; ++pass)
         {
-            ++applesTotal;
+            if (!ThreadWait(index))
+                return;
+
+            //Calculate chunk
+            for (uint X = _X[pass]; X < _X[pass] + chunkWidth; ++X)
+            {
+                for (uint Y = 0; Y < FieldCellsHeight; ++Y)
+                {
+                    obj_calc(allCells[X][Y]);
+                }
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(threadMutex);
+                threadGoMarker[index] = false;
+                ++threadsReady;
+            }
+            threadDoneCondition.notify_one();
         }
-        else if (object->type() == organic_waste)
+    }
+}
+
+void Field::StartThreads()
+{
+    repeat(NumThreads)
+    {
+        uint X1 = (FieldCellsWidth / NumThreads) * i;
+        uint X2 = (FieldCellsWidth / NumThreads) * (i + 1);
+
+        threads[i] = std::thread(&Field::ProcessPart_MultipleThreads, this, X1, X2, i);
+    }
+}
+
+void Field::SignalThreads()
+{
+    {
+        std::lock_guard<std::mutex> lock(threadMutex);
+        threadsReady = 0;
+
+        repeat(NumThreads)
         {
-            ++organicsTotal;
+            threadGoMarker[i] = true;
         }
+    }
+
+    threadStartCondition.notify_all();
+}
+
+void Field::WaitForThreads()
+{
+    std::unique_lock<std::mutex> lock(threadMutex);
+    threadDoneCondition.wait(lock, [&]()
+    {
+        return (threadsReady >= NumThreads) || terminateThreads;
+    });
+}
+
+
+inline void Field::tick_multiple_threads()
+{
+    auto clearCounters = [&]()
+    {
+        repeat(NumThreads)
+        {
+            objectCounters[i].Clear();
+        }
+    };
+
+    auto addCounters = [&]()
+    {
+        repeat(NumThreads)
+        {
+            objectsTotal += objectCounters[i].objects;
+            botsTotal += objectCounters[i].bots;
+            applesTotal += objectCounters[i].apples;
+            organicsTotal += objectCounters[i].organics;
+            predatorsTotal += objectCounters[i].predators;
+            averageLifetime += objectCounters[i].lifetime;
+        }
+    };
+
+    objectsTotal = 0;
+    botsTotal = 0;
+    applesTotal = 0;
+    organicsTotal = 0;
+    predatorsTotal = 0;
+    averageLifetime = 0;
+
+    //2 passes
+    repeat(2)
+    {
+        //Clear object counters
+        clearCounters();
+
+        //Starting signal for all threads
+        SignalThreads();
+
+        //Wait for threads to synchronize
+        WaitForThreads();
+
+        //Add object counters
+        addCounters();
     }
 
     if (botsTotal > 0)
-    {
         averageLifetime /= botsTotal;
-    }
 }
 
-void Field::ClampDynamicParams()
-{
-    params.oceanLevel = (std::max)(0, (std::min)(params.oceanLevel, static_cast<int>(config.height)));
-    params.mudLevel = (std::max)(0, (std::min)(params.mudLevel, static_cast<int>(config.height)));
-}
 
 void Field::tick(uint thisFrame)
 {
-    ClampDynamicParams();
-
+    //Change season
     if (params.useSeasons)
-    {
         SeasonTick();
-    }
 
+    //Memorize frame number
     Object::currentFrame = thisFrame;
-    planningTick = thisFrame;
 
-    if (params.spawnApples && spawnApplesCounter++ == AppleSpawnInterval)
+    //Spawn apples
+    if(params.spawnApples)
     {
-        SpawnApples();
-        spawnApplesCounter = 0;
-    }
-
-    BuildSnapshot();
-    planningPhase.store(true, std::memory_order_release);
-
-    activeWorkers = (std::min)(workers.size(), stableObjects.size());
-    if (activeWorkers > 0)
-    {
+        if (spawnApplesCounter++ == AppleSpawnInterval)
         {
-            std::lock_guard<std::mutex> lock(workerMutex);
-            workersDone = 0;
-            ++workerGeneration;
+            SpawnApples();
+
+            spawnApplesCounter = 0;
         }
-        workerStartCondition.notify_all();
-
-        std::unique_lock<std::mutex> lock(workerMutex);
-        workerDoneCondition.wait(lock, [&]()
-        {
-            return workersDone == workers.size();
-        });
     }
 
-    planningPhase.store(false, std::memory_order_release);
-    ApplyCommands();
-    RecalculateStatistics();
+    //Make simulation step
+    #if NumThreads == 1
+        tick_single_thread();
+    #else
+        tick_multiple_threads();
+    #endif
 }
+
+
 
 void Field::draw(RenderTypes render)
 {
-    ClampDynamicParams();
     ClampViewOffset();
+
     SDL_Rect viewport = GetViewportRect();
     int scaledFieldWidth = GetScaledFieldWidth();
     int scaledFieldHeight = GetScaledFieldHeight();
     double scale = GetViewScale();
-    SDL_Rect fieldRect = {FieldX - viewX, FieldY - viewY, scaledFieldWidth, scaledFieldHeight};
+    SDL_Rect fieldRect = { FieldX - viewX, FieldY - viewY, scaledFieldWidth, scaledFieldHeight };
 
     SDL_RenderSetClipRect(renderer, &viewport);
+
+    //Clear the whole viewport before drawing the scaled field.
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderFillRect(renderer, &viewport);
+
+    //Background
     SDL_SetRenderDrawColor(renderer, FieldBackgroundColor);
     SDL_RenderFillRect(renderer, &fieldRect);
 
-    int mudHeight = static_cast<int>(std::ceil(params.mudLevel * FieldCellSize * scale));
+    //Mud layer
     SDL_SetRenderDrawColor(renderer, MudColor);
-    SDL_Rect mud = {FieldX - viewX, FieldY - viewY + scaledFieldHeight - mudHeight, scaledFieldWidth, mudHeight};
+    int mudHeight = (int)std::ceil(params.mudLevel * FieldCellSize * scale);
+    SDL_Rect mud = { FieldX - viewX, FieldY - viewY + scaledFieldHeight - mudHeight, scaledFieldWidth, mudHeight };
     SDL_RenderFillRect(renderer, &mud);
 
-    int oceanHeight = static_cast<int>(std::ceil(params.oceanLevel * FieldCellSize * scale));
+    //Ocean
     SDL_SetRenderDrawColor(renderer, OceanColor);
-    SDL_Rect ocean = {FieldX - viewX, FieldY - viewY + scaledFieldHeight - oceanHeight, scaledFieldWidth, (std::max)(oceanHeight - mud.h, 0)};
+    int oceanHeight = (int)std::ceil(params.oceanLevel * FieldCellSize * scale);
+    SDL_Rect ocean = { FieldX - viewX, FieldY - viewY + scaledFieldHeight - oceanHeight, scaledFieldWidth, oceanHeight - mud.h };
     SDL_RenderFillRect(renderer, &ocean);
 
-    double scaledCell = FieldCellSize * scale;
-    int firstY = (std::max)(0, static_cast<int>(std::floor(viewY / scaledCell)) - 1);
-    int lastY = (std::min)(static_cast<int>(config.height), static_cast<int>(std::ceil((viewY + viewport.h) / scaledCell)) + 1);
-    int X = renderX;
+    //Objects
+    Object* tmpObj;
+    int ix = renderX;
 
-    for (int visibleX = 0; visibleX < GetVisibleColumns(); ++visibleX)
+    for (uint i = 0; i < FieldRenderCellsWidth; ++i)
     {
-        if (X >= static_cast<int>(config.width))
+        for (uint iy = 0; iy < FieldCellsHeight; ++iy)
         {
-            X -= static_cast<int>(config.width);
-        }
 
-        for (int Y = firstY; Y < lastY; ++Y)
-        {
-            Object* object = allCells[Index(X, Y)];
-            if (object)
+            if (ix >= FieldCellsWidth)
+                ix -= FieldCellsWidth;
+
+            tmpObj = allCells[ix][iy];
+
+            if (tmpObj)
             {
                 switch (render)
                 {
-                case natural: object->draw(); break;
-                case predators: object->drawPredators(); break;
-                case energy: object->drawEnergy(); break;
+                case natural:
+                    tmpObj->draw();
+                    break;
+                case predators:
+                    tmpObj->drawPredators();
+                    break;
+                case energy:
+                    tmpObj->drawEnergy();
+                    break;
                 }
             }
         }
-        ++X;
+
+        ++ix;
     }
 
-#ifdef DrawUnderwaterMask
-    SDL_SetRenderDrawColor(renderer, UnderwaterMaskColor);
-    SDL_Rect underwater = {FieldX - viewX, FieldY - viewY + scaledFieldHeight - oceanHeight, scaledFieldWidth, oceanHeight};
-    SDL_RenderFillRect(renderer, &underwater);
-#endif
+    //Underwater mask
+    #ifdef DrawUnderwaterMask
+    {
+        SDL_SetRenderDrawColor(renderer, UnderwaterMaskColor);
+        SDL_Rect underwater = { FieldX - viewX, FieldY - viewY + scaledFieldHeight - oceanHeight, scaledFieldWidth, oceanHeight };
+        SDL_RenderFillRect(renderer, &underwater);
+    }
+    #endif
 
     SDL_RenderSetClipRect(renderer, NULL);
+
 }
 
-bool Field::IsInBounds(int X, int Y) const
+bool Field::IsInBounds(int X, int Y)
 {
-    return X >= 0 && Y >= 0 && X < static_cast<int>(config.width) && Y < static_cast<int>(config.height);
+    return ((X >= 0) and (Y >= 0) and (X < FieldCellsWidth) and (Y < FieldCellsHeight));
 }
 
-bool Field::IsInBounds(Point point) const
+bool Field::IsInBounds(Point p)
 {
-    return IsInBounds(point.x, point.y);
+    return IsInBounds(p.x, p.y);
 }
 
-bool Field::IsInWater(int Y) const
+bool Field::IsInWater(int Y)
 {
-    return Y >= static_cast<int>(config.height) - params.oceanLevel;
+    return (Y >= (FieldCellsHeight - params.oceanLevel));
 }
 
-bool Field::IsInMud(int Y) const
+bool Field::IsInMud(int Y)
 {
-    return Y >= static_cast<int>(config.height) - params.mudLevel;
+    return (Y >= (FieldCellsHeight - params.mudLevel));
 }
 
-int Field::ValidateX(int X) const
+int Field::ValidateX(int X)
 {
-    const int width = static_cast<int>(config.width);
-    X %= width;
-    return X < 0 ? X + width : X;
+    if (X < 0)
+    {
+        return X + FieldCellsWidth;
+    }
+    else if (X >= FieldCellsWidth)
+    {
+        return (X - FieldCellsWidth);
+    }
+
+    return X;
 }
 
-int Field::FindDistanceX(int X1, int X2) const
+int Field::FindDistanceX(int X1, int X2)
 {
-    int direct = std::abs(X2 - X1);
-    return (std::min)(direct, static_cast<int>(config.width) - direct);
+    uint minDistX1 = min(X1, (FieldCellsWidth - X1));
+    uint minDistX2 = min(X2, (FieldCellsWidth - X2));
+    uint crossDist = abs(X2 - X1);
+
+    return min(crossDist, minDistX1 + minDistX2);
 }
 
 bool Field::IsInBoundsScreenCoords(int X, int Y)
 {
     ClampViewOffset();
+
     SDL_Rect viewport = GetViewportRect();
-    SDL_Rect fieldRect = {FieldX - viewX, FieldY - viewY, GetScaledFieldWidth(), GetScaledFieldHeight()};
-    return X >= viewport.x && X < viewport.x + viewport.w && Y >= viewport.y && Y < viewport.y + viewport.h &&
-        X >= fieldRect.x && X < fieldRect.x + fieldRect.w && Y >= fieldRect.y && Y < fieldRect.y + fieldRect.h;
+    SDL_Rect fieldRect = { FieldX - viewX, FieldY - viewY, GetScaledFieldWidth(), GetScaledFieldHeight() };
+
+    return ((X >= viewport.x) and (X < viewport.x + viewport.w) and (Y >= viewport.y) and (Y < viewport.y + viewport.h) and
+        (X >= fieldRect.x) and (X < fieldRect.x + fieldRect.w) and (Y >= fieldRect.y) and (Y < fieldRect.y + fieldRect.h));
 }
 
 Point Field::ScreenCoordsToLocal(int X, int Y)
 {
     ClampViewOffset();
+
     SDL_Rect viewport = GetViewportRect();
     double scale = GetViewScale();
-    X = static_cast<int>(std::floor(((X - viewport.x + viewX) / scale) / FieldCellSize));
-    Y = static_cast<int>(std::floor(((Y - viewport.y + viewY) / scale) / FieldCellSize));
-    return {ValidateX(X + renderX), Y};
+
+    X -= viewport.x;
+    Y -= viewport.y;
+
+    X += viewX;
+    Y += viewY;
+
+    X = (int)std::floor((X / scale) / FieldCellSize);
+    Y = (int)std::floor((Y / scale) / FieldCellSize);
+
+    X += renderX;
+
+    X = ValidateX(X);
+
+    return { X, Y };
 }
 
 Object* Field::GetObjectLocalCoords(int X, int Y)
 {
-    return IsInBounds(X, Y) ? allCells[Index(X, Y)] : NULL;
+    return allCells[X][Y];
 }
 
-bool Field::ValidateObjectExistance(Object* object)
+bool Field::ValidateObjectExistance(Object* obj)
 {
-    return object && liveObjects.find(object) != liveObjects.end();
+    return (allCells[obj->x][obj->y] == obj);
 }
 
-uint Field::GetNumObjects() { return objectsTotal; }
-uint Field::GetNumBots() { return botsTotal; }
-uint Field::GetNumApples() { return applesTotal; }
-uint Field::GetNumOrganics() { return organicsTotal; }
-uint Field::GetNumPredators() { return predatorsTotal; }
-uint Field::GetAverageLifetime() { return averageLifetime; }
-
-void Field::BeginGeneratorTask(std::uint64_t stream)
+uint Field::GetNumObjects()
 {
-    SetRandomState(MixRandomSeed(generatorState ^ MixRandomSeed(stream)));
+    return objectsTotal;
 }
 
-void Field::EndGeneratorTask()
+uint Field::GetNumBots()
 {
-    generatorState = GetRandomState();
+    return botsTotal;
 }
 
-int Field::RandomWorldValue(int max, std::uint64_t stream)
+uint Field::GetNumApples()
 {
-    BeginGeneratorTask(stream);
-    int value = RandomVal(max);
-    EndGeneratorTask();
-    return value;
+    return applesTotal;
+}
+
+uint Field::GetNumOrganics()
+{
+    return organicsTotal;
+}
+
+uint Field::GetNumPredators()
+{
+    return predatorsTotal;
+}
+
+uint Field::GetAverageLifetime()
+{
+    return averageLifetime;
 }
 
 void Field::SpawnControlGroup()
 {
-    BeginGeneratorTask(0x636f6e74726f6cULL);
     for (int i = 0; i < ControlGroupSize; ++i)
     {
-        Bot* creature = new Bot(RandomVal(config.width), RandomVal(config.height), params.botMaxEnergy);
-        if (!AddObjectDirect(creature))
-        {
-            delete creature;
-        }
+        Bot* tmpBot = new Bot(RandomVal(FieldCellsWidth), RandomVal(FieldCellsHeight), params.botMaxEnergy);
+
+        if (!AddObject(tmpBot))
+            delete tmpBot;
     }
-    EndGeneratorTask();
 }
+
 
 void Field::SpawnApples()
 {
-    BeginGeneratorTask(0x6170706c6573ULL ^ planningTick);
-    const uint landHeight = config.height > static_cast<uint>(params.oceanLevel) ? config.height - params.oceanLevel : 0;
-    for (uint Y = 0; Y < landHeight; ++Y)
+    for (uint ix = 0; ix < FieldCellsWidth; ++ix)
     {
-        for (uint X = 0; X < config.width; ++X)
+        for (uint iy = 0; iy < (FieldCellsHeight - (uint)params.oceanLevel); ++iy)
         {
-            if (!allCells[Index(X, Y)] && RandomPercentX10(SpawnAppleInCellChance))
+            if (allCells[ix][iy] == NULL)
             {
-                AddObjectDirect(new Apple(X, Y));
+                //Take a chance to spawn an apple
+                if (RandomPercentX10(SpawnAppleInCellChance))
+                {
+                    AddObject(new Apple(ix, iy));
+                }
             }
         }
     }
-    EndGeneratorTask();
 }
 
-Field::Field(const WorldConfig& worldConfig, std::uint64_t seedValue) :
-    config(worldConfig),
-    seed(seedValue)
-{
-    std::wstring error;
-    if (!config.Validate(&error))
-    {
-        throw std::invalid_argument("Invalid CB3 world configuration");
-    }
 
-    cellCount = static_cast<std::size_t>(config.width) * config.height;
-    allCells.assign(cellCount, NULL);
-    snapshotCells.resize(cellCount);
-    generatorState = MixRandomSeed(seed);
-    params.oceanLevel = (std::min)(params.oceanLevel, static_cast<int>(config.height));
-    params.mudLevel = (std::min)(params.mudLevel, static_cast<int>(config.height));
-    Object::SetField(this);
-    StartWorkers();
+Field::Field()
+{
+    //Clear array
+    memset(allCells, 0, sizeof(Point*) * FieldCellsWidth * FieldCellsHeight);    
+
+    #if NumThreads!=1
+    {
+        StartThreads();
+    }
+    #endif
+
+    Object::SetPointers(this, (Object***)allCells);
+
 }
 
 Field::~Field()
 {
-    StopWorkers();
-    RemoveAllObjects();
+#if NumThreads!=1
+    {
+        std::lock_guard<std::mutex> lock(threadMutex);
+        terminateThreads = true;
+
+        repeat(NumThreads)
+        {
+            threadGoMarker[i] = true;
+        }
+    }
+    threadStartCondition.notify_all();
+
+    repeat(NumThreads)
+    {
+        if (threads[i].joinable())
+            threads[i].join();
+    }
+#endif
 }
 
 void FieldDynamicParams::Reset()
 {
-    memset(this, 0, sizeof(*this));
     oceanLevel = InitialOceanHeight;
     mudLevel = InitialMudLayerHeight;
     appleEnergy = DefaultAppleEnergy;
+
     spawnApples = false;
+
     botMaxLifetime = MaxBotLifetimeInitial;
     botMaxEnergy = BotMaxEnergyInitial;
+
     adaptation_StepsNumToDivide_Winds = 0;
+
     adaptation_landBirthBlock = 0;
     adaptation_seaBirthBlock = 0;
     adaptation_PSInOceanBlock = 0;
     adaptation_PSInMudBlock = 0;
     adaptation_botShouldDoPSOnLandOnceToMultiply = 0;
     adaptation_forceBotMovementsY = 0;
+
     adaptation_organicSpawnRate = 0;
+
     adaptation_forceBotMovementsX = 0;
+
     noPredators = false;
     noMutations = false;
+
     fertility_delay = FertilityDelayInitial;
+
     PSreward = PSRewardInitial;
+
     useSeasons = false;
     seasonInterval = 2000;
+
+    memset(reserved, 0, sizeof(reserved));
 }
 
 FieldDynamicParams::FieldDynamicParams()
 {
     Reset();
 }
+
 
 }

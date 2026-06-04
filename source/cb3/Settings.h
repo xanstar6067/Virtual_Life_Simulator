@@ -36,6 +36,9 @@ namespace cb3
 #define RandomSeed
 //#define Seed 0
 
+//Number of threads (only 1, 4, 8, 16, 24 or 48)
+#define NumThreads 48
+
 //-----------------------------------------------------------------
 
 
@@ -120,6 +123,10 @@ namespace cb3
 //constexpr uint ScreenCellsWidth = ((WindowWidth - InterfaceBorder * 2 - GUIWindowWidth) / FieldCellSize);
 #define ScreenCellsWidth 12*16
 
+//Должно делиться на 8 без остатка если нужны 4 потока! И на 16 без остатка если 8 потоков и т.д.!
+#define FieldCellsWidth ScreenCellsWidth*30
+#define FieldCellsHeight 133
+
 #define FieldRenderCellsWidth 202
 
 #if ScreenCellsWidth < FieldRenderCellsWidth
@@ -128,6 +135,7 @@ namespace cb3
 #endif
 
 #define FieldWidth FieldCellSize*FieldRenderCellsWidth
+#define FieldHeight FieldCellSize*FieldCellsHeight
 
 #define FieldZoomMin 1.0
 #define FieldZoomMax 8.0
@@ -169,6 +177,8 @@ namespace cb3
 #define LimitFPSAtStart 60
 
 #define ControlGroupSize 2000
+#define SpawnRocksSize FieldCellsWidth
+
 //-----------------------------------------------------------------
 
 

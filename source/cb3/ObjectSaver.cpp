@@ -5,32 +5,6 @@ namespace cb3
 {
 
 static constexpr int SaveModeId = static_cast<int>(SimulationMode::CyberBiology3);
-static constexpr int SaveFormatVersion = 3;
-
-bool ObjectSaver::ReadWorldHeader(char* filename, WorldParams& params)
-{
-    MyInputStream file(filename, std::ios::in | std::ios::binary | std::ios::beg);
-    if (!file.is_open() || file.ReadInt() != MagicNumber_WorldFile || file.ReadInt() != SaveModeId ||
-        file.ReadInt() != SaveFormatVersion)
-    {
-        return false;
-    }
-
-    params.width = file.ReadInt();
-    params.height = file.ReadInt();
-    params.maxWorkerThreads = file.ReadInt();
-    params.id = file.ReadInt();
-    params.seed = file.ReadUInt64();
-    params.tick = file.ReadInt();
-    params.nextObjectId = file.ReadUInt64();
-    params.generatorState = file.ReadUInt64();
-
-    WorldConfig config;
-    config.width = params.width;
-    config.height = params.height;
-    config.maxWorkerThreads = params.maxWorkerThreads;
-    return file.good() && config.Validate();
-}
 
 Bot* ObjectSaver::LoadBotFromFile(MyInputStream& file)
 {
@@ -112,7 +86,7 @@ Object* ObjectSaver::LoadObjectFromFile(MyInputStream& file)
 
 ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, char* filename, bool clearWorld, bool loadParams, bool loadLandscape, bool loadBots)
 {
-    WorldParams toRet;
+    WorldParams toRet = {-1, -1, -1, -1, -1};
     Object* tmpObj;
 
     //Open file for reading, binary type
@@ -127,24 +101,20 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, char* filename, bo
         if (file.ReadInt() != SaveModeId)
             goto NoSuccess;
 
-        if (file.ReadInt() != SaveFormatVersion)
-            goto NoSuccess;
-
+        //Read world size
         toRet.width = file.ReadInt();
         toRet.height = file.ReadInt();
-        toRet.maxWorkerThreads = file.ReadInt();
-        toRet.id = file.ReadInt();
-        toRet.seed = file.ReadUInt64();
-        toRet.tick = file.ReadInt();
-        toRet.nextObjectId = file.ReadUInt64();
-        toRet.generatorState = file.ReadUInt64();
 
-        if (toRet.width != static_cast<int>(world->GetWidth()) || toRet.height != static_cast<int>(world->GetHeight()) ||
-            toRet.maxWorkerThreads != static_cast<int>(world->GetConfig().maxWorkerThreads))
+        if (toRet.height != FieldCellsHeight)
             goto NoSuccess;
                 
         if(loadParams)
         {
+            //Load world params
+            toRet.id = file.ReadInt();
+            toRet.seed = file.ReadInt();
+            toRet.tick = file.ReadInt();
+
             if (file.ReadInt() != sizeof world->params)
                 goto NoSuccess;
 
@@ -154,13 +124,13 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, char* filename, bo
             worldState.spawnApplesCounter = (uint)file.ReadInt();
             worldState.season = (Season)file.ReadByte();
             worldState.changeSeasonCounter = (uint)file.ReadInt();
-            worldState.nextObjectId = toRet.nextObjectId;
-            worldState.generatorState = toRet.generatorState;
             world->SetPersistentState(worldState);
-            world->seed = toRet.seed;
         }
         else
         {
+            //Skip world params
+            file.ignore(4 * 3);
+
             if (file.ReadInt() != sizeof world->params)
                 goto NoSuccess;
             
@@ -190,14 +160,13 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, char* filename, bo
         {
             int x = file.ReadUShort();
             int y = file.ReadUShort();
-            std::uint64_t stableId = file.ReadUInt64();
 
             tmpObj = LoadObjectCompact(file);
 
             if (!tmpObj)
                 goto NoSuccess;
 
-            if ((x >= static_cast<int>(world->GetWidth())) || (y >= static_cast<int>(world->GetHeight())))
+            if ((x >= FieldCellsWidth) || (y >= FieldCellsHeight))
             {
                 delete tmpObj;
                 continue;
@@ -224,7 +193,6 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, char* filename, bo
 
             tmpObj->x = x;
             tmpObj->y = y;
-            tmpObj->SetStableId(stableId);
 
             if (!world->AddObject(tmpObj))
             {
@@ -238,26 +206,21 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, char* filename, bo
     }
 
     NoSuccess:
-    return {};
+    return {-1, -1};
 }
 
 
 /*World file format
     4b - magic number
-    4b - simulation mode
-    4b - format version
     4b - Field width
     4b - Field height
-    4b - max worker threads
     4b - sim id
-    8b - seed
+    4b - seed
     4b - ticknum
-    8b - next object id
-    8b - world generator state
     4b - FieldDynamicParams size
     FieldDynamicParams params
 
-    following all objects with 16-bit coordinates and 64-bit stable ids
+    following all objects
 */
 bool ObjectSaver::SaveWorld(Field* world, char* filename, int id, int ticknum)
 {
@@ -270,22 +233,20 @@ bool ObjectSaver::SaveWorld(Field* world, char* filename, int id, int ticknum)
         //Magic number
         file.WriteInt(MagicNumber_WorldFile);
         file.WriteInt(SaveModeId);
-        file.WriteInt(SaveFormatVersion);
 
-        file.WriteInt(world->GetWidth());
-        file.WriteInt(world->GetHeight());
-        file.WriteInt(world->GetConfig().maxWorkerThreads);
+        //World size
+        file.WriteInt(FieldCellsWidth);
+        file.WriteInt(FieldCellsHeight);
+
+        //World params
         file.WriteInt(id);
-        file.WriteUInt64(world->seed);
+        file.WriteInt(world->seed);
         file.WriteInt(ticknum);
-
-        const Field::PersistentState worldState = world->GetPersistentState();
-        file.WriteUInt64(worldState.nextObjectId);
-        file.WriteUInt64(worldState.generatorState);
 
         file.WriteInt(sizeof world->params);
         file.write((char*)&world->params, sizeof world->params);
 
+        const Field::PersistentState worldState = world->GetPersistentState();
         file.WriteInt((int)worldState.spawnApplesCounter);
         file.WriteByte((byte)worldState.season);
         file.WriteInt((int)worldState.changeSeasonCounter);
@@ -296,9 +257,9 @@ bool ObjectSaver::SaveWorld(Field* world, char* filename, int id, int ticknum)
 
         int objectCount = 0;
 
-        for (int y = 0; y < static_cast<int>(world->GetHeight()); ++y)
+        for (int x = 0; x < FieldCellsWidth; ++x)
         {
-            for (int x = 0; x < static_cast<int>(world->GetWidth()); ++x)
+            for (int y = 0; y < FieldCellsHeight; ++y)
             {
                 if (world->GetObjectLocalCoords(x, y))
                     ++objectCount;
@@ -308,9 +269,9 @@ bool ObjectSaver::SaveWorld(Field* world, char* filename, int id, int ticknum)
         file.WriteInt(objectCount);
 
         //All objects
-        for (int y = 0; y < static_cast<int>(world->GetHeight()); ++y)
+        for (int x = 0; x < FieldCellsWidth; ++x)
         {
-            for (int x = 0; x < static_cast<int>(world->GetWidth()); ++x)
+            for (int y = 0; y < FieldCellsHeight; ++y)
             {
                 tmpObj = world->GetObjectLocalCoords(x, y);
 
@@ -318,7 +279,6 @@ bool ObjectSaver::SaveWorld(Field* world, char* filename, int id, int ticknum)
                 {
                     file.WriteUShort((unsigned short)x);
                     file.WriteUShort((unsigned short)y);
-                    file.WriteUInt64(tmpObj->GetStableId());
                     WriteObjectCompact(file, tmpObj);
                 }
             }
@@ -651,7 +611,6 @@ bool ObjectSaver::SaveObject(Object* obj, char* filename)
     {
         file.WriteInt(MagicNumber_ObjectFile);
         file.WriteInt(SaveModeId);
-        file.WriteInt(SaveFormatVersion);
 
         WriteObjectCompact(file, obj);
 
@@ -677,9 +636,6 @@ Object* ObjectSaver::LoadObject(char* filename)
             return NULL;
 
         if (file.ReadInt() != SaveModeId)
-            return NULL;
-
-        if (file.ReadInt() != SaveFormatVersion)
             return NULL;
         
         toRet = LoadObjectCompact(file);
@@ -712,11 +668,6 @@ void MyOutStream::WriteByte(byte data)
 void MyOutStream::WriteUShort(unsigned short data)
 {
     write((char*)&data, sizeof(unsigned short));
-}
-
-void MyOutStream::WriteUInt64(std::uint64_t data)
-{
-    write((char*)&data, sizeof(data));
 }
 
 MyOutStream::MyOutStream(char* filename, int flags) :std::ofstream(filename, flags) 
@@ -756,13 +707,6 @@ unsigned short MyInputStream::ReadUShort()
 
     read((char*)&toRet, sizeof(unsigned short));
 
-    return toRet;
-}
-
-std::uint64_t MyInputStream::ReadUInt64()
-{
-    std::uint64_t toRet = 0;
-    read((char*)&toRet, sizeof(toRet));
     return toRet;
 }
 

@@ -20,7 +20,6 @@
 
 
 #include "Main.h"
-#include "cb3/SelfTest.h"
 
 #include <algorithm>
 #include <ctime>
@@ -138,15 +137,6 @@ static string MakeTimestampFileName(const char* prefix)
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR    lpCmdLine, _In_ int       nCmdShow)
 {
-	if (lpCmdLine && wcsstr(lpCmdLine, L"--cb3-self-test"))
-	{
-		std::string report;
-		bool success = cb3::RunSelfTests(report);
-		std::filesystem::create_directories("x64/Debug");
-		std::ofstream file("x64/Debug/cb3_self_test.log", std::ios::trunc);
-		file << report;
-		return success ? 0 : 20;
-	}
 	
 	InitSDL();
 
