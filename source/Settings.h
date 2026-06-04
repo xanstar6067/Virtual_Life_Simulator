@@ -239,9 +239,9 @@
 
 #define DirectoryName "SavedObjects/"
 
-#define MagicNumber_ObjectFile 0xfcfa47fe
+#define MagicNumber_ObjectFile 0xfcfa47ff
 #define MagicNumber_WorldFile 0xbffa51fd
-#define MagicNumber_WorldFileV2 0xbffa51fe
+#define MagicNumber_WorldFileV2 0xbffa51ff
 
 //-----------------------------------------------------------------
 

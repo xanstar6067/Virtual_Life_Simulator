@@ -119,6 +119,12 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, char* filename, bo
                 goto NoSuccess;
 
             file.read((char*)&world->params, sizeof world->params);
+
+            Field::PersistentState worldState;
+            worldState.spawnApplesCounter = (uint)file.ReadInt();
+            worldState.season = (Season)file.ReadByte();
+            worldState.changeSeasonCounter = (uint)file.ReadInt();
+            world->SetPersistentState(worldState);
         }
         else
         {
@@ -129,6 +135,7 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, char* filename, bo
                 goto NoSuccess;
             
             file.ignore(sizeof world->params);
+            file.ignore(4 + 1 + 4);
         }
 
         if (file.ReadInt() != NumberOfMutationMarkers)
@@ -239,6 +246,11 @@ bool ObjectSaver::SaveWorld(Field* world, char* filename, int id, int ticknum)
         file.WriteInt(sizeof world->params);
         file.write((char*)&world->params, sizeof world->params);
 
+        const Field::PersistentState worldState = world->GetPersistentState();
+        file.WriteInt((int)worldState.spawnApplesCounter);
+        file.WriteByte((byte)worldState.season);
+        file.WriteInt((int)worldState.changeSeasonCounter);
+
         file.WriteInt(NumberOfMutationMarkers);
         file.WriteInt(NumNeuronLayers);
         file.WriteInt(NumNeuronsInLayerMax);
@@ -284,7 +296,7 @@ void ObjectSaver::WriteBrainCompact(MyOutStream& file, BotNeuralNet* brain, bool
 {
     for (uint layer = 0; layer < NumNeuronLayers; ++layer)
     {
-        for (uint neuronIndex = 0; neuronIndex < NumNeuronsInLayerMax; ++neuronIndex)
+        for (uint neuronIndex = 0; neuronIndex < neuronsInLayer[layer]; ++neuronIndex)
         {
             Neuron* neuron = &brain->allNeurons[layer][neuronIndex];
 
@@ -304,14 +316,28 @@ void ObjectSaver::WriteBrainCompact(MyOutStream& file, BotNeuralNet* brain, bool
     }
 
     if (includeMemory)
-        file.write((char*)brain->allMemory, NumNeuronLayers * NumNeuronsInLayerMax);
+    {
+        for (uint layer = 0; layer < NumNeuronLayers; ++layer)
+            file.write((char*)brain->allMemory[layer], neuronsInLayer[layer]);
+    }
 }
 
 bool ObjectSaver::LoadBrainCompact(MyInputStream& file, BotNeuralNet* brain, bool includeMemory)
 {
     for (uint layer = 0; layer < NumNeuronLayers; ++layer)
     {
-        for (uint neuronIndex = 0; neuronIndex < NumNeuronsInLayerMax; ++neuronIndex)
+        for (uint neuronIndex = neuronsInLayer[layer]; neuronIndex < NumNeuronsInLayerMax; ++neuronIndex)
+        {
+            Neuron* neuron = &brain->allNeurons[layer][neuronIndex];
+            neuron->type = basic;
+            neuron->layer = (byte)layer;
+            neuron->SetZero();
+        }
+    }
+
+    for (uint layer = 0; layer < NumNeuronLayers; ++layer)
+    {
+        for (uint neuronIndex = 0; neuronIndex < neuronsInLayer[layer]; ++neuronIndex)
         {
             Neuron* neuron = &brain->allNeurons[layer][neuronIndex];
 
@@ -331,14 +357,19 @@ bool ObjectSaver::LoadBrainCompact(MyInputStream& file, BotNeuralNet* brain, boo
                 connection->dest_neuron = file.ReadByte();
                 connection->weight = (int8_t)file.ReadByte();
 
-                if ((connection->dest_layer >= NumNeuronLayers) || (connection->dest_neuron >= NumNeuronsInLayerMax))
+                if ((connection->dest_layer >= NumNeuronLayers) || (connection->dest_neuron >= neuronsInLayer[connection->dest_layer]))
                     return false;
             }
         }
     }
 
     if (includeMemory)
-        file.read((char*)brain->allMemory, NumNeuronLayers * NumNeuronsInLayerMax);
+    {
+        memset(brain->allMemory, 0, sizeof brain->allMemory);
+
+        for (uint layer = 0; layer < NumNeuronLayers; ++layer)
+            file.read((char*)brain->allMemory[layer], neuronsInLayer[layer]);
+    }
 
     return true;
 }
@@ -350,8 +381,8 @@ void ObjectSaver::WriteBotCompact(MyOutStream& file, Bot* obj)
 
     repeat(3)
     {
-        file.WriteInt(obj->GetColor()->c[i]);
-        file.WriteInt(obj->GetColor()->change_vector[i]);
+        file.WriteUShort((unsigned short)obj->GetColor()->c[i]);
+        file.WriteByte((byte)obj->GetColor()->change_vector[i]);
     }
 
     repeat(NumberOfMutationMarkers)
@@ -360,7 +391,20 @@ void ObjectSaver::WriteBotCompact(MyOutStream& file, Bot* obj)
     }
 
     file.WriteInt(obj->energy);
-    file.WriteInt(obj->GetDirection());
+
+    const Bot::PersistentState state = obj->GetPersistentState();
+    file.WriteByte((byte)state.direction);
+    file.WriteInt((int)state.stunned);
+    file.WriteInt((int)state.fertilityDelay);
+    file.WriteInt(state.energyFromPS);
+    file.WriteInt(state.energyFromPredation);
+    file.WriteInt(state.energyFromOrganics);
+    file.WriteByte((byte)state.nextMarker);
+    file.WriteInt(state.addaptation_birthX);
+    file.WriteInt((int)state.numAttacks);
+    file.WriteInt((int)state.numMovesX);
+    file.WriteInt((int)state.numMovesY);
+    file.WriteInt((int)state.numPSonLand);
 
     WriteBrainCompact(file, obj->GetActiveBrain(), true);
     WriteBrainCompact(file, obj->GetInitialBrain(), false);
@@ -376,8 +420,8 @@ Bot* ObjectSaver::LoadBotCompact(MyInputStream& file)
 
     repeat(3)
     {
-        c.c[i] = file.ReadInt();
-        c.change_vector[i] = (char)file.ReadInt();
+        c.c[i] = (short)file.ReadUShort();
+        c.change_vector[i] = (char)file.ReadByte();
     }
 
     toRet->SetColor(c);
@@ -388,7 +432,21 @@ Bot* ObjectSaver::LoadBotCompact(MyInputStream& file)
     }
 
     toRet->energy = file.ReadInt();
-    toRet->SetDirection(file.ReadInt());
+
+    Bot::PersistentState state;
+    state.direction = file.ReadByte();
+    state.stunned = (uint)file.ReadInt();
+    state.fertilityDelay = (uint)file.ReadInt();
+    state.energyFromPS = file.ReadInt();
+    state.energyFromPredation = file.ReadInt();
+    state.energyFromOrganics = file.ReadInt();
+    state.nextMarker = file.ReadByte();
+    state.addaptation_birthX = file.ReadInt();
+    state.numAttacks = (uint)file.ReadInt();
+    state.numMovesX = (uint)file.ReadInt();
+    state.numMovesY = (uint)file.ReadInt();
+    state.numPSonLand = (uint)file.ReadInt();
+    toRet->SetPersistentState(state);
 
     if (!LoadBrainCompact(file, toRet->GetActiveBrain(), true))
     {

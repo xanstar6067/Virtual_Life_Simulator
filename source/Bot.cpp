@@ -929,3 +929,43 @@ BotNeuralNet* Bot::GetInitialBrain()
 {
 	return &initialBrain;
 }
+
+Bot::PersistentState Bot::GetPersistentState() const
+{
+	return {
+		direction,
+		stunned,
+		fertilityDelay,
+		energyFromPS,
+		energyFromPredation,
+		energyFromOrganics,
+		nextMarker,
+		adaptation_numTicks,
+		adaptation_numRightSteps,
+		addaptation_lastX,
+		adaptationCounter,
+		numAttacks,
+		numMovesY,
+		numPSonLand,
+		wasOnLand
+	};
+}
+
+void Bot::SetPersistentState(const PersistentState& state)
+{
+	direction = state.direction % 8;
+	stunned = state.stunned;
+	fertilityDelay = state.fertilityDelay;
+	energyFromPS = state.energyFromPS;
+	energyFromPredation = state.energyFromPredation;
+	energyFromOrganics = state.energyFromOrganics;
+	nextMarker = state.nextMarker % NumberOfMutationMarkers;
+	adaptation_numTicks = state.adaptation_numTicks;
+	adaptation_numRightSteps = state.adaptation_numRightSteps;
+	addaptation_lastX = state.addaptation_lastX;
+	adaptationCounter = state.adaptationCounter;
+	numAttacks = state.numAttacks;
+	numMovesY = state.numMovesY;
+	numPSonLand = state.numPSonLand;
+	wasOnLand = state.wasOnLand;
+}

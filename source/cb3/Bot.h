@@ -154,6 +154,22 @@ protected:
 
 public:
 
+	struct PersistentState
+	{
+		int direction;
+		uint stunned;
+		uint fertilityDelay;
+		int energyFromPS;
+		int energyFromPredation;
+		int energyFromOrganics;
+		uint nextMarker;
+		int addaptation_birthX;
+		uint numAttacks;
+		uint numMovesX;
+		uint numMovesY;
+		uint numPSonLand;
+	};
+
 	constexpr ObjectTypes type() override;
 	constexpr float image_sensor_val() override;
 	
@@ -182,7 +198,9 @@ public:
 	Color* GetColor();
 
 	BotNeuralNet* GetActiveBrain();
-	BotNeuralNet* GetInitialBrain();	
+	BotNeuralNet* GetInitialBrain();
+	PersistentState GetPersistentState() const;
+	void SetPersistentState(const PersistentState& state);
 
 	/*Get neuron summary(info)
 	Format: (all integers)

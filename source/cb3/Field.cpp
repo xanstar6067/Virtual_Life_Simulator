@@ -286,6 +286,18 @@ uint Field::GetSeasonCounter()
     return changeSeasonCounter;
 }
 
+Field::PersistentState Field::GetPersistentState() const
+{
+    return {spawnApplesCounter, season, changeSeasonCounter};
+}
+
+void Field::SetPersistentState(const PersistentState& state)
+{
+    spawnApplesCounter = state.spawnApplesCounter;
+    season = state.season <= spring ? state.season : summer;
+    changeSeasonCounter = state.changeSeasonCounter;
+}
+
 void Field::shiftRenderPoint(int cx)
 {
     renderX += cx;

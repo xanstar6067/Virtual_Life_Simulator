@@ -148,6 +148,25 @@ class Bot final:public Object
 
 
 public:
+
+	struct PersistentState
+	{
+		uint direction;
+		int stunned;
+		int fertilityDelay;
+		int energyFromPS;
+		int energyFromPredation;
+		int energyFromOrganics;
+		uint nextMarker;
+		int adaptation_numTicks;
+		int adaptation_numRightSteps;
+		int addaptation_lastX;
+		int adaptationCounter;
+		uint numAttacks;
+		uint numMovesY;
+		uint numPSonLand;
+		bool wasOnLand;
+	};
 	
 	//Experimental
 	void Mutagen();
@@ -178,6 +197,8 @@ public:
 
 	BotNeuralNet* GetActiveBrain();
 	BotNeuralNet* GetInitialBrain();
+	PersistentState GetPersistentState() const;
+	void SetPersistentState(const PersistentState& state);
 
 	//Take away bot energy, return true if 0 or below (bot dies)
 	bool TakeEnergy(int val);

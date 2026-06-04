@@ -175,6 +175,13 @@ private:
 
 public:
 
+    struct PersistentState
+    {
+        uint spawnApplesCounter;
+        Season season;
+        uint changeSeasonCounter;
+    };
+
     FieldDynamicParams params;
 
     void shiftRenderPoint(int cx);
@@ -251,6 +258,8 @@ public:
     uint GetNumOrganics();
     uint GetNumPredators();
     uint GetAverageLifetime();
+    PersistentState GetPersistentState() const;
+    void SetPersistentState(const PersistentState& state);
 
     //Spawn group of random bots
     void SpawnControlGroup();

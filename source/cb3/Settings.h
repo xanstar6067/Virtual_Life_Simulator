@@ -248,8 +248,8 @@ namespace cb3
 
 #define OuicksaveFilename "SavedObjects/CyberBiology3/Quicksave"
 
-#define MagicNumber_ObjectFile 0xfcfa47fe
-#define MagicNumber_WorldFile 0xbffd52fd
+#define MagicNumber_ObjectFile 0xfcfa47ff
+#define MagicNumber_WorldFile 0xbffd52ff
 
 //-----------------------------------------------------------------
 

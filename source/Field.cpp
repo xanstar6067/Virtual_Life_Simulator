@@ -741,6 +741,16 @@ void Field::tick(uint thisFrame)
     #endif
 }
 
+Field::PersistentState Field::GetPersistentState() const
+{
+    return {spawnApplesInterval};
+}
+
+void Field::SetPersistentState(const PersistentState& state)
+{
+    spawnApplesInterval = state.spawnApplesInterval;
+}
+
 
 
 void Field::draw(RenderTypes render)

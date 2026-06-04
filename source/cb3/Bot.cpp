@@ -873,4 +873,38 @@ BotNeuralNet* Bot::GetInitialBrain()
 	return &initialBrain;
 }
 
+Bot::PersistentState Bot::GetPersistentState() const
+{
+	return {
+		direction,
+		stunned,
+		fertilityDelay,
+		energyFromPS,
+		energyFromPredation,
+		energyFromOrganics,
+		nextMarker,
+		addaptation_birthX,
+		numAttacks,
+		numMovesX,
+		numMovesY,
+		numPSonLand
+	};
+}
+
+void Bot::SetPersistentState(const PersistentState& state)
+{
+	direction = ((state.direction % 8) + 8) % 8;
+	stunned = state.stunned;
+	fertilityDelay = state.fertilityDelay;
+	energyFromPS = state.energyFromPS;
+	energyFromPredation = state.energyFromPredation;
+	energyFromOrganics = state.energyFromOrganics;
+	nextMarker = state.nextMarker % NumberOfMutationMarkers;
+	addaptation_birthX = state.addaptation_birthX;
+	numAttacks = state.numAttacks;
+	numMovesX = state.numMovesX;
+	numMovesY = state.numMovesY;
+	numPSonLand = state.numPSonLand;
+}
+
 }

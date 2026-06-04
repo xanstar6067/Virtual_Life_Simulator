@@ -138,6 +138,11 @@ class Field final
 
 public:
 
+    struct PersistentState
+    {
+        uint spawnApplesInterval;
+    };
+
     void shiftRenderPoint(int cx);
 
     void jumpToFirstBot();
@@ -217,6 +222,8 @@ public:
     uint GetNumApples();
     uint GetNumOrganics();
     uint GetNumThreads();
+    PersistentState GetPersistentState() const;
+    void SetPersistentState(const PersistentState& state);
 
     //Spawn group of random bots
     void SpawnControlGroup();

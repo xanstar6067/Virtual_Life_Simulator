@@ -132,6 +132,10 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorldCompact(Field* world, MyInputStre
 
     file.read((char*)&world->params, sizeof world->params);
 
+    Field::PersistentState worldState;
+    worldState.spawnApplesInterval = (uint)file.ReadInt();
+    world->SetPersistentState(worldState);
+
     if (file.ReadInt() != NumberOfMutationMarkers)
         return {-1, -1};
 
@@ -212,6 +216,9 @@ bool ObjectSaver::SaveWorld(Field* world, const std::filesystem::path& filename,
 
         file.WriteInt(sizeof world->params);
         file.write((char*)&world->params, sizeof world->params);
+
+        const Field::PersistentState worldState = world->GetPersistentState();
+        file.WriteInt((int)worldState.spawnApplesInterval);
 
         file.WriteInt(NumberOfMutationMarkers);
         file.WriteInt(NumNeuronLayers);
@@ -332,6 +339,23 @@ void ObjectSaver::WriteBotCompact(MyOutStream& file, Bot* obj)
 
     file.WriteInt(obj->energy);
 
+    const Bot::PersistentState state = obj->GetPersistentState();
+    file.WriteByte((byte)state.direction);
+    file.WriteInt(state.stunned);
+    file.WriteInt(state.fertilityDelay);
+    file.WriteInt(state.energyFromPS);
+    file.WriteInt(state.energyFromPredation);
+    file.WriteInt(state.energyFromOrganics);
+    file.WriteByte((byte)state.nextMarker);
+    file.WriteInt(state.adaptation_numTicks);
+    file.WriteInt(state.adaptation_numRightSteps);
+    file.WriteInt(state.addaptation_lastX);
+    file.WriteInt(state.adaptationCounter);
+    file.WriteInt((int)state.numAttacks);
+    file.WriteInt((int)state.numMovesY);
+    file.WriteInt((int)state.numPSonLand);
+    file.WriteBool(state.wasOnLand);
+
     WriteBrainCompact(file, obj->GetActiveBrain(), true);
     WriteBrainCompact(file, obj->GetInitialBrain(), false);
 }
@@ -349,6 +373,24 @@ Bot* ObjectSaver::LoadBotCompact(MyInputStream& file)
     }
 
     toRet->energy = file.ReadInt();
+
+    Bot::PersistentState state;
+    state.direction = file.ReadByte();
+    state.stunned = file.ReadInt();
+    state.fertilityDelay = file.ReadInt();
+    state.energyFromPS = file.ReadInt();
+    state.energyFromPredation = file.ReadInt();
+    state.energyFromOrganics = file.ReadInt();
+    state.nextMarker = file.ReadByte();
+    state.adaptation_numTicks = file.ReadInt();
+    state.adaptation_numRightSteps = file.ReadInt();
+    state.addaptation_lastX = file.ReadInt();
+    state.adaptationCounter = file.ReadInt();
+    state.numAttacks = (uint)file.ReadInt();
+    state.numMovesY = (uint)file.ReadInt();
+    state.numPSonLand = (uint)file.ReadInt();
+    state.wasOnLand = file.ReadBool();
+    toRet->SetPersistentState(state);
 
     if (!LoadBrainCompact(file, toRet->GetActiveBrain(), true))
     {
