@@ -15,7 +15,15 @@ double Field::zoom = 1.0;
 
 static int GetSidePanelXForField()
 {
-    return 2 * FieldX + FieldWidth;
+    int fixedX = 2 * FieldX + FieldWidth;
+    int maxVisibleX = windowWidth - GUISidePanelWidth - InterfaceBorder;
+
+    if (maxVisibleX < InterfaceBorder)
+    {
+        maxVisibleX = InterfaceBorder;
+    }
+
+    return (fixedX < maxVisibleX) ? fixedX : maxVisibleX;
 }
 
 static void GetFieldViewportLayout(SDL_Rect& viewport, bool& needHorizontal, bool& needVertical)

@@ -407,9 +407,9 @@ void Main::DrawSidePanelWindow()
 			ImGui::SameLine();
 			ImGui::Text(" %s", SDL_GetPlatform());
 
-			ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Ядер процессора: %d", SDL_GetCPUCount());
+			ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Логических процессоров: %d", SDL_GetCPUCount());
 			ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
-			ImGui::Text(", потоков: %u", field->GetNumThreads());
+			ImGui::Text("Рабочих потоков симуляции: %u", field->GetNumThreads());
 		}
 
 		if (ImGui::CollapsingHeader("Управление", ImGuiTreeNodeFlags_DefaultOpen))

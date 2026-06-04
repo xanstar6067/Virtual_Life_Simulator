@@ -332,6 +332,242 @@ void Main::DrawAdditionalsWindow()
 	End();
 }
 
+static float GetSidePanelX()
+{
+	float fixedX = (2 * FieldX + FieldWidth) * 1.0f;
+	float maxVisibleX = windowWidth - GUISidePanelWidth * 1.0f - InterfaceBorder * 1.0f;
+
+	if (maxVisibleX < InterfaceBorder)
+	{
+		maxVisibleX = InterfaceBorder * 1.0f;
+	}
+
+	return (fixedX < maxVisibleX) ? fixedX : maxVisibleX;
+}
+
+void Main::DrawSidePanelWindow()
+{
+	float panelHeight = windowHeight - InterfaceBorder * 2.0f;
+
+	if (panelHeight < 200.0f)
+	{
+		panelHeight = 200.0f;
+	}
+
+	SetNextWindowBgAlpha(1.0f);
+	SetNextWindowSize({ GUISidePanelWidth * 1.0f, panelHeight });
+	SetNextWindowPos({ GetSidePanelX(), InterfaceBorder * 1.0f });
+
+	Begin("Панель", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+	{
+		if (CollapsingHeader("Главное", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			Text("Режим симуляции");
+			if (RadioButton("Classic", false))
+			{
+				showModeSwitchConfirm = true;
+			}
+			SameLine();
+			RadioButton("CyberBiology3", true);
+
+			Text("шаги: %i", ticknum);
+			Text("(интервал %i, тиков/с: %i, кадров/с: %i)", limit_interval, realTPS, realFPS);
+			Text("Всего объектов: %i", field->GetNumObjects());
+			Text("Всего ботов: %i", field->GetNumBots());
+
+			if (field->params.useSeasons)
+			{
+				Text("Сезон: %s (%i/%i)", SeasonNames[field->GetSeason()], field->GetSeasonCounter(), field->params.seasonInterval);
+			}
+
+			Text("Слоев: %i, нейронов: %i, сдвиг X: %i", NumNeuronLayers, NumHiddenNeurons, field->renderX);
+			Text("Зерно: %i, id симуляции: %i", seed, id);
+			Text("Размер мира: %i (%i экранов)", FieldCellsWidth, FieldCellsWidth / ScreenCellsWidth);
+			Text("Средний возраст: %i (макс.: %i)", field->GetAverageLifetime(), field->params.botMaxLifetime);
+		}
+
+		if (CollapsingHeader("Система", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Платформа");
+			SameLine();
+			Text(" %s", SDL_GetPlatform());
+
+			int logicalProcessors = SDL_GetCPUCount();
+			TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Логических процессоров: %d", logicalProcessors);
+			TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
+			Text("Рабочих потоков симуляции: %u", (uint)NumThreads);
+
+			if (NumThreads > logicalProcessors)
+			{
+				TextColored(ImVec4(1.0f, 0.65f, 0.15f, 1.0f), "Потоков больше, чем логических процессоров");
+			}
+		}
+
+		if (CollapsingHeader("Управление", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			if (Button((simulate) ? "Стоп" : "Старт", { 200, 25 }))
+			{
+				SwitchPause();
+			}
+
+			PushItemWidth(200);
+			SliderInt("лимит тиков", &limit_ticks_per_second, 0, GUI_Max_tps, "%d");
+			SliderInt("лимит кадров", &limitFPS, 0, GUI_Max_fps, "%d");
+			SliderInt("энергия ФС", &field->params.PSreward, 0, GUI_Max_food);
+			SliderInt("кисть", &brushSize, GUI_Max_brush, 1, "%d");
+			PopItemWidth();
+		}
+
+		if (CollapsingHeader("Выбор", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			if (selectedObject && field->ValidateObjectExistance(selectedObject))
+			{
+				Text("тип: бот	X: %i, Y: %i", selectedObject->x, selectedObject->y);
+				Text("возраст: %i / %i", selectedObject->GetLifetime(), field->params.botMaxLifetime);
+				Text("энергия: %i (ФС: %i, охота: %i)", selectedObject->energy,
+					((Bot*)selectedObject)->GetEnergyFromPS(), ((Bot*)selectedObject)->GetEnergyFromKills());
+
+				int markers[NumberOfMutationMarkers];
+				memcpy(markers, ((Bot*)selectedObject)->GetMarkers(), sizeof(markers));
+				Text("метки: {");
+
+				repeat(NumberOfMutationMarkers)
+				{
+					SameLine();
+					Text("%i", markers[i]);
+				}
+
+				SameLine();
+				Text("}");
+
+				Color& color = *((Bot*)selectedObject)->GetColor();
+				Text("цвет: {%i, %i, %i}", color.c[0], color.c[1], color.c[2]);
+				SameLine();
+				TextColored(ImVec4(color.c[0] / 255.0f, color.c[1] / 255.0f, color.c[2] / 255.0f, 1.0f), "*****");
+
+				if (Button("Показать мозг", { 120, 25 }))
+				{
+					showBrain = !showBrain;
+				}
+				SameLine();
+				if (Button("Новый цвет", { 100, 25 }))
+				{
+					field->RepaintBot((Bot*)selectedObject, Color::GetRandomColor(), RepaintTolerance);
+				}
+			}
+			else if (selectedObject)
+			{
+				Deselect();
+			}
+		}
+
+		if (CollapsingHeader("Вид", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			Text("Режим:");
+
+			if (BeginTable("##RenderModesPanelCB3", 2))
+			{
+				TableSetupColumn("##RenderModeLeftCB3", ImGuiTableColumnFlags_WidthFixed, 105.0f);
+				TableSetupColumn("##RenderModeRightCB3", ImGuiTableColumnFlags_WidthFixed, 105.0f);
+
+				TableNextRow();
+				TableSetColumnIndex(0);
+				RadioButton("Обычный", (int*)&renderType, 0);
+				TableSetColumnIndex(1);
+				RadioButton("Хищники", (int*)&renderType, 1);
+
+				TableNextRow();
+				TableSetColumnIndex(0);
+				RadioButton("Энергия", (int*)&renderType, 2);
+				TableSetColumnIndex(1);
+				RadioButton("Без отрис.", (int*)&renderType, 3);
+
+				EndTable();
+			}
+		}
+
+		if (CollapsingHeader("Журнал", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			PushStyleColor(ImGuiCol_ChildBg, ImVec4(LogBackgroundColor));
+			BeginChild("scrolling_panel_cb3", ImVec2(0, 80), true);
+			{
+				TextUnformatted(logText.Buf.Data);
+
+				if (GetScrollY() >= GetScrollMaxY())
+				{
+					SetScrollHereY(1.0f);
+				}
+			}
+			EndChild();
+			PopStyleColor();
+		}
+
+		if (CollapsingHeader("Действие мыши", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			if (BeginTable("##MouseFunctionsPanelCB3", 2))
+			{
+				TableSetupColumn("##MouseFunctionLeftCB3", ImGuiTableColumnFlags_WidthFixed, 105.0f);
+				TableSetupColumn("##MouseFunctionRightCB3", ImGuiTableColumnFlags_WidthFixed, 105.0f);
+
+				TableNextRow();
+				TableSetColumnIndex(0);
+				RadioButton("Выбрать", (int*)&mouseFunc, 0);
+				TableSetColumnIndex(1);
+				RadioButton("Удалить", (int*)&mouseFunc, 1);
+
+				TableNextRow();
+				TableSetColumnIndex(0);
+				RadioButton("Камень", (int*)&mouseFunc, 2);
+				TableSetColumnIndex(1);
+				RadioButton("Из файла", (int*)&mouseFunc, 3);
+
+				TableNextRow();
+				TableSetColumnIndex(0);
+				RadioButton("Мутировать", (int*)&mouseFunc, 4);
+
+				EndTable();
+			}
+		}
+
+		if (CollapsingHeader("Окна", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			const ImVec2 windowButtonSize = { 92, 28 };
+
+			if (Button("Файлы", windowButtonSize))
+			{
+				LoadFilenames();
+				showSaveLoad = !showSaveLoad;
+			}
+			SameLine();
+			if (Button("Инструменты", windowButtonSize))
+			{
+				showDangerous = !showDangerous;
+			}
+			SameLine();
+			if (Button("Среда", windowButtonSize))
+			{
+				showAdaptation = !showAdaptation;
+			}
+
+			if (Button("График", windowButtonSize))
+			{
+				showChart = !showChart;
+			}
+			SameLine();
+			if (Button("Автоадапт.", windowButtonSize))
+			{
+				showAutomaticAdaptation = !showAutomaticAdaptation;
+			}
+			SameLine();
+			if (Button("Classic", windowButtonSize))
+			{
+				showModeSwitchConfirm = true;
+			}
+		}
+	}
+	End();
+}
+
 void Main::DrawSaveLoadWindow()
 {
 	if (!showSaveLoad)
@@ -916,15 +1152,8 @@ void Main::DrawWindows()
 		DrawDemoWindow();
 	#endif
 
-	DrawMainWindow();
+	DrawSidePanelWindow();
 	DrawFieldScrollbars();
-	DrawSystemWindow();
-	DrawControlsWindow();
-	DrawSelectionWindow();
-	DrawDisplayWindow();
-	DrawLogWindow();
-	DrawMouseFunctionWindow();
-	DrawAdditionalsWindow();
 	DrawModeSwitchWindow();
 
 	//Below windows that are hidden at startup

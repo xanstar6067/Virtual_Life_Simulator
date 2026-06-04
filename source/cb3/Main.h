@@ -71,6 +71,7 @@ protected:
 	void DrawLogWindow();
 	void DrawMouseFunctionWindow();
 	void DrawAdditionalsWindow();
+	void DrawSidePanelWindow();
 	void DrawFieldScrollbars();
 	void DrawModeSwitchWindow();
 	void DrawModeSwitchConfirmWindow();
