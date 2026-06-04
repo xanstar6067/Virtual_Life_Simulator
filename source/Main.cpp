@@ -211,6 +211,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 exitfor:
 
 	//Clear memory
+	simulation.Shutdown();
 	Apple::DeleteImage();
 	Bot::DeleteImage();
 	Organics::DeleteImage();
@@ -760,7 +761,15 @@ Main::Main()
 
 Main::~Main()
 {
+	Shutdown();
+}
+
+void Main::Shutdown()
+{
+	cb3Runtime.reset();
+
 	delete field;
+	field = NULL;
 }
 
 bool Main::IsClassicMode() const

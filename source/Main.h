@@ -207,6 +207,7 @@ public:
 
 	Main();
 	~Main();
+	void Shutdown();
 
 	void CatchKeyboard();
 

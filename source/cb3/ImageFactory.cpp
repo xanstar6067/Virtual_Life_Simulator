@@ -244,13 +244,28 @@ void ImageFactory::CreateImages()
 void ImageFactory::DeleteImages()
 {
     SDL_DestroyTexture(apple);
+    apple = NULL;
+
     SDL_DestroyTexture(organics);
+    organics = NULL;
+
     SDL_DestroyTexture(rock);
+    rock = NULL;
 
     repeat(8)
+    {
         SDL_DestroyTexture(bot_head[i]);
+        bot_head[i] = NULL;
+    }
 
     SDL_DestroyTexture(bot_body);
+    bot_body = NULL;
+
+    Apple::SetImage(NULL);
+    Organics::SetImage(NULL);
+    Rock::SetImage(NULL);
+    Bot::SetHeadImages(bot_head);
+    Bot::SetBodyImage(NULL);
 }
 
 
