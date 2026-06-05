@@ -86,6 +86,11 @@ Object* ObjectSaver::LoadObjectFromFile(MyInputStream& file)
 
 ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, char* filename, bool clearWorld, bool loadParams, bool loadLandscape, bool loadBots)
 {
+    return LoadWorld(world, std::filesystem::path(filename), clearWorld, loadParams, loadLandscape, loadBots);
+}
+
+ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, const std::filesystem::path& filename, bool clearWorld, bool loadParams, bool loadLandscape, bool loadBots)
+{
     WorldParams toRet = {-1, -1, -1, -1, -1};
     Object* tmpObj;
 
@@ -223,6 +228,11 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, char* filename, bo
     following all objects
 */
 bool ObjectSaver::SaveWorld(Field* world, char* filename, int id, int ticknum)
+{
+    return SaveWorld(world, std::filesystem::path(filename), id, ticknum);
+}
+
+bool ObjectSaver::SaveWorld(Field* world, const std::filesystem::path& filename, int id, int ticknum)
 {
     //Open file for writing, binary type
     MyOutStream file(filename, std::ios::in | std::ios::binary | std::ios::trunc);
@@ -603,6 +613,11 @@ File format:
 */
 bool ObjectSaver::SaveObject(Object* obj, char* filename)
 {
+    return SaveObject(obj, std::filesystem::path(filename));
+}
+
+bool ObjectSaver::SaveObject(Object* obj, const std::filesystem::path& filename)
+{
 
     //Open file for writing, binary type, all contents to be deleted
     MyOutStream file(filename, std::ios::in | std::ios::binary | std::ios::trunc);
@@ -624,6 +639,11 @@ bool ObjectSaver::SaveObject(Object* obj, char* filename)
 }
 
 Object* ObjectSaver::LoadObject(char* filename)
+{
+    return LoadObject(std::filesystem::path(filename));
+}
+
+Object* ObjectSaver::LoadObject(const std::filesystem::path& filename)
 {    
     Object* toRet;
 
@@ -673,6 +693,9 @@ void MyOutStream::WriteUShort(unsigned short data)
 MyOutStream::MyOutStream(char* filename, int flags) :std::ofstream(filename, flags) 
 {}
 
+MyOutStream::MyOutStream(const std::filesystem::path& filename, int flags) :std::ofstream(filename, flags)
+{}
+
 
 int MyInputStream::ReadInt()
 {
@@ -711,6 +734,9 @@ unsigned short MyInputStream::ReadUShort()
 }
 
 MyInputStream::MyInputStream(char* filename, int flags) :std::ifstream(filename, flags) 
+{}
+
+MyInputStream::MyInputStream(const std::filesystem::path& filename, int flags) :std::ifstream(filename, flags)
 {}
 
 }

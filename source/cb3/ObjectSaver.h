@@ -3,6 +3,7 @@
 #include "Field.h"
 #include "../SimulationMode.h"
 
+#include <filesystem>
 
 
 namespace cb3
@@ -20,6 +21,7 @@ public:
     void WriteUShort(unsigned short);
 
     MyOutStream(char* filename, int flags);
+    MyOutStream(const std::filesystem::path& filename, int flags);
 };
 
 class MyInputStream final : public std::ifstream
@@ -32,6 +34,7 @@ public:
     unsigned short ReadUShort();
 
     MyInputStream(char* filename, int flags);
+    MyInputStream(const std::filesystem::path& filename, int flags);
 };
 
 
@@ -55,9 +58,12 @@ private:
 public:
     
     bool SaveObject(Object* obj, char* filename);
+    bool SaveObject(Object* obj, const std::filesystem::path& filename);
     Object* LoadObject(char* filename);
+    Object* LoadObject(const std::filesystem::path& filename);
 
     bool SaveWorld(Field* world, char* filename, int id, int ticknum);
+    bool SaveWorld(Field* world, const std::filesystem::path& filename, int id, int ticknum);
 
     struct WorldParams
     {
@@ -70,6 +76,7 @@ public:
     };
 
     WorldParams LoadWorld(Field* world, char* filename, bool clearWorld = true, bool loadParams = true, bool loadLandscape = true, bool loadBots = true);
+    WorldParams LoadWorld(Field* world, const std::filesystem::path& filename, bool clearWorld = true, bool loadParams = true, bool loadLandscape = true, bool loadBots = true);
 
 };
 

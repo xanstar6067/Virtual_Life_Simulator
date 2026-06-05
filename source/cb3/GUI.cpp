@@ -651,7 +651,7 @@ void Main::DrawSaveLoadWindow()
 					}
 					else if (selectedFile->isWorld)
 					{
-						ObjectSaver::WorldParams ret = saver.LoadWorld(field, (char*)selectedFile->nameFull.c_str());
+						ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull);
 
 						if (ret.id != -1)
 						{
@@ -674,7 +674,7 @@ void Main::DrawSaveLoadWindow()
 						if (selectedObject)
 							delete selectedObject;
 
-						selectedObject = saver.LoadObject((char*)selectedFile->nameFull.c_str());
+						selectedObject = saver.LoadObject(selectedFile->pathFull);
 
 						if (selectedObject)
 							LogPrint("Объект загружен\r\n");
@@ -715,7 +715,7 @@ void Main::DrawSaveLoadWindow()
 					}
 					else if (Button("Ландшафт, ботов оставить", { 150, 30 }))
 					{
-						ObjectSaver::WorldParams ret = saver.LoadWorld(field, (char*)selectedFile->nameFull.c_str(),
+						ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull,
 							false, false, true, false);
 
 						if (ret.id != -1)
@@ -735,7 +735,7 @@ void Main::DrawSaveLoadWindow()
 
 						if (Button("Только боты", { 150, 30 }))
 						{
-							ObjectSaver::WorldParams ret = saver.LoadWorld(field, (char*)selectedFile->nameFull.c_str(),
+							ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull,
 								false, false, false, true);
 
 							if (ret.id != -1)
@@ -1233,7 +1233,7 @@ void Main::MouseClick()
 							return;
 						}
 
-						obj = saver.LoadObject((char*)selectedFile->nameFull.c_str());
+						obj = saver.LoadObject(selectedFile->pathFull);
 
 						if (obj)
 						{

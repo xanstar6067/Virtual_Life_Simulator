@@ -80,6 +80,43 @@ static string TrimFileName(string fileName)
 	return fileName;
 }
 
+static std::filesystem::path PathFromUtf8(string fileName)
+{
+	int wideSize = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, fileName.c_str(), -1, NULL, 0);
+
+	if (wideSize <= 0)
+	{
+		return std::filesystem::path(fileName);
+	}
+
+	std::wstring wideName(wideSize - 1, L'\0');
+	MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, fileName.c_str(), -1, wideName.data(), wideSize);
+
+	return std::filesystem::path(wideName);
+}
+
+static string PathToUtf8(const std::filesystem::path& path)
+{
+	std::wstring wideName = path.wstring();
+
+	if (wideName.empty())
+	{
+		return "";
+	}
+
+	int utf8Size = WideCharToMultiByte(CP_UTF8, 0, wideName.c_str(), (int)wideName.size(), NULL, 0, NULL, NULL);
+
+	if (utf8Size <= 0)
+	{
+		return path.filename().string();
+	}
+
+	string utf8Name(utf8Size, '\0');
+	WideCharToMultiByte(CP_UTF8, 0, wideName.c_str(), (int)wideName.size(), utf8Name.data(), utf8Size, NULL, NULL);
+
+	return utf8Name;
+}
+
 static string MakeTimestampFileName(const char* prefix)
 {
 	std::time_t time = std::time(NULL);
@@ -311,10 +348,10 @@ void Main::LoadFilenames()
 
 		//Full paths to files
 		f.pathFull = entry.path();
-		f.nameFull = entry.path().string();
+		f.nameFull = PathToUtf8(entry.path());
 
 		//Only file name
-		f.nameShort = entry.path().filename().string();
+		f.nameShort = PathToUtf8(entry.path().filename());
 
 		//File size and modified time
 		auto size = entry.file_size();
@@ -324,7 +361,7 @@ void Main::LoadFilenames()
 		f.modifiedTimeText = FormatFileTime(f.modifiedTime);
 
 		//Is world (open file briefly and look for file type)
-		MyInputStream file((char*)f.nameFull.c_str(), std::ios::in | std::ios::binary | std::ios::beg);
+		MyInputStream file(f.pathFull, std::ios::in | std::ios::binary | std::ios::beg);
 
 		if (!file.is_open())
 			continue;
@@ -414,7 +451,7 @@ void Main::RenameSelectedFile()
 		return;
 	}
 
-	std::filesystem::path newNamePath = newName;
+	std::filesystem::path newNamePath = PathFromUtf8(newName);
 
 	if (newNamePath.filename() != newNamePath)
 	{
@@ -459,12 +496,12 @@ std::filesystem::path Main::BuildSavePath(const char* defaultPrefix)
 		fileName = MakeTimestampFileName(defaultPrefix);
 	}
 
-	std::filesystem::path fileNamePath = fileName;
+	std::filesystem::path fileNamePath = PathFromUtf8(fileName);
 
 	if (fileNamePath.filename() != fileNamePath)
 	{
 		fileName = MakeTimestampFileName(defaultPrefix);
-		fileNamePath = fileName;
+		fileNamePath = PathFromUtf8(fileName);
 	}
 
 	std::filesystem::path savePath = std::filesystem::path(DirectoryName) / fileNamePath.filename();
@@ -510,9 +547,8 @@ void Main::SaveSelectedObjectToNamedFile()
 	}
 
 	std::filesystem::path savePath = BuildSavePath("Bot");
-	string fileName = savePath.string();
 
-	if (saver.SaveObject(selectedObject, (char*)fileName.c_str()))
+	if (saver.SaveObject(selectedObject, savePath))
 	{
 		LogPrint("Объект сохранен\r\n");
 		LoadFilenames();
@@ -527,9 +563,8 @@ void Main::SaveSelectedObjectToNamedFile()
 void Main::SaveWorldToNamedFile()
 {
 	std::filesystem::path savePath = BuildSavePath("World");
-	string fileName = savePath.string();
 
-	if (saver.SaveWorld(field, (char*)fileName.c_str(), id, ticknum))
+	if (saver.SaveWorld(field, savePath, id, ticknum))
 	{
 		LogPrint("Мир сохранен\r\n");
 		LoadFilenames();
