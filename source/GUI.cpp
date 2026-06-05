@@ -657,7 +657,7 @@ void Main::DrawSaveLoadWindow()
 	{
 		//Save/load window
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::SetNextWindowSize({ 650.0f, 260.0f });
+		ImGui::SetNextWindowSize({ 650.0f, 296.0f });
 		ImGui::SetNextWindowPos({ 100 * 1.0f, 100.0f }, ImGuiCond_Once);
 
 		ImGui::Begin("Сохранение и загрузка", &showSaveLoad, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
@@ -665,7 +665,7 @@ void Main::DrawSaveLoadWindow()
 			//List of files
 			ImGui::Text("Выберите файл");
 
-			if (ImGui::BeginTable("##SaveFiles", 5, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(630, 110)))
+			if (ImGui::BeginTable("##SaveFiles", 5, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(630, 148)))
 			{
 				ImGui::TableSetupColumn("Имя", ImGuiTableColumnFlags_WidthStretch);
 				ImGui::TableSetupColumn("Размер", ImGuiTableColumnFlags_WidthFixed, 70.0f);
@@ -716,7 +716,9 @@ void Main::DrawSaveLoadWindow()
 
 			//Buttons
 
-			const ImVec2 fileButtonSize = { 120, 26 };
+			const float buttonSpacing = ImGui::GetStyle().ItemSpacing.x;
+			const float buttonWidth = (ImGui::GetContentRegionAvail().x - buttonSpacing * 3.0f) / 4.0f;
+			const ImVec2 fileButtonSize = { buttonWidth, 26.0f };
 
 			if (ImGui::Button("Загрузить", fileButtonSize))
 			{
