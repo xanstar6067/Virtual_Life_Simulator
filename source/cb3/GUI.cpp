@@ -334,7 +334,6 @@ void Main::DrawAdditionalsWindow()
 
 static float GetSidePanelX()
 {
-	float fixedX = (2 * FieldX + FieldWidth) * 1.0f;
 	float maxVisibleX = windowWidth - GUISidePanelWidth * 1.0f - InterfaceBorder * 1.0f;
 
 	if (maxVisibleX < InterfaceBorder)
@@ -342,7 +341,7 @@ static float GetSidePanelX()
 		maxVisibleX = InterfaceBorder * 1.0f;
 	}
 
-	return (fixedX < maxVisibleX) ? fixedX : maxVisibleX;
+	return maxVisibleX;
 }
 
 void Main::DrawSidePanelWindow()
