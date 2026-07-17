@@ -580,7 +580,8 @@ void Bot::draw()
 	CalcObjectRect();
 
 	//Draw body
-	SDL_SetTextureColorMod(sprite_body, color.c[0], color.c[1], color.c[2]);
+	SDL_SetTextureColorMod(sprite_body, ToColorChannel(color.c[0]),
+		ToColorChannel(color.c[1]), ToColorChannel(color.c[2]));
 	SDL_RenderCopy(renderer, sprite_body, &image_rect, &object_rect);
 
 	//Draw outlines
@@ -594,8 +595,8 @@ void Bot::drawEnergy()
 	CalcObjectRect();
 
 	//Draw body
-	SDL_SetTextureColorMod(sprite_body, 255, 
-		static_cast<int>((1.0f - ((energy * 1.0f) / (pField->params.botMaxEnergy * 1.0f))) * 255.0f), 0);
+	SDL_SetTextureColorMod(sprite_body, 255,
+		ToColorChannel((1.0f - ((energy * 1.0f) / (pField->params.botMaxEnergy * 1.0f))) * 255.0f), 0);
 	SDL_RenderCopy(renderer, sprite_body, &image_rect, &object_rect);
 
 	//Draw outlines
@@ -614,9 +615,10 @@ void Bot::drawPredators()
 	if (energySumm < 20)
 		SDL_SetTextureColorMod(sprite_body, 180, 180, 180);
 	else
-		SDL_SetTextureColorMod(sprite_body, static_cast<int>(255.0f * ((energyFromPredation * 1.0f) / (energySumm * 1.0f))),
-			static_cast<int>(255.0f * ((energyFromPS * 1.0f) / (energySumm * 1.0f))),
-			static_cast<int>(255.0f * ((energyFromOrganics * 1.0f) / (energySumm * 1.0f))));
+		SDL_SetTextureColorMod(sprite_body,
+			ToColorChannel(255.0f * ((energyFromPredation * 1.0f) / (energySumm * 1.0f))),
+			ToColorChannel(255.0f * ((energyFromPS * 1.0f) / (energySumm * 1.0f))),
+			ToColorChannel(255.0f * ((energyFromOrganics * 1.0f) / (energySumm * 1.0f))));
 
 	SDL_RenderCopy(renderer, sprite_body, &image_rect, &object_rect);
 

@@ -968,11 +968,12 @@ void Field::SpawnControlGroup()
 
 void Field::SpawnApples()
 {
-    Object* tmpObj; 
+    Object* tmpObj;
+    const int landHeight = std::clamp(FieldCellsHeight - params.oceanLevel, 0, FieldCellsHeight);
 
     for (uint ix = 0; ix < FieldCellsWidth; ++ix)
     {
-        for (uint iy = 0; iy < (FieldCellsHeight - params.oceanLevel); ++iy)
+        for (int iy = 0; iy < landHeight; ++iy)
         {
 
             tmpObj = allCells[ix][iy];

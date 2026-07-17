@@ -1202,7 +1202,7 @@ void Main::DrawBotBrainWindow()
 					ImGui::Text("Смещение: %f", nn_renderer.selectedNeuron->bias);
 
 					//Show connections
-					repeat(nn_renderer.selectedNeuron->numConnections)
+					for (uint i = 0; i < nn_renderer.selectedNeuron->numConnections; ++i)
 					{
 						ImGui::Text("Связь к слою: %i, нейрону: %i, вес: %f", nn_renderer.selectedNeuron->allConnections[i].dest_layer,
 							nn_renderer.selectedNeuron->allConnections[i].dest_neuron, nn_renderer.selectedNeuron->allConnections[i].weight);

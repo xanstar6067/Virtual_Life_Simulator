@@ -21,8 +21,8 @@ void Organics::drawEnergy()
     CalcObjectRectShrinked(2);
 
 	//Draw
-	SDL_SetRenderDrawColor(renderer, 255, 
-        static_cast<int>((1.0f - ((energy * 1.0f) / (pField->params.botMaxEnergy * .5f))) * 255.0f), 0, 255);
+	SDL_SetRenderDrawColor(renderer, 255,
+		ToColorChannel((1.0f - ((energy * 1.0f) / (pField->params.botMaxEnergy * .5f))) * 255.0f), 0, 255);
 	SDL_RenderFillRect(renderer, &object_rect);
 }
 

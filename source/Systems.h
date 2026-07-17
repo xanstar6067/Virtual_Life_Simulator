@@ -1,6 +1,8 @@
 #pragma once
 
 //System headers
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <thread>
 #include <filesystem>

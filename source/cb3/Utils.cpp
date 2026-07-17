@@ -86,15 +86,22 @@ void Color::RandomChange(const int strMin, const int strMax)
 
 void Color::NormalizeChangeVector()
 {
-	float magnitude = sqrt(
-		(change_vector[0] * change_vector[0]) + 
-		(change_vector[1] * change_vector[1]) + 
-		(change_vector[2] * change_vector[2])) 
-		/ 18.0f; // A little correction
-	 
+	const int squaredMagnitude =
+		(change_vector[0] * change_vector[0]) +
+		(change_vector[1] * change_vector[1]) +
+		(change_vector[2] * change_vector[2]);
+
+	if (squaredMagnitude == 0)
+	{
+		change_vector[0] = 18;
+		return;
+	}
+
+	const float scale = 18.0f / std::sqrt(static_cast<float>(squaredMagnitude));
+
 	repeat(3)
 	{
-		change_vector[i] /= magnitude;
+		change_vector[i] = static_cast<char>(change_vector[i] * scale);
 	}
 }
 

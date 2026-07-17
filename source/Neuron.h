@@ -27,11 +27,11 @@ enum NeuronType
 	memory
 };
 
-const int MaxConnectionsPerNeuronType[] = 
+constexpr uint MaxConnectionsPerNeuronType[] =
 { 
 	MaxConnections_Basic, 
 	MaxConnections_Input, 
-	0,
+	0u,
 	MaxConnections_Random,
 	MaxConnections_RadialBasis,
 	MaxConnections_Memory 

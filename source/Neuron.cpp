@@ -56,7 +56,7 @@ void Neuron::RemoveConnection(uint index)
 {
 	--numConnections;
 
-	for (int i = index; i < numConnections; ++i)
+	for (uint i = index; i < numConnections; ++i)
 	{
 		allConnections[i] = allConnections[i + 1];
 	}

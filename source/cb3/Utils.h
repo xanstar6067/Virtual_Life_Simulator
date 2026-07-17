@@ -20,6 +20,20 @@ using std::min;
 using std::to_string;
 
 
+inline Uint8 ToColorChannel(float value)
+{
+	if (!std::isfinite(value))
+		return 0;
+
+	return static_cast<Uint8>(std::clamp(value, 0.0f, 255.0f));
+}
+
+inline Uint8 ToColorChannel(int value)
+{
+	return static_cast<Uint8>(std::clamp(value, 0, 255));
+}
+
+
 //Platform dependent
 #define ErrorMessage(msg, caption) MessageBoxW(NULL, msg, caption, MB_ICONERROR | MB_OK);
 

@@ -4,6 +4,7 @@
 #include <Windows.h>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <mutex>
