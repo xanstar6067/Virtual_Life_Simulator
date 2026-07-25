@@ -19,7 +19,7 @@ Bot* ObjectSaver::LoadBotFromFile(MyInputStream& file)
     if (file.ReadInt() != sizeof(Neuron))
         return NULL;
 
-    Bot* toRet = new Bot(0, 0);
+    Bot* toRet = new Bot(0, 0, Bot::LoadTag{});
 
     toRet->SetLifetime(lifetime);
 
@@ -294,9 +294,7 @@ bool ObjectSaver::SaveWorld(Field* world, const std::filesystem::path& filename,
             }
         }
 
-        file.close();
-
-        return true;
+        return file.close();
     }
 
     return false;
@@ -422,7 +420,7 @@ void ObjectSaver::WriteBotCompact(MyOutStream& file, Bot* obj)
 
 Bot* ObjectSaver::LoadBotCompact(MyInputStream& file)
 {
-    Bot* toRet = new Bot(0, 0);
+    Bot* toRet = new Bot(0, 0, Bot::LoadTag{});
 
     toRet->SetLifetime(file.ReadInt());
 
@@ -629,9 +627,7 @@ bool ObjectSaver::SaveObject(Object* obj, const std::filesystem::path& filename)
 
         WriteObjectCompact(file, obj);
 
-        file.close();
-
-        return true;
+        return file.close();
     }
 
     return false;
@@ -670,73 +666,118 @@ Object* ObjectSaver::LoadObject(const std::filesystem::path& filename)
 
 }
 
-void MyOutStream::WriteInt(int data)
+void MyOutStream::FlushBuffer()
 {
-    write((char*)&data, 4);
+    if (bufferedBytes == 0 || failed)
+        return;
+
+    stream.write(buffer.get(), static_cast<std::streamsize>(bufferedBytes));
+    if (!stream)
+        failed = true;
+    bufferedBytes = 0;
 }
 
-void MyOutStream::WriteBool(bool data)
+void MyOutStream::WriteBytesSlow(const char* data, size_t size)
 {
-    write((char*)&data, 1);
+    FlushBuffer();
+    if (failed)
+        return;
+
+    if (size >= BufferCapacity)
+    {
+        stream.write(data, static_cast<std::streamsize>(size));
+        if (!stream)
+            failed = true;
+        return;
+    }
+
+    std::memcpy(buffer.get(), data, size);
+    bufferedBytes = size;
 }
 
-void MyOutStream::WriteByte(byte data)
+bool MyOutStream::close()
 {
-    write((char*)&data, sizeof(byte));
+    if (!closed)
+    {
+        FlushBuffer();
+        if (stream.is_open())
+        {
+            stream.close();
+            if (stream.fail())
+                failed = true;
+        }
+        closed = true;
+    }
+
+    return !failed;
 }
 
-void MyOutStream::WriteUShort(unsigned short data)
-{
-    write((char*)&data, sizeof(unsigned short));
-}
-
-MyOutStream::MyOutStream(char* filename, int flags) :std::ofstream(filename, flags) 
+MyOutStream::MyOutStream(char* filename, int flags)
+    : stream(filename, static_cast<std::ios::openmode>(flags)), buffer(std::make_unique<char[]>(BufferCapacity))
 {}
 
-MyOutStream::MyOutStream(const std::filesystem::path& filename, int flags) :std::ofstream(filename, flags)
+MyOutStream::MyOutStream(const std::filesystem::path& filename, int flags)
+    : stream(filename, static_cast<std::ios::openmode>(flags)), buffer(std::make_unique<char[]>(BufferCapacity))
 {}
 
-
-int MyInputStream::ReadInt()
+MyOutStream::~MyOutStream()
 {
-    int toRet;
-
-    read((char*)&toRet, 4);
-
-    return toRet;
+    close();
 }
 
-bool MyInputStream::ReadBool()
+bool MyInputStream::RefillBuffer()
 {
-    bool toRet;
+    if (failed || !stream.is_open())
+        return false;
 
-    read((char*)&toRet, 1);
-
-    return toRet;
+    stream.read(buffer.get(), static_cast<std::streamsize>(BufferCapacity));
+    bufferedBytes = static_cast<size_t>(stream.gcount());
+    bufferPosition = 0;
+    return bufferedBytes != 0;
 }
 
-byte MyInputStream::ReadByte()
+void MyInputStream::ReadBytesSlow(char* destination, size_t size)
 {
-    byte toRet = 0;
+    size_t copied = 0;
+    while (copied < size)
+    {
+        if (bufferPosition == bufferedBytes && !RefillBuffer())
+        {
+            failed = true;
+            std::memset(destination + copied, 0, size - copied);
+            return;
+        }
 
-    read((char*)&toRet, sizeof(byte));
-
-    return toRet;
+        const size_t chunkSize = (std::min)(size - copied, bufferedBytes - bufferPosition);
+        std::memcpy(destination + copied, buffer.get() + bufferPosition, chunkSize);
+        bufferPosition += chunkSize;
+        copied += chunkSize;
+    }
 }
 
-unsigned short MyInputStream::ReadUShort()
+void MyInputStream::IgnoreSlow(size_t size)
 {
-    unsigned short toRet = 0;
+    size_t ignored = 0;
+    while (ignored < size)
+    {
+        if (bufferPosition == bufferedBytes && !RefillBuffer())
+        {
+            failed = true;
+            return;
+        }
 
-    read((char*)&toRet, sizeof(unsigned short));
-
-    return toRet;
+        const size_t chunkSize = (std::min)(size - ignored, bufferedBytes - bufferPosition);
+        bufferPosition += chunkSize;
+        ignored += chunkSize;
+    }
 }
 
-MyInputStream::MyInputStream(char* filename, int flags) :std::ifstream(filename, flags) 
+MyInputStream::MyInputStream(char* filename, int flags)
+    : stream(filename, static_cast<std::ios::openmode>(flags)), buffer(std::make_unique<char[]>(BufferCapacity))
 {}
 
-MyInputStream::MyInputStream(const std::filesystem::path& filename, int flags) :std::ifstream(filename, flags)
+MyInputStream::MyInputStream(const std::filesystem::path& filename, int flags)
+    : stream(filename, static_cast<std::ios::openmode>(flags)), buffer(std::make_unique<char[]>(BufferCapacity))
 {}
 
 }

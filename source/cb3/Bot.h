@@ -70,6 +70,12 @@ const int RotationsReverse[3][3] =
 
 class Bot : public Object
 {
+	friend class ObjectSaver;
+
+	// Loading overwrites every serialized field. This tag avoids generating a
+	// random brain only to discard it immediately for every bot in the world.
+	struct LoadTag {};
+	Bot(int X, int Y, LoadTag);
 
 protected:
 

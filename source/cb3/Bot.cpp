@@ -865,6 +865,25 @@ Bot::Bot(int X, int Y, uint Energy) :Object(X, Y)
 }
 
 
+Bot::Bot(int X, int Y, LoadTag) : Object(X, Y)
+{
+	// Keep the defaults that are needed by the legacy object format, but skip
+	// RandomizeMarkers/Randomize/Optimize: the loader replaces those values.
+	energy = 0;
+	stunned = StunAfterBirth;
+	fertilityDelay = pParams->fertility_delay;
+	energyFromPS = 0;
+	energyFromPredation = 0;
+	energyFromOrganics = 0;
+	nextMarker = 0;
+	addaptation_birthX = X;
+	numAttacks = 0;
+	numMovesX = 1000;
+	numMovesY = 1000;
+	numPSonLand = 0;
+}
+
+
 BotNeuralNet* Bot::GetActiveBrain()
 {
 	return &activeBrain;
