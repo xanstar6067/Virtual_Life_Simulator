@@ -253,6 +253,33 @@ void Main::Pause()
 	}
 }
 
+void Main::SpawnInitialPopulation()
+{
+	field->SpawnControlGroup();
+	LogPrint("Добавлена стартовая группа ботов\r\n");
+}
+
+void Main::PlaceWorldWall()
+{
+	repeat(FieldCellsHeight)
+		field->AddObject(new Rock(0, i));
+
+	LogPrint("Добавлена вертикальная стена\r\n");
+}
+
+void Main::DropWorldOrganics()
+{
+	for (int X = 0; X < FieldCellsWidth; ++X)
+	{
+		for (int Y = 0; Y < 25 + RandomVal(20); ++Y)
+		{
+			field->AddObject(new Organics(X, Y, MaxPossibleEnergyForABot / 2));
+		}
+	}
+
+	LogPrint("В мир добавлена органика\r\n");
+}
+
 void Main::MakeStep()
 {
 	if (!IsClassicMode())
@@ -906,22 +933,15 @@ void Main::CatchKeyboard()
 	}
 	else if (keyboard[Keyboard_SpawnRandoms])
 	{
-		field->SpawnControlGroup();
+		SpawnInitialPopulation();
 	}
 	else if (keyboard[Keyboard_PlaceWall])
 	{
-		repeat(FieldCellsHeight)
-			field->AddObject(new Rock(0, i));
+		PlaceWorldWall();
 	}
 	else if (keyboard[Keyboard_DropOrganics])
 	{
-		for (int X = 0; X < FieldCellsWidth; ++X)
-		{
-			for (int Y = 0; Y < 25 + RandomVal(20); ++Y)
-			{
-				field->AddObject(new Organics(X, Y, MaxPossibleEnergyForABot/2));
-			}
-		}
+		DropWorldOrganics();
 	}
 	else if (keyboard[Keyboard_NextFrame])
 	{

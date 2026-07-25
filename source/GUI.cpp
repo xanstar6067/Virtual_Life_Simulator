@@ -1,5 +1,6 @@
 
 #include "GUI.h"
+#include "UITheme.h"
 
 
 
@@ -15,7 +16,7 @@ void InitImGUI()
 	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
 	//Setup Dear ImGui style
-	ImGui::StyleColorsDark();
+	vlsui::ApplyModernTheme();
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
@@ -380,207 +381,246 @@ void Main::DrawSidePanelWindow()
 	ImGui::SetNextWindowSize({ GUISidePanelWidth * 1.0f, panelHeight });
 	ImGui::SetNextWindowPos({ GetSidePanelX(), InterfaceBorder * 1.0f });
 
-	ImGui::Begin("Панель", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+	ImGuiWindowFlags panelFlags =
+		ImGuiWindowFlags_NoTitleBar |
+		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoMove |
+		ImGuiWindowFlags_NoCollapse;
+
+	ImGui::Begin("Панель", NULL, panelFlags);
 	{
-		if (ImGui::CollapsingHeader("Главное", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			ImGui::Text("Режим симуляции");
-			ImGui::RadioButton("Classic", true);
-			ImGui::SameLine();
-			if (ImGui::RadioButton("CyberBiology3", false))
-			{
-				RequestSimulationMode(SimulationMode::CyberBiology3);
-			}
+		ImGui::TextColored(vlsui::Accent(), "VIRTUAL LIFE");
+		ImGui::SameLine();
+		ImGui::TextDisabled("/ CLASSIC");
+		ImGui::TextDisabled("Классическая модель эволюции");
+		vlsui::DrawStatus(simulate);
 
-			ImGui::Text("шаги: %i", ticknum);
-			ImGui::Text("(интервал %i, тиков/с: %i, кадров/с: %i)", limit_interval, realTPS, realFPS);
-			ImGui::Text("Всего объектов: %i", field->GetNumObjects());
-			ImGui::Text("Всего ботов: %i", field->GetNumBots());
-			ImGui::Text("Слоев: %i, нейронов: %i, сдвиг X: %i", NumNeuronLayers, NeuronsInLayer, field->renderX);
-			ImGui::Text("Зерно: %i, id симуляции: %i", seed, id);
+		ImGui::Spacing();
+		float halfWidth = vlsui::HalfWidth();
+		const ImVec4 runButtonColor = simulate ? vlsui::Warning() : vlsui::Success();
+
+		if (vlsui::ColoredButton(simulate ? "Пауза" : "Продолжить", ImVec2(halfWidth, 38.0f), runButtonColor))
+		{
+			Pause();
 		}
+		vlsui::ItemTooltip("Space / Pause");
 
-		if (ImGui::CollapsingHeader("Система", ImGuiTreeNodeFlags_DefaultOpen))
+		ImGui::SameLine();
+		ImGui::BeginDisabled(simulate);
+		if (ImGui::Button("Один шаг", ImVec2(halfWidth, 38.0f)))
 		{
-			ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Платформа");
-			ImGui::SameLine();
-			ImGui::Text(" %s", SDL_GetPlatform());
-
-			ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Логических процессоров: %d", SDL_GetCPUCount());
-			ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
-			ImGui::Text("Рабочих потоков симуляции: %u", field->GetNumThreads());
+			MakeStep();
 		}
+		ImGui::EndDisabled();
+		vlsui::ItemTooltip(simulate ? "Сначала поставьте симуляцию на паузу" : "Num +");
 
-		if (ImGui::CollapsingHeader("Управление", ImGuiTreeNodeFlags_DefaultOpen))
+		if (vlsui::ColoredButton("Заселить мир", ImVec2(-1.0f, 38.0f), vlsui::Accent()))
 		{
-			if (ImGui::Button((simulate) ? "Стоп" : "Старт", { 200, 25 }))
-			{
-				Pause();
-			}
-
-			ImGui::PushItemWidth(200);
-			ImGui::SliderInt("лимит тиков", &limit_ticks_per_second, 0, GUI_Max_tps, "%d");
-			ImGui::SliderInt("лимит кадров", &limitFPS, 0, GUI_Max_fps, "%d");
-			ImGui::SliderInt("энергия ФС", &(field->photosynthesisReward), 0, GUI_Max_food);
-			ImGui::SliderInt("кисть", &brushSize, GUI_Max_brush, 0, "%d");
-			ImGui::PopItemWidth();
+			SpawnInitialPopulation();
 		}
+		vlsui::ItemTooltip("Добавить стартовую группу случайных ботов (F1)");
 
-		if (ImGui::CollapsingHeader("Выбор", ImGuiTreeNodeFlags_DefaultOpen))
+		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::BeginChild("##ClassicPanelContent", ImVec2(0.0f, 0.0f), false);
 		{
-			if (selectedObject)
+			if (ImGui::BeginTabBar("##ClassicPanelTabs"))
 			{
-				if (field->ValidateObjectExistance(selectedObject))
+				if (ImGui::BeginTabItem("Симуляция"))
 				{
-					ImGui::Text("тип: бот	X: %i, Y: %i", selectedObject->x, selectedObject->y);
-					ImGui::Text("возраст: %i / %i", selectedObject->GetLifetime(), MaxBotLifetime);
-					ImGui::Text("энергия: %i (ФС: %i, охота: %i)", selectedObject->energy, ((Bot*)selectedObject)->GetEnergyFromPS(), ((Bot*)selectedObject)->GetEnergyFromKills());
-
-					int m[NumberOfMutationMarkers];
-					memcpy(m, ((Bot*)selectedObject)->GetMarkers(), sizeof(m));
-					ImGui::Text("метки: {");
-
-					repeat(NumberOfMutationMarkers)
+					vlsui::SectionTitle("Состояние мира");
+					if (ImGui::BeginTable("##ClassicMetrics", 2, ImGuiTableFlags_SizingStretchSame))
 					{
+						ImGui::TableNextRow();
+						ImGui::TableSetColumnIndex(0);
+						ImGui::TextDisabled("Шаг");
+						ImGui::Text("%u", ticknum);
+						ImGui::TableSetColumnIndex(1);
+						ImGui::TextDisabled("Скорость");
+						ImGui::Text("%u TPS / %u FPS", realTPS, realFPS);
+
+						ImGui::TableNextRow();
+						ImGui::TableSetColumnIndex(0);
+						ImGui::TextDisabled("Объекты");
+						ImGui::Text("%i", field->GetNumObjects());
+						ImGui::TableSetColumnIndex(1);
+						ImGui::TextDisabled("Боты");
+						ImGui::Text("%i", field->GetNumBots());
+						ImGui::EndTable();
+					}
+
+					vlsui::SectionTitle("Скорость и среда");
+					ImGui::TextDisabled("Лимит симуляции");
+					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+					ImGui::SliderInt("##ClassicTPS", &limit_ticks_per_second, 0, GUI_Max_tps, "%d тиков/с");
+					if (limit_ticks_per_second == 0)
+					{
+						ImGui::TextDisabled("Без ограничения скорости");
+					}
+
+					ImGui::TextDisabled("Лимит отрисовки");
+					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+					ImGui::SliderInt("##ClassicFPS", &limitFPS, 0, GUI_Max_fps, "%d кадров/с");
+					ImGui::TextDisabled("Энергия фотосинтеза");
+					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+					ImGui::SliderInt("##ClassicPS", &field->photosynthesisReward, 0, GUI_Max_food, "%d");
+
+					vlsui::SectionTitle("Быстрые действия", "горячие клавиши больше не нужны");
+					float actionWidth = vlsui::HalfWidth();
+					if (ImGui::Button("Стена", ImVec2(actionWidth, 34.0f)))
+					{
+						PlaceWorldWall();
+					}
+					vlsui::ItemTooltip("Вертикальная стена в X=0 (F2)");
+					ImGui::SameLine();
+					if (ImGui::Button("Добавить органику", ImVec2(actionWidth, 34.0f)))
+					{
+						DropWorldOrganics();
+					}
+					vlsui::ItemTooltip("Насыпать органику в верхней части мира (F3)");
+
+					if (ImGui::CollapsingHeader("Техническая информация"))
+					{
+						ImGui::Text("Платформа: %s", SDL_GetPlatform());
+						ImGui::Text("Процессоры: %d", SDL_GetCPUCount());
+						ImGui::Text("Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
+						ImGui::Text("Потоки симуляции: %u", field->GetNumThreads());
+						ImGui::TextDisabled("Seed %i  •  ID %i", seed, id);
+						ImGui::TextDisabled("Слоев %i  •  нейронов %i", NumNeuronLayers, NeuronsInLayer);
+					}
+
+					ImGui::EndTabItem();
+				}
+
+				if (ImGui::BeginTabItem("Объект"))
+				{
+					vlsui::SectionTitle("Выбранный объект");
+					if (selectedObject && field->ValidateObjectExistance(selectedObject))
+					{
+						ImGui::Text("Бот  •  X %i  •  Y %i", selectedObject->x, selectedObject->y);
+						ImGui::Text("Возраст: %i / %i", selectedObject->GetLifetime(), MaxBotLifetime);
+						ImGui::Text("Энергия: %i", selectedObject->energy);
+						ImGui::TextDisabled("Фотосинтез %i  •  охота %i",
+							((Bot*)selectedObject)->GetEnergyFromPS(),
+							((Bot*)selectedObject)->GetEnergyFromKills());
+
+						Uint8 color[3];
+						memcpy(color, ((Bot*)selectedObject)->GetColor(), sizeof(color));
+						ImGui::ColorButton("##ClassicBotColor",
+							ImVec4(color[0] / 255.0f, color[1] / 255.0f, color[2] / 255.0f, 1.0f),
+							ImGuiColorEditFlags_NoTooltip, ImVec2(28.0f, 28.0f));
 						ImGui::SameLine();
-						ImGui::Text("%i", m[i]);
+						if (ImGui::Button("Новый цвет", ImVec2(110.0f, 28.0f)))
+						{
+							field->RepaintBot((Bot*)selectedObject, Bot::GetRandomColor(), 1);
+						}
+						ImGui::SameLine();
+						if (ImGui::Button("Мозг", ImVec2(-1.0f, 28.0f)))
+						{
+							showBrain = !showBrain;
+						}
 					}
-
-					ImGui::SameLine();
-					ImGui::Text("}");
-
-					Uint8 c[3];
-					memcpy(c, ((Bot*)selectedObject)->GetColor(), sizeof(c));
-					ImGui::Text("цвет: {%i, %i, %i}", c[0], c[1], c[2]);
-
-					ImGui::SameLine();
-					ImGui::TextColored(ImVec4(((c[0] * 1.0f) / 255.0f), ((c[1] * 1.0f) / 255.0f), ((c[2] * 1.0f) / 255.0f), 1.0f), "*****");
-
-					ImGui::SameLine();
-					if (ImGui::Button("Новый", { 55, 20 }))
+					else
 					{
-						field->RepaintBot((Bot*)selectedObject, Bot::GetRandomColor(), 1);
+						if (selectedObject)
+						{
+							Deselect();
+						}
+						ImGui::TextDisabled("Ничего не выбрано.");
+						ImGui::TextDisabled("Выберите инструмент «Выбор» и нажмите на бота.");
 					}
 
-					if (ImGui::Button("Показать мозг", { 120, 25 }))
-					{
-						showBrain = !showBrain;
-					}
+					vlsui::SectionTitle("Инструмент мыши");
+					float toolWidth = vlsui::HalfWidth();
+					if (vlsui::ModeButton("Выбор", mouseFunc == mouse_select, ImVec2(toolWidth, 34.0f)))
+						mouseFunc = mouse_select;
+					ImGui::SameLine();
+					if (vlsui::ModeButton("Удаление", mouseFunc == mouse_remove, ImVec2(toolWidth, 34.0f)))
+						mouseFunc = mouse_remove;
+					if (vlsui::ModeButton("Камень", mouseFunc == mouse_place_rock, ImVec2(toolWidth, 34.0f)))
+						mouseFunc = mouse_place_rock;
+					ImGui::SameLine();
+					if (vlsui::ModeButton("Из файла", mouseFunc == mouse_from_file, ImVec2(toolWidth, 34.0f)))
+						mouseFunc = mouse_from_file;
+					if (vlsui::ModeButton("Мутация", mouseFunc == mouse_force_mutation, ImVec2(toolWidth, 34.0f)))
+						mouseFunc = mouse_force_mutation;
+
+					ImGui::TextDisabled("Размер кисти");
+					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+					ImGui::SliderInt("##ClassicBrush", &brushSize, 0, GUI_Max_brush, "%d");
+
+					ImGui::EndTabItem();
 				}
-				else
+
+				if (ImGui::BeginTabItem("Вид и окна"))
 				{
-					Deselect();
+					vlsui::SectionTitle("Отображение");
+					float viewWidth = vlsui::HalfWidth();
+					if (vlsui::ModeButton("Обычный", renderType == natural, ImVec2(viewWidth, 34.0f)))
+						renderType = natural;
+					ImGui::SameLine();
+					if (vlsui::ModeButton("Охота", renderType == predators, ImVec2(viewWidth, 34.0f)))
+						renderType = predators;
+					if (vlsui::ModeButton("Энергия", renderType == energy, ImVec2(viewWidth, 34.0f)))
+						renderType = energy;
+					ImGui::SameLine();
+					if (vlsui::ModeButton("Без отрисовки", renderType == noRender, ImVec2(viewWidth, 34.0f)))
+						renderType = noRender;
+
+					vlsui::SectionTitle("Окна");
+					if (ImGui::BeginTable("##ClassicWindows", 2, ImGuiTableFlags_SizingStretchSame))
+					{
+						ImGui::TableNextRow();
+						ImGui::TableSetColumnIndex(0);
+						if (ImGui::Button("Файлы", ImVec2(-1.0f, 34.0f)))
+						{
+							LoadFilenames();
+							showSaveLoad = !showSaveLoad;
+						}
+						ImGui::TableSetColumnIndex(1);
+						if (ImGui::Button("Инструменты", ImVec2(-1.0f, 34.0f)))
+							showDangerous = !showDangerous;
+
+						ImGui::TableNextRow();
+						ImGui::TableSetColumnIndex(0);
+						if (ImGui::Button("Среда", ImVec2(-1.0f, 34.0f)))
+							showAdaptation = !showAdaptation;
+						ImGui::TableSetColumnIndex(1);
+						if (ImGui::Button("График", ImVec2(-1.0f, 34.0f)))
+							showChart = !showChart;
+
+						ImGui::TableNextRow();
+						ImGui::TableSetColumnIndex(0);
+						if (ImGui::Button("Справка", ImVec2(-1.0f, 34.0f)))
+							showInfo = !showInfo;
+						ImGui::TableSetColumnIndex(1);
+						if (ImGui::Button("Выход", ImVec2(-1.0f, 34.0f)))
+							showExitConfirm = true;
+						ImGui::EndTable();
+					}
+
+					vlsui::SectionTitle("Режим симуляции");
+					if (vlsui::ColoredButton("Перейти в CyberBiology3", ImVec2(-1.0f, 36.0f), vlsui::Accent()))
+					{
+						RequestSimulationMode(SimulationMode::CyberBiology3);
+					}
+
+					if (ImGui::CollapsingHeader("Журнал"))
+					{
+						ImGui::BeginChild("##ClassicLog", ImVec2(0.0f, 100.0f), true);
+						ImGui::TextUnformatted(logText.Buf.Data);
+						if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+							ImGui::SetScrollHereY(1.0f);
+						ImGui::EndChild();
+					}
+
+					ImGui::EndTabItem();
 				}
+
+				ImGui::EndTabBar();
 			}
 		}
-
-		if (ImGui::CollapsingHeader("Вид", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			ImGui::Text("Режим:");
-
-			if (ImGui::BeginTable("##RenderModesPanel", 2))
-			{
-				ImGui::TableSetupColumn("##RenderModeLeft", ImGuiTableColumnFlags_WidthFixed, 105.0f);
-				ImGui::TableSetupColumn("##RenderModeRight", ImGuiTableColumnFlags_WidthFixed, 105.0f);
-
-				ImGui::TableNextRow();
-				ImGui::TableSetColumnIndex(0);
-				ImGui::RadioButton("Обычный", (int*)&renderType, 0);
-				ImGui::TableSetColumnIndex(1);
-				ImGui::RadioButton("Охота", (int*)&renderType, 1);
-
-				ImGui::TableNextRow();
-				ImGui::TableSetColumnIndex(0);
-				ImGui::RadioButton("Энергия", (int*)&renderType, 2);
-				ImGui::TableSetColumnIndex(1);
-				ImGui::RadioButton("Без отрис.", (int*)&renderType, 3);
-
-				ImGui::EndTable();
-			}
-		}
-
-		if (ImGui::CollapsingHeader("Журнал", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(LogBackgroundColor));
-
-			ImGui::BeginChild("scrolling_panel", ImVec2(0, 80), true);
-			{
-				ImGui::TextUnformatted(logText.Buf.Data);
-
-				if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
-					ImGui::SetScrollHereY(1.0f);
-			}
-			ImGui::EndChild();
-
-			ImGui::PopStyleColor();
-		}
-
-		if (ImGui::CollapsingHeader("Действие мыши", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			if (ImGui::BeginTable("##MouseFunctionsPanel", 2))
-			{
-				ImGui::TableSetupColumn("##MouseFunctionLeft", ImGuiTableColumnFlags_WidthFixed, 105.0f);
-				ImGui::TableSetupColumn("##MouseFunctionRight", ImGuiTableColumnFlags_WidthFixed, 105.0f);
-
-				ImGui::TableNextRow();
-				ImGui::TableSetColumnIndex(0);
-				ImGui::RadioButton("Выбрать", (int*)&mouseFunc, 0);
-				ImGui::TableSetColumnIndex(1);
-				ImGui::RadioButton("Удалить", (int*)&mouseFunc, 1);
-
-				ImGui::TableNextRow();
-				ImGui::TableSetColumnIndex(0);
-				ImGui::RadioButton("Камень", (int*)&mouseFunc, 2);
-				ImGui::TableSetColumnIndex(1);
-				ImGui::RadioButton("Из файла", (int*)&mouseFunc, 3);
-
-				ImGui::TableNextRow();
-				ImGui::TableSetColumnIndex(0);
-				ImGui::RadioButton("Мутировать", (int*)&mouseFunc, 4);
-
-				ImGui::EndTable();
-			}
-		}
-
-		if (ImGui::CollapsingHeader("Окна", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			const ImVec2 windowButtonSize = { 92, 28 };
-
-			if (ImGui::Button("Файлы", windowButtonSize))
-			{
-				LoadFilenames();
-				showSaveLoad = !showSaveLoad;
-			}
-			ImGui::SameLine();
-
-			if (ImGui::Button("Инструменты", windowButtonSize))
-			{
-				showDangerous = !showDangerous;
-			}
-			ImGui::SameLine();
-
-			if (ImGui::Button("Среда", windowButtonSize))
-			{
-				showAdaptation = !showAdaptation;
-			}
-
-			if (ImGui::Button("График", windowButtonSize))
-			{
-				showChart = !showChart;
-			}
-			ImGui::SameLine();
-
-			if (ImGui::Button("Инфо", windowButtonSize))
-			{
-				showInfo = !showInfo;
-			}
-			ImGui::SameLine();
-
-			if (ImGui::Button("Выход", windowButtonSize))
-			{
-				showExitConfirm = true;
-			}
-		}
+		ImGui::EndChild();
 	}
 	ImGui::End();
 }

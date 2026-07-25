@@ -171,6 +171,13 @@ protected:
 	bool windowIsVisible = true;
 
 	void SwitchPause();		
+	void SpawnInitialPopulation();
+	void PlaceWorldWall();
+	void DropWorldOrganics();
+	void SpawnWorldRocks();
+	void MutateWholeWorld();
+	void QuickSaveWorld();
+	void QuickLoadWorld();
 
 	void BrushIterate(Point p, void (*callback)(uint, uint, Field*));
 

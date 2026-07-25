@@ -109,6 +109,7 @@
     <ClInclude Include="source\SDL.h" />
     <ClInclude Include="source\Settings.h" />
     <ClInclude Include="source\Systems.h" />
+    <ClInclude Include="source\UITheme.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="source\Cb3Runtime.h" />
     <ClInclude Include="source\SimulationMode.h" />

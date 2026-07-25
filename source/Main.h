@@ -176,6 +176,9 @@ private:
 	void ChangeSeason();
 
 	void Pause();
+	void SpawnInitialPopulation();
+	void PlaceWorldWall();
+	void DropWorldOrganics();
 
 	void ClearWorld();
 	void ResetClassicWorld();

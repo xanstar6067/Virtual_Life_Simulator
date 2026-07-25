@@ -51,7 +51,7 @@ namespace cb3
 #define InterfaceBorder 10
 
 #define GUIWindowWidth 284
-#define GUISidePanelWidth 320
+#define GUISidePanelWidth 360
 #define FieldScrollbarSize 18
 
 #define LogBackgroundColor 0.1f, 0.1f, 0.3f, 1.0f

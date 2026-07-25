@@ -189,6 +189,87 @@ void Main::Pause()
 	simulate = false;
 }
 
+void Main::SpawnInitialPopulation()
+{
+	field->SpawnControlGroup();
+	LogPrint("Добавлена стартовая группа ботов\r\n");
+}
+
+void Main::PlaceWorldWall()
+{
+	field->placeWall();
+	LogPrint("Добавлена вертикальная стена\r\n");
+}
+
+void Main::DropWorldOrganics()
+{
+	for (int X = 0; X < FieldCellsWidth; ++X)
+	{
+		for (int Y = 0; Y < 25 + RandomVal(20); ++Y)
+		{
+			field->AddObject(new Organics(X, Y, BotMaxEnergyInitial / 2));
+		}
+	}
+
+	LogPrint("В мир добавлена органика\r\n");
+}
+
+void Main::SpawnWorldRocks()
+{
+	for (int i = 0; i < SpawnRocksSize; ++i)
+	{
+		Rock* rock = new Rock(RandomVal(FieldCellsWidth), RandomVal(FieldCellsHeight));
+
+		if (!field->AddObject(rock))
+		{
+			delete rock;
+		}
+	}
+
+	LogPrint("В мир добавлены случайные камни\r\n");
+}
+
+void Main::MutateWholeWorld()
+{
+	field->mutateWorld();
+	LogPrint("[Солнечная вспышка!]");
+}
+
+void Main::QuickSaveWorld()
+{
+	if (saver.SaveWorld(field, (char*)OuicksaveFilename, id, ticknum))
+	{
+		LogPrint("Мир сохранен\r\n");
+		LoadFilenames();
+	}
+	else
+	{
+		LogPrint("Ошибка сохранения мира\r\n");
+	}
+}
+
+void Main::QuickLoadWorld()
+{
+	ObjectSaver::WorldParams ret = saver.LoadWorld(field, (char*)OuicksaveFilename);
+
+	if (ret.id != -1)
+	{
+		if (ret.width != FieldCellsWidth)
+			LogPrint("Мир загружен (ширина не совпадает)\r\n");
+		else
+			LogPrint("Мир загружен\r\n");
+
+		seed = ret.seed;
+		ticknum = ret.tick;
+		id = ret.id;
+		field->seed = seed;
+	}
+	else
+	{
+		LogPrint("Ошибка загрузки мира\r\n");
+	}
+}
+
 void Main::MakeStep()
 {
 	//Simulation step
@@ -779,70 +860,31 @@ void Main::CatchKeyboard()
 	}
 	else if (keyboard[Keyboard_SpawnRandoms])
 	{
-		field->SpawnControlGroup();
+		SpawnInitialPopulation();
 	}
 	else if (keyboard[Keyboard_PlaceWall])
 	{
-		field->placeWall();
+		PlaceWorldWall();
 	}
 	else if (keyboard[Keyboard_DropOrganics])
 	{
-		for (int X = 0; X < FieldCellsWidth; ++X)
-		{
-			for (int Y = 0; Y < 25 + RandomVal(20); ++Y)
-			{
-				field->AddObject(new Organics(X, Y, BotMaxEnergyInitial/2));
-			}
-		}
+		DropWorldOrganics();
 	}
 	else if (keyboard[Keyboard_SpawnRocks])
 	{
-		for (int i = 0; i < SpawnRocksSize; ++i)
-		{
-			Rock* tmp = new Rock(RandomVal(FieldCellsWidth), RandomVal(FieldCellsHeight));
-
-			if (!field->AddObject(tmp))
-				delete tmp;
-		}
+		SpawnWorldRocks();
 	}
 	else if (keyboard[Keyboard_MutateScreen])
 	{
-		field->mutateWorld();
-
-		LogPrint("[Солнечная вспышка!]");
+		MutateWholeWorld();
 	}
 	else if (keyboard[Keyboard_Quicksave])
 	{
-		if (saver.SaveWorld(field, (char*)OuicksaveFilename, id, ticknum))
-		{
-			LogPrint("Мир сохранен\r\n");
-
-			LoadFilenames();
-		}
-		else
-		{
-			LogPrint("Ошибка сохранения мира\r\n");
-		}
+		QuickSaveWorld();
 	}
 	else if (keyboard[Keyboard_Quickload])
 	{
-		ObjectSaver::WorldParams ret = saver.LoadWorld(field, (char*)OuicksaveFilename);
-
-		if (ret.id != -1)
-		{
-			if (ret.width != FieldCellsWidth)
-				LogPrint("Мир загружен (ширина не совпадает)\r\n");
-			else
-				LogPrint("Мир загружен\r\n");
-
-			seed = ret.seed;
-			ticknum = ret.tick;
-			id = ret.id;
-
-			field->seed = seed;
-		}
-		else
-			LogPrint("Ошибка загрузки мира\r\n");
+		QuickLoadWorld();
 	}
 	else if (keyboard[Keyboard_NextFrame])
 	{
