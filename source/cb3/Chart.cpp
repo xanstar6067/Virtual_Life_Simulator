@@ -58,7 +58,37 @@ void Chart::Plot()
 {
 	using namespace ImPlot;
 
-	if (BeginPlot("Объекты", { 800, 550 }))
+	if (ImGui::BeginTable("##Cb3ChartControls", 4, ImGuiTableFlags_SizingStretchProp))
+	{
+		ImGui::TableSetupColumn("##Cb3ChartAction", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+		ImGui::TableSetupColumn("##Cb3ChartAxis", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+		ImGui::TableSetupColumn("##Cb3ChartSeriesA", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableSetupColumn("##Cb3ChartSeriesB", ImGuiTableColumnFlags_WidthStretch);
+
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(0);
+		if (ImGui::Button("Очистить", ImVec2(-1.0f, 32.0f)))
+			ClearChart();
+		ImGui::TableSetColumnIndex(1);
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextDisabled("Левая ось");
+		ImGui::TableSetColumnIndex(2);
+		ImGui::Checkbox("Яблоки", &chartShow_apples);
+		ImGui::TableSetColumnIndex(3);
+		ImGui::Checkbox("Органика", &chartShow_organics);
+
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(1);
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextDisabled("Правая ось");
+		ImGui::TableSetColumnIndex(2);
+		ImGui::Checkbox("Хищники", &chartShow_predators);
+		ImGui::TableSetColumnIndex(3);
+		ImGui::Checkbox("Средний возраст", &chartShow_avg_lifetime);
+		ImGui::EndTable();
+	}
+
+	if (BeginPlot("Объекты", ImVec2(-1.0f, -1.0f)))
 	{
 		const int chartValuesToPlot = chart_numValues;
 
@@ -119,27 +149,6 @@ void Chart::Plot()
 
 		EndPlot();
 	}
-
-	ImGui::SameLine();
-
-	ImGui::BeginGroup();
-	{
-		if (ImGui::Button("Очистить", { 100.0f, 30.0f }))
-			ClearChart();
-
-		ImGui::Text("Левая ось:");
-
-		ImGui::Checkbox("Яблоки", &chartShow_apples);
-		ImGui::Checkbox("Органика", &chartShow_organics);
-
-		ImGui::NewLine();
-
-		ImGui::Text("Правая ось:");
-
-		ImGui::Checkbox("Хищники", &chartShow_predators);
-		ImGui::Checkbox("Средний возраст", &chartShow_avg_lifetime);
-	}
-	ImGui::EndGroup();
 }
 
 

@@ -108,6 +108,45 @@ inline void ApplyModernTheme()
 	colors[ImGuiCol_NavHighlight] = Accent();
 }
 
+inline void PrepareToolWindow(const ImVec2& preferredSize, const ImVec2& minimumSize)
+{
+	const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+	const float margin = 24.0f;
+
+	ImVec2 maximumSize = preferredSize;
+	if (displaySize.x > margin * 2.0f)
+		maximumSize.x = displaySize.x - margin * 2.0f;
+	if (displaySize.y > margin * 2.0f)
+		maximumSize.y = displaySize.y - margin * 2.0f;
+
+	ImVec2 clampedMinimum = minimumSize;
+	if (clampedMinimum.x > maximumSize.x)
+		clampedMinimum.x = maximumSize.x;
+	if (clampedMinimum.y > maximumSize.y)
+		clampedMinimum.y = maximumSize.y;
+
+	ImVec2 initialSize = preferredSize;
+	if (initialSize.x > maximumSize.x)
+		initialSize.x = maximumSize.x;
+	if (initialSize.y > maximumSize.y)
+		initialSize.y = maximumSize.y;
+	if (initialSize.x < clampedMinimum.x)
+		initialSize.x = clampedMinimum.x;
+	if (initialSize.y < clampedMinimum.y)
+		initialSize.y = clampedMinimum.y;
+
+	ImGui::SetNextWindowSizeConstraints(clampedMinimum, maximumSize);
+	ImGui::SetNextWindowSize(initialSize, ImGuiCond_Appearing);
+
+	if (displaySize.x > 0.0f && displaySize.y > 0.0f)
+	{
+		ImGui::SetNextWindowPos(
+			ImVec2(displaySize.x * 0.5f, displaySize.y * 0.5f),
+			ImGuiCond_Appearing,
+			ImVec2(0.5f, 0.5f));
+	}
+}
+
 inline void SectionTitle(const char* title, const char* hint = nullptr)
 {
 	ImGui::Spacing();

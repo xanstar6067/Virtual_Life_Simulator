@@ -640,15 +640,16 @@ void Main::DrawSaveLoadWindow()
 	{
 		//Save/load window
 		SetNextWindowBgAlpha(1.0f);
-		SetNextWindowSize({ 650.0f, 325.0f });
-		SetNextWindowPos({ 100 * 1.0f, 100.0f }, ImGuiCond_Once);
+		vlsui::PrepareToolWindow(ImVec2(800.0f, 470.0f), ImVec2(620.0f, 390.0f));
 
-		Begin("Сохранение и загрузка", &showSaveLoad, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		Begin("Сохранение и загрузка", &showSaveLoad, ImGuiWindowFlags_NoCollapse);
 		{
 			//List of files
 			Text("Выберите файл");
 
-			if (BeginTable("##SaveFilesCB3", 5, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(630, 148)))
+			if (BeginTable("##SaveFilesCB3", 5,
+				ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+				ImGuiTableFlags_Resizable, ImVec2(0.0f, 210.0f)))
 			{
 				TableSetupColumn("Имя", ImGuiTableColumnFlags_WidthStretch);
 				TableSetupColumn("Размер", ImGuiTableColumnFlags_WidthFixed, 70.0f);
@@ -682,89 +683,91 @@ void Main::DrawSaveLoadWindow()
 				EndTable();
 			}
 
-			Text("Имя файла");
-			SameLine();
-			PushItemWidth(295);
-			InputText("##RenameFileNameCB3", renameFileName, sizeof(renameFileName));
-			saveFileNameInputActive = IsItemActive();
-			PopItemWidth();
-
-			SameLine();
-
-			if (Button("Переименовать", { 120, 25 }))
+			if (BeginTable("##Cb3RenameRow", 3, ImGuiTableFlags_SizingStretchProp))
 			{
-				RenameSelectedFile();
+				TableSetupColumn("##Cb3RenameLabel", ImGuiTableColumnFlags_WidthFixed, 85.0f);
+				TableSetupColumn("##Cb3RenameInput", ImGuiTableColumnFlags_WidthStretch);
+				TableSetupColumn("##Cb3RenameButton", ImGuiTableColumnFlags_WidthFixed, 145.0f);
+				TableNextRow();
+				TableSetColumnIndex(0);
+				AlignTextToFramePadding();
+				TextUnformatted("Имя файла");
+				TableSetColumnIndex(1);
+				SetNextItemWidth(-1.0f);
+				InputText("##RenameFileNameCB3", renameFileName, sizeof(renameFileName));
+				saveFileNameInputActive = IsItemActive();
+				TableSetColumnIndex(2);
+				if (Button("Переименовать", ImVec2(-1.0f, 0.0f)))
+				{
+					RenameSelectedFile();
+				}
+				EndTable();
 			}
 
 			//Buttons
-			const float buttonSpacing = GetStyle().ItemSpacing.x;
-			const float buttonWidth = (GetContentRegionAvail().x - buttonSpacing * 3.0f) / 4.0f;
-			const ImVec2 fileButtonSize = { buttonWidth, 26.0f };
-
-			if (Button("Загрузить", fileButtonSize))
+			if (BeginTable("##Cb3FileActions", 4, ImGuiTableFlags_SizingStretchSame))
 			{
-				if (selectedFile)
+				TableNextRow();
+				TableSetColumnIndex(0);
+				if (Button("Загрузить", ImVec2(-1.0f, 32.0f)))
 				{
-					if (selectedFile->mode != SimulationMode::CyberBiology3)
+					if (selectedFile)
 					{
-						LogPrint("Режим файла: ");
-						LogPrint(SimulationModeName(selectedFile->mode));
-						LogPrint(", текущий режим: CyberBiology3. Загрузка отменена.\r\n");
-					}
-					else if (selectedFile->isWorld)
-					{
-						ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull);
-
-						if (ret.id != -1)
+						if (selectedFile->mode != SimulationMode::CyberBiology3)
 						{
-							if (ret.width != FieldCellsWidth)
-								LogPrint("Мир загружен (ширина не совпадает)\r\n");
-							else
-								LogPrint("Мир загружен\r\n");
-
-							seed = ret.seed;
-							ticknum = ret.tick;
-							id = ret.id;
-
-							field->seed = seed;
+							LogPrint("Режим файла: ");
+							LogPrint(SimulationModeName(selectedFile->mode));
+							LogPrint(", текущий режим: CyberBiology3. Загрузка отменена.\r\n");
 						}
 						else
-							LogPrint("Ошибка загрузки мира\r\n");
-					}
-					else
-					{
-						if (selectedObject)
-							delete selectedObject;
+						{
+							if (selectedFile->isWorld)
+							{
+								ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull);
 
-						selectedObject = saver.LoadObject(selectedFile->pathFull);
+								if (ret.id != -1)
+								{
+									if (ret.width != FieldCellsWidth)
+										LogPrint("Мир загружен (ширина не совпадает)\r\n");
+									else
+										LogPrint("Мир загружен\r\n");
 
-						if (selectedObject)
-							LogPrint("Объект загружен\r\n");
-						else
-							LogPrint("Ошибка загрузки объекта\r\n");
+									seed = ret.seed;
+									ticknum = ret.tick;
+									id = ret.id;
+									field->seed = seed;
+								}
+								else
+									LogPrint("Ошибка загрузки мира\r\n");
+							}
+							else
+							{
+								if (selectedObject)
+									delete selectedObject;
+
+								selectedObject = saver.LoadObject(selectedFile->pathFull);
+
+								if (selectedObject)
+									LogPrint("Объект загружен\r\n");
+								else
+									LogPrint("Ошибка загрузки объекта\r\n");
+							}
+						}
 					}
 				}
-			}			
 
-			SameLine();
+				TableSetColumnIndex(1);
+				if (Button("Сохранить бота", ImVec2(-1.0f, 32.0f)))
+					SaveSelectedObjectToNamedFile();
 
-			if (Button("Сохр. бота", fileButtonSize))
-			{
-				SaveSelectedObjectToNamedFile();
-			}
+				TableSetColumnIndex(2);
+				if (Button("Сохранить мир", ImVec2(-1.0f, 32.0f)))
+					SaveWorldToNamedFile();
 
-			SameLine();
-
-			if (Button("Сохр. мир", fileButtonSize))
-			{
-				SaveWorldToNamedFile();
-			}
-
-			SameLine();
-
-			if (Button("Удалить", fileButtonSize))
-			{
-				DeleteSelectedFile();
+				TableSetColumnIndex(3);
+				if (Button("Удалить", ImVec2(-1.0f, 32.0f)))
+					DeleteSelectedFile();
+				EndTable();
 			}
 
 			if (selectedFile)
@@ -775,40 +778,45 @@ void Main::DrawSaveLoadWindow()
 					{
 						TextWrapped("Этот мир сохранен в режиме %s и не может быть загружен в CyberBiology3.", SimulationModeName(selectedFile->mode));
 					}
-					else if (Button("Ландшафт, ботов оставить", { 150, 30 }))
+					else
 					{
-						ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull,
-							false, false, true, false);
-
-						if (ret.id != -1)
+						if (BeginTable("##Cb3PartialLoadActions", 2, ImGuiTableFlags_SizingStretchSame))
 						{
-							if (ret.width != FieldCellsWidth)
-								LogPrint("Ландшафт загружен (ширина не совпадает)\r\n");
-							else
-								LogPrint("Ландшафт загружен\r\n");
-						}
-						else
-							LogPrint("Ошибка загрузки ландшафта\r\n");
-					}
-
-					if (selectedFile->mode == SimulationMode::CyberBiology3)
-					{
-						SameLine();
-
-						if (Button("Только боты", { 150, 30 }))
-						{
-							ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull,
-								false, false, false, true);
-
-							if (ret.id != -1)
+							TableNextRow();
+							TableSetColumnIndex(0);
+							if (Button("Только ландшафт", ImVec2(-1.0f, 34.0f)))
 							{
-								if (ret.width != FieldCellsWidth)
-									LogPrint("Ландшафт загружен (ширина не совпадает)\r\n");
+								ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull,
+									false, false, true, false);
+
+								if (ret.id != -1)
+								{
+									if (ret.width != FieldCellsWidth)
+										LogPrint("Ландшафт загружен (ширина не совпадает)\r\n");
+									else
+										LogPrint("Ландшафт загружен\r\n");
+								}
 								else
-									LogPrint("Ландшафт загружен\r\n");
+									LogPrint("Ошибка загрузки ландшафта\r\n");
 							}
-							else
-								LogPrint("Ошибка загрузки ландшафта\r\n");
+
+							TableSetColumnIndex(1);
+							if (Button("Только боты", ImVec2(-1.0f, 34.0f)))
+							{
+								ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull,
+									false, false, false, true);
+
+								if (ret.id != -1)
+								{
+									if (ret.width != FieldCellsWidth)
+										LogPrint("Боты загружены (ширина не совпадает)\r\n");
+									else
+										LogPrint("Боты загружены\r\n");
+								}
+								else
+									LogPrint("Ошибка загрузки ботов\r\n");
+							}
+							EndTable();
 						}
 					}
 				}
@@ -823,49 +831,44 @@ void Main::DrawDangerousWindow()
 	if (showDangerous)
 	{
 		SetNextWindowBgAlpha(1.0f);
-		SetNextWindowSize({ 290.0f, 100.0f });
-		SetNextWindowPos({ 100 * 1.0f, 300.0f }, ImGuiCond_Once);
+		vlsui::PrepareToolWindow(ImVec2(400.0f, 210.0f), ImVec2(360.0f, 190.0f));
 
-		Begin("Инструменты", &showDangerous, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		Begin("Инструменты", &showDangerous, ImGuiWindowFlags_NoCollapse);
 		{
-			if (Button("Очистить мир", { 130, 30 }))
+			TextDisabled("Операции применяются ко всему миру");
+			if (BeginTable("##Cb3DangerActions", 2, ImGuiTableFlags_SizingStretchSame))
 			{
-				ClearWorld();
-				field->params.Reset();
-				chart.ClearChart();
-			}
-
-			SameLine();
-
-			if (Button("Убить ботов", { 130, 30 }))
-			{
-				Deselect();
-
-				for (int cx = 0; cx < FieldCellsWidth; ++cx)
+				TableNextRow();
+				TableSetColumnIndex(0);
+				if (Button("Очистить мир", ImVec2(-1.0f, 36.0f)))
 				{
-					for (int cy = 0; cy < FieldCellsHeight; ++cy)
+					ClearWorld();
+					field->params.Reset();
+					chart.ClearChart();
+				}
+				TableSetColumnIndex(1);
+				if (Button("Убить всех ботов", ImVec2(-1.0f, 36.0f)))
+				{
+					Deselect();
+					for (int cx = 0; cx < FieldCellsWidth; ++cx)
 					{
-						Object* o = field->GetObjectLocalCoords(cx, cy);
-
-						if (o == NULL)
-							continue;
-
-						if (o->type() == bot)
-							field->RemoveObject(cx, cy);
+						for (int cy = 0; cy < FieldCellsHeight; ++cy)
+						{
+							Object* o = field->GetObjectLocalCoords(cx, cy);
+							if (o && o->type() == bot)
+								field->RemoveObject(cx, cy);
+						}
 					}
 				}
-			}
 
-			if (Button("Выход", { 130, 30 }))
-			{
-				terminate = true;
-			}
-
-			SameLine();
-
-			if (Button("Обнулить время", { 130, 30 }))
-			{
-				ticknum = 0;
+				TableNextRow();
+				TableSetColumnIndex(0);
+				if (Button("Обнулить время", ImVec2(-1.0f, 36.0f)))
+					ticknum = 0;
+				TableSetColumnIndex(1);
+				if (Button("Выход", ImVec2(-1.0f, 36.0f)))
+					terminate = true;
+				EndTable();
 			}
 		}
 		End();
@@ -877,10 +880,9 @@ void Main::DrawSummaryWindow()
 	if (showBrain)
 	{
 		SetNextWindowBgAlpha(1.0f);
-		SetNextWindowSize({ 330.0f, 180.0f });
-		SetNextWindowPos({ 100 * 1.0f, 150.0f }, ImGuiCond_Once);
+		vlsui::PrepareToolWindow(ImVec2(400.0f, 280.0f), ImVec2(350.0f, 230.0f));
 
-		Begin("Сводка бота", &showBrain, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		Begin("Сводка бота", &showBrain, ImGuiWindowFlags_NoCollapse);
 		{
 			if (selectedObject)
 			{
@@ -919,11 +921,11 @@ void Main::DrawAdaptationWindow()
 	if (showAdaptation)
 	{
 		SetNextWindowBgAlpha(1.0f);
-		SetNextWindowSize({ 600.0f, 650.0f });
-		SetNextWindowPos({ 100 * 1.0f, 250.0f }, ImGuiCond_Once);
+		vlsui::PrepareToolWindow(ImVec2(660.0f, 740.0f), ImVec2(500.0f, 520.0f));
 
-		Begin("Условия среды", &showAdaptation, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		Begin("Условия среды", &showAdaptation, ImGuiWindowFlags_NoCollapse);
 		{
+			PushItemWidth(GetContentRegionAvail().x * 0.55f);
 			if(CollapsingHeader("Ветры"))			
 			{
 				SliderInt("Шагов X до деления", &field->params.adaptation_StepsNumToDivide_Winds, 0, 200);
@@ -991,6 +993,7 @@ void Main::DrawAdaptationWindow()
 			{
 				field->params.Reset();
 			}
+			PopItemWidth();
 		}
 		End();
 	}
@@ -1001,10 +1004,9 @@ void Main::DrawChartWindow()
 	if (showChart)
 	{
 		SetNextWindowBgAlpha(1.0f);
-		SetNextWindowSize({ 920.0f, 600.0f });
-		SetNextWindowPos({ 700.0f, 250.0f }, ImGuiCond_Once);
+		vlsui::PrepareToolWindow(ImVec2(980.0f, 700.0f), ImVec2(650.0f, 460.0f));
 
-		Begin("График популяции", &showChart, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		Begin("График популяции", &showChart, ImGuiWindowFlags_NoCollapse);
 		{
 			chart.Plot();
 		}
@@ -1019,10 +1021,9 @@ void Main::DrawBotBrainWindow()
 		if (selectedObject)
 		{
 			SetNextWindowBgAlpha(1.0f);
-			SetNextWindowSize({ 330.0f, 280.0f });
-			SetNextWindowPos({ 650 * 1.0f, 350.0f });
+			vlsui::PrepareToolWindow(ImVec2(520.0f, 460.0f), ImVec2(400.0f, 330.0f));
 
-			Begin("Данные мозга бота", &showBrain, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+			Begin("Данные мозга бота", &showBrain, ImGuiWindowFlags_NoCollapse);
 			{
 				BeginGroup();
 

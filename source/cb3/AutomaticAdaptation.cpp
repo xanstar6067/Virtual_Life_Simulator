@@ -1,4 +1,5 @@
 #include "AutomaticAdaptation.h"
+#include "../UITheme.h"
 
 
 namespace cb3
@@ -325,7 +326,7 @@ void AutomaticAdaptation::Plot()
 {
 	using namespace ImPlot;
 
-	if (BeginPlot("Результаты", { 680, 400 }))
+	if (BeginPlot("Результаты", ImVec2(-1.0f, -1.0f)))
 	{
 		//Axes
 		SetupAxisLimits(ImAxis_X1, 0.0, 1.0f * history[0].size(), ImPlotCond_Always);
@@ -364,15 +365,14 @@ void AutomaticAdaptation::DrawWindow(bool* open)
 	static int iterations = 1;
 
 	SetNextWindowBgAlpha(1.0f);
-	SetNextWindowSize({ 700.0f, 770.0f });
-	SetNextWindowPos({ 700.0f, 250.0f }, ImGuiCond_Once);
+	vlsui::PrepareToolWindow(ImVec2(780.0f, 820.0f), ImVec2(560.0f, 600.0f));
 
 
-	Begin("Автоадаптация", open, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+	Begin("Автоадаптация", open, ImGuiWindowFlags_NoCollapse);
 	{
 		PushStyleColor(ImGuiCol_ChildBg, ImVec4(LogBackgroundColor));
 
-		BeginChild("Журнал автоадаптации", { 565, 200 });
+		BeginChild("Журнал автоадаптации", ImVec2(-1.0f, 200.0f), true);
 		{
 			TextUnformatted(AALog.Buf.Data);
 
@@ -383,7 +383,7 @@ void AutomaticAdaptation::DrawWindow(bool* open)
 
 		PopStyleColor();
 
-		NewLine();		
+		Spacing();
 
 		if (inProgress)
 		{
@@ -403,71 +403,67 @@ void AutomaticAdaptation::DrawWindow(bool* open)
 				NewLine();
 			}
 
-			NewLine();
-
-			if (Button("Стоп", { 100, 30 }))
+			if (vlsui::ColoredButton("Остановить автоадаптацию", ImVec2(-1.0f, 36.0f), vlsui::Warning()))
 			{
 				Stop();
 			}
 		}
 		else
 		{
-			NewLine();
-
-			if (Button("Создать ветры", { 100, 30 }))
-			{	
-				numIterations = iterations;
-				iteration = 0u;
-				history.clear();
-
-				BeginWinds();
-
-				if (visualize)
-				{
-					sim->RunWithMinimumRender();
-				}
-				else
-				{
-					sim->RunWithNoRender();
-				}
-			}
-
-			SameLine();
-
-			if (Button("Создать ныряльщиков", { 100, 30 }))
+			if (BeginTable("##AutomaticAdaptationActions", 3, ImGuiTableFlags_SizingStretchSame))
 			{
-				numIterations = iterations;
-				iteration = 0u;
-				history.clear();
-
-				BeginDivers();				
-
-				if (visualize)
+				TableNextRow();
+				TableSetColumnIndex(0);
+				if (Button("Создать ветры", ImVec2(-1.0f, 36.0f)))
 				{
-					sim->RunWithMinimumRender();
+					numIterations = iterations;
+					iteration = 0u;
+					history.clear();
+					BeginWinds();
+
+					if (visualize)
+						sim->RunWithMinimumRender();
+					else
+						sim->RunWithNoRender();
 				}
-				else
+
+				TableSetColumnIndex(1);
+				if (Button("Создать ныряльщиков", ImVec2(-1.0f, 36.0f)))
 				{
-					sim->RunWithNoRender();
+					numIterations = iterations;
+					iteration = 0u;
+					history.clear();
+					BeginDivers();
+
+					if (visualize)
+						sim->RunWithMinimumRender();
+					else
+						sim->RunWithNoRender();
 				}
+
+				TableSetColumnIndex(2);
+				if (Button("Очистить журнал", ImVec2(-1.0f, 36.0f)))
+				{
+					AALog.clear();
+				}
+				EndTable();
 			}
 
-			SameLine();
-
-			if (Button("Очистить журнал", { 100, 30 }))
+			if (BeginTable("##AutomaticAdaptationOptions", 2, ImGuiTableFlags_SizingStretchProp))
 			{
-				AALog.clear();
+				TableSetupColumn("##AutomaticAdaptationIterations", ImGuiTableColumnFlags_WidthStretch);
+				TableSetupColumn("##AutomaticAdaptationVisualize", ImGuiTableColumnFlags_WidthStretch);
+				TableNextRow();
+				TableSetColumnIndex(0);
+				SetNextItemWidth(90.0f);
+				DragInt("Итерации", &iterations, 1.0f, 1, 20);
+				TableSetColumnIndex(1);
+				Checkbox("Визуализировать", &visualize);
+				EndTable();
 			}
-
-			SetNextItemWidth(60);
-			SameLine();
-			DragInt("итерации", &iterations, 1.0f, 1, 20);
-
-			SameLine();
-			Checkbox("Визуализировать", &visualize);
 		}
 
-		NewLine();
+		Spacing();
 
 		if(history.size() > 0)
 		{

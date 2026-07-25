@@ -696,15 +696,16 @@ void Main::DrawSaveLoadWindow()
 	{
 		//Save/load window
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::SetNextWindowSize({ 650.0f, 296.0f });
-		ImGui::SetNextWindowPos({ 100 * 1.0f, 100.0f }, ImGuiCond_Once);
+		vlsui::PrepareToolWindow(ImVec2(760.0f, 410.0f), ImVec2(600.0f, 350.0f));
 
-		ImGui::Begin("Сохранение и загрузка", &showSaveLoad, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Сохранение и загрузка", &showSaveLoad, ImGuiWindowFlags_NoCollapse);
 		{
 			//List of files
 			ImGui::Text("Выберите файл");
 
-			if (ImGui::BeginTable("##SaveFiles", 5, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(630, 148)))
+			if (ImGui::BeginTable("##SaveFiles", 5,
+				ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+				ImGuiTableFlags_Resizable, ImVec2(0.0f, 210.0f)))
 			{
 				ImGui::TableSetupColumn("Имя", ImGuiTableColumnFlags_WidthStretch);
 				ImGui::TableSetupColumn("Размер", ImGuiTableColumnFlags_WidthFixed, 70.0f);
@@ -739,94 +740,99 @@ void Main::DrawSaveLoadWindow()
 				ImGui::EndTable();
 			}
 
-			ImGui::Text("Имя файла");
-			ImGui::SameLine();
-			ImGui::PushItemWidth(295);
-			ImGui::InputText("##RenameFileName", renameFileName, sizeof(renameFileName));
-			saveFileNameInputActive = ImGui::IsItemActive();
-			ImGui::PopItemWidth();
-
-			ImGui::SameLine();
-
-			if (ImGui::Button("Переименовать", { 120, 25 }))
+			if (ImGui::BeginTable("##ClassicRenameRow", 3, ImGuiTableFlags_SizingStretchProp))
 			{
-				RenameSelectedFile();
+				ImGui::TableSetupColumn("##ClassicRenameLabel", ImGuiTableColumnFlags_WidthFixed, 85.0f);
+				ImGui::TableSetupColumn("##ClassicRenameInput", ImGuiTableColumnFlags_WidthStretch);
+				ImGui::TableSetupColumn("##ClassicRenameButton", ImGuiTableColumnFlags_WidthFixed, 145.0f);
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::AlignTextToFramePadding();
+				ImGui::TextUnformatted("Имя файла");
+				ImGui::TableSetColumnIndex(1);
+				ImGui::SetNextItemWidth(-1.0f);
+				ImGui::InputText("##RenameFileName", renameFileName, sizeof(renameFileName));
+				saveFileNameInputActive = ImGui::IsItemActive();
+				ImGui::TableSetColumnIndex(2);
+				if (ImGui::Button("Переименовать", ImVec2(-1.0f, 0.0f)))
+				{
+					RenameSelectedFile();
+				}
+				ImGui::EndTable();
 			}
 
 			//Buttons
-
-			const float buttonSpacing = ImGui::GetStyle().ItemSpacing.x;
-			const float buttonWidth = (ImGui::GetContentRegionAvail().x - buttonSpacing * 3.0f) / 4.0f;
-			const ImVec2 fileButtonSize = { buttonWidth, 26.0f };
-
-			if (ImGui::Button("Загрузить", fileButtonSize))
+			if (ImGui::BeginTable("##ClassicFileActions", 4, ImGuiTableFlags_SizingStretchSame))
 			{
-				if (selectedFile)
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				if (ImGui::Button("Загрузить", ImVec2(-1.0f, 32.0f)))
 				{
-					if (selectedFile->mode != activeMode)
+					if (selectedFile)
 					{
-						LogPrint("Файл сохранен в режиме ");
-						LogPrint(SimulationModeName(selectedFile->mode));
-						LogPrint(". Текущий режим: ");
-						LogPrint(SimulationModeName(activeMode));
-						LogPrint(". Загрузка отменена.\r\n");
-					}
-					else if (selectedFile->isWorld)
-					{
-						ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull);
-
-						if (ret.id != -1)
+						if (selectedFile->mode != activeMode)
 						{
-							if (ret.width != FieldCellsWidth)
-								LogPrint("Мир загружен (ширина не совпадает)\r\n");
+							LogPrint("Файл сохранен в режиме ");
+							LogPrint(SimulationModeName(selectedFile->mode));
+							LogPrint(". Текущий режим: ");
+							LogPrint(SimulationModeName(activeMode));
+							LogPrint(". Загрузка отменена.\r\n");
+						}
+						else if (selectedFile->isWorld)
+						{
+							ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull);
+
+							if (ret.id != -1)
+							{
+								if (ret.width != FieldCellsWidth)
+									LogPrint("Мир загружен (ширина не совпадает)\r\n");
+								else
+									LogPrint("Мир загружен\r\n");
+
+								seed = ret.seed;
+								ticknum = ret.tick;
+								id = ret.id;
+								field->seed = seed;
+							}
 							else
-								LogPrint("Мир загружен\r\n");
-
-							seed = ret.seed;
-							ticknum = ret.tick;
-							id = ret.id;
-
-							field->seed = seed;
+								LogPrint("Ошибка загрузки мира\r\n");
 						}
 						else
-							LogPrint("Ошибка загрузки мира\r\n");
-					}
-					else
-					{
-						if (selectedObject)
 						{
-							delete selectedObject;
+							if (selectedObject)
+							{
+								delete selectedObject;
+							}
+
+							selectedObject = saver.LoadObject(selectedFile->pathFull);
+
+							if (selectedObject)
+								LogPrint("Объект загружен\r\n");
+							else
+								LogPrint("Ошибка загрузки объекта\r\n");
 						}
-
-						selectedObject = saver.LoadObject(selectedFile->pathFull);
-
-						if (selectedObject)
-							LogPrint("Объект загружен\r\n");
-						else
-							LogPrint("Ошибка загрузки объекта\r\n");
 					}
 				}
-			}			
 
-			ImGui::SameLine();
+				ImGui::TableSetColumnIndex(1);
+				if (ImGui::Button("Сохранить бота", ImVec2(-1.0f, 32.0f)))
+				{
+					SaveSelectedObjectToNamedFile();
+				}
 
-			if (ImGui::Button("Сохр. бота", fileButtonSize))
-			{
-				SaveSelectedObjectToNamedFile();
-			}
+				ImGui::TableSetColumnIndex(2);
+				if (ImGui::Button("Сохранить мир", ImVec2(-1.0f, 32.0f)))
+				{
+					SaveWorldToNamedFile();
+				}
 
-			ImGui::SameLine();
+				ImGui::TableSetColumnIndex(3);
+				if (ImGui::Button("Удалить", ImVec2(-1.0f, 32.0f)))
+				{
+					DeleteSelectedFile();
+				}
 
-			if (ImGui::Button("Сохр. мир", fileButtonSize))
-			{
-				SaveWorldToNamedFile();
-			}
-
-			ImGui::SameLine();
-
-			if (ImGui::Button("Удалить", fileButtonSize))
-			{
-				DeleteSelectedFile();
+				ImGui::EndTable();
 			}
 		}
 		ImGui::End();
@@ -838,41 +844,41 @@ void Main::DrawDangerousWindow()
 	if (showDangerous)
 	{
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::SetNextWindowSize({ 290.0f, 95.0f });
-		ImGui::SetNextWindowPos({ 100 * 1.0f, 300.0f }, ImGuiCond_Once);
+		vlsui::PrepareToolWindow(ImVec2(380.0f, 190.0f), ImVec2(340.0f, 170.0f));
 
-		ImGui::Begin("Инструменты", &showDangerous, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Инструменты", &showDangerous, ImGuiWindowFlags_NoCollapse);
 		{
-
-			if (ImGui::Button("Очистить мир", { 130, 30 }))
+			ImGui::TextDisabled("Операции применяются ко всему миру");
+			if (ImGui::BeginTable("##ClassicDangerActions", 2, ImGuiTableFlags_SizingStretchSame))
 			{
-				ClearWorld();
-			}
-
-			ImGui::SameLine();
-
-			if (ImGui::Button("Убить ботов", { 130, 30 }))
-			{
-				Deselect();
-
-				for (int cx = 0; cx < FieldCellsWidth; ++cx)
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				if (ImGui::Button("Очистить мир", ImVec2(-1.0f, 36.0f)))
 				{
-					for (int cy = 0; cy < FieldCellsHeight; ++cy)
+					ClearWorld();
+				}
+				ImGui::TableSetColumnIndex(1);
+				if (ImGui::Button("Убить всех ботов", ImVec2(-1.0f, 36.0f)))
+				{
+					Deselect();
+					for (int cx = 0; cx < FieldCellsWidth; ++cx)
 					{
-						Object* o = field->GetObjectLocalCoords(cx, cy);
-
-						if (o == NULL)
-							continue;
-
-						if (o->type == bot)
-							field->RemoveObject(cx, cy);
+						for (int cy = 0; cy < FieldCellsHeight; ++cy)
+						{
+							Object* o = field->GetObjectLocalCoords(cx, cy);
+							if (o && o->type == bot)
+								field->RemoveObject(cx, cy);
+						}
 					}
 				}
-			}
 
-			if (ImGui::Button("Обнулить время", { 130, 30 }))
-			{
-				ticknum = 0;
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				if (ImGui::Button("Обнулить время", ImVec2(-1.0f, 36.0f)))
+				{
+					ticknum = 0;
+				}
+				ImGui::EndTable();
 			}
 		}
 		ImGui::End();
@@ -884,10 +890,9 @@ void Main::DrawSummaryWindow()
 	if (showBrain)
 	{
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::SetNextWindowSize({ 330.0f, 180.0f });
-		ImGui::SetNextWindowPos({ 100 * 1.0f, 150.0f }, ImGuiCond_Once);
+		vlsui::PrepareToolWindow(ImVec2(390.0f, 270.0f), ImVec2(340.0f, 220.0f));
 
-		ImGui::Begin("Сводка бота", &showBrain, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Сводка бота", &showBrain, ImGuiWindowFlags_NoCollapse);
 		{
 			if (selectedObject)
 			{
@@ -926,11 +931,11 @@ void Main::DrawAdaptationWindow()
 	if (showAdaptation)
 	{
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::SetNextWindowSize({ 500.0f, 500.0f });
-		ImGui::SetNextWindowPos({ 100 * 1.0f, 250.0f }, ImGuiCond_Once);
+		vlsui::PrepareToolWindow(ImVec2(580.0f, 620.0f), ImVec2(460.0f, 460.0f));
 
-		ImGui::Begin("Условия среды", &showAdaptation, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Условия среды", &showAdaptation, ImGuiWindowFlags_NoCollapse);
 		{
+			ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.56f);
 			if(ImGui::CollapsingHeader("Ветры"))
 			{
 				ImGui::SliderInt("Фаза", &field->params.adaptation_DeathChance_Winds, 0, 1000);
@@ -980,6 +985,7 @@ void Main::DrawAdaptationWindow()
 			{
 				field->params.Reset();
 			}
+			ImGui::PopItemWidth();
 		}
 		ImGui::End();
 	}
@@ -990,12 +996,18 @@ void Main::DrawChartWindow()
 	if (showChart)
 	{
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::SetNextWindowSize({ 900.0f, 600.0f });
-		ImGui::SetNextWindowPos({ 700.0f, 250.0f }, ImGuiCond_Once);
+		vlsui::PrepareToolWindow(ImVec2(940.0f, 680.0f), ImVec2(620.0f, 440.0f));
 
-		ImGui::Begin("График популяции", &showChart, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("График популяции", &showChart, ImGuiWindowFlags_NoCollapse);
 		{
-			if (ImPlot::BeginPlot("Объекты", { 800, 550 }))
+			if (ImGui::Button("Очистить", ImVec2(100.0f, 32.0f)))
+				ClearChart();
+			ImGui::SameLine();
+			ImGui::Checkbox("Яблоки", &chartShow_apples);
+			ImGui::SameLine();
+			ImGui::Checkbox("Органика", &chartShow_organics);
+
+			if (ImPlot::BeginPlot("Объекты", ImVec2(-1.0f, -1.0f)))
 			{
 				const int chartValuesToPlot = chart_numValues;
 				
@@ -1029,18 +1041,6 @@ void Main::DrawChartWindow()
 
 				ImPlot::EndPlot();
 			}
-
-			ImGui::SameLine();
-
-			ImGui::BeginGroup();			
-
-			if (ImGui::Button("Очистить", { 80.0f, 30.0f }))
-				ClearChart();
-
-			ImGui::Checkbox("Яблоки", &chartShow_apples);
-			ImGui::Checkbox("Органика", &chartShow_organics);
-
-			ImGui::EndGroup();
 		}
 		ImGui::End();
 	}
@@ -1051,14 +1051,15 @@ void Main::DrawInfoWindow()
 	if (showInfo)
 	{
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::SetNextWindowSize({ 640.0f, 620.0f });
-		ImGui::SetNextWindowPos({ 140.0f, 120.0f }, ImGuiCond_Once);
+		vlsui::PrepareToolWindow(ImVec2(720.0f, 700.0f), ImVec2(560.0f, 500.0f));
 
-		ImGui::Begin("Инфо", &showInfo, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Begin("Инфо", &showInfo, ImGuiWindowFlags_NoCollapse);
 		{
 			ImGui::Text("Горячие клавиши");
 
-			if (ImGui::BeginTable("##Hotkeys", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(620, 380)))
+			if (ImGui::BeginTable("##Hotkeys", 2,
+				ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+				ImGuiTableFlags_Resizable, ImVec2(0.0f, 390.0f)))
 			{
 				ImGui::TableSetupColumn("Клавиша", ImGuiTableColumnFlags_WidthFixed, 165.0f);
 				ImGui::TableSetupColumn("Действие", ImGuiTableColumnFlags_WidthStretch);
@@ -1114,7 +1115,9 @@ void Main::DrawInfoWindow()
 			ImGui::Spacing();
 			ImGui::Text("Мышь");
 
-			if (ImGui::BeginTable("##MouseControlsInfo", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg, ImVec2(620, 0)))
+			if (ImGui::BeginTable("##MouseControlsInfo", 2,
+				ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable,
+				ImVec2(0.0f, 0.0f)))
 			{
 				ImGui::TableSetupColumn("Действие", ImGuiTableColumnFlags_WidthFixed, 165.0f);
 				ImGui::TableSetupColumn("Описание", ImGuiTableColumnFlags_WidthStretch);
@@ -1220,10 +1223,9 @@ void Main::DrawBotBrainWindow()
 		{
 			//Bot brain window
 			ImGui::SetNextWindowBgAlpha(1.0f);
-			ImGui::SetNextWindowSize({ 330.0f, 240.0f });
-			ImGui::SetNextWindowPos({ 650 * 1.0f, 350.0f });
+			vlsui::PrepareToolWindow(ImVec2(500.0f, 420.0f), ImVec2(380.0f, 300.0f));
 
-			ImGui::Begin("Данные мозга", &showBrain, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+			ImGui::Begin("Данные мозга", &showBrain, ImGuiWindowFlags_NoCollapse);
 			{
 				ImGui::BeginGroup();
 
