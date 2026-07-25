@@ -420,6 +420,13 @@ void Main::DrawSidePanelWindow()
 		}
 		vlsui::ItemTooltip("Добавить стартовую группу случайных ботов (F1)");
 
+		if (ImGui::Button("Сохранения и загрузка", ImVec2(-1.0f, 34.0f)))
+		{
+			LoadFilenames();
+			showSaveLoad = true;
+		}
+		vlsui::ItemTooltip("Открыть полную библиотеку сохранений (Z)");
+
 		ImGui::Spacing();
 		ImGui::Separator();
 		ImGui::BeginChild("##ClassicPanelContent", ImVec2(0.0f, 0.0f), false);
@@ -478,6 +485,24 @@ void Main::DrawSidePanelWindow()
 						DropWorldOrganics();
 					}
 					vlsui::ItemTooltip("Насыпать органику в верхней части мира (F3)");
+
+					vlsui::SectionTitle("Быстрое сохранение", "отдельный слот Classic");
+					if (ImGui::Button("Быстро сохранить", ImVec2(actionWidth, 34.0f)))
+					{
+						QuickSaveWorld();
+					}
+					vlsui::ItemTooltip("F5 — перезаписывает быстрый слот Classic");
+					ImGui::SameLine();
+					const bool hasClassicQuickSave = std::filesystem::exists(QuicksaveFilename);
+					ImGui::BeginDisabled(!hasClassicQuickSave);
+					if (ImGui::Button("Быстро загрузить", ImVec2(actionWidth, 34.0f)))
+					{
+						QuickLoadWorld();
+					}
+					ImGui::EndDisabled();
+					vlsui::ItemTooltip(hasClassicQuickSave
+						? "F9 — заменяет текущий мир быстрым сохранением"
+						: "Быстрое сохранение Classic еще не создано");
 
 					if (ImGui::CollapsingHeader("Техническая информация"))
 					{
@@ -572,7 +597,7 @@ void Main::DrawSidePanelWindow()
 					{
 						ImGui::TableNextRow();
 						ImGui::TableSetColumnIndex(0);
-						if (ImGui::Button("Файлы", ImVec2(-1.0f, 34.0f)))
+						if (ImGui::Button("Сохранения", ImVec2(-1.0f, 34.0f)))
 						{
 							LoadFilenames();
 							showSaveLoad = !showSaveLoad;
@@ -692,54 +717,106 @@ void Main::DrawSaveLoadWindow()
 		return;
 	}
 
-	if (showSaveLoad)
+	ImGui::SetNextWindowBgAlpha(1.0f);
+	vlsui::PrepareToolWindow(ImVec2(860.0f, 560.0f), ImVec2(680.0f, 480.0f));
+
+	ImGui::Begin("Сохранения и загрузка", &showSaveLoad, ImGuiWindowFlags_NoCollapse);
 	{
-		//Save/load window
-		ImGui::SetNextWindowBgAlpha(1.0f);
-		vlsui::PrepareToolWindow(ImVec2(760.0f, 410.0f), ImVec2(600.0f, 350.0f));
+		ImGui::TextColored(vlsui::Accent(), "CLASSIC");
+		ImGui::SameLine();
+		ImGui::TextDisabled("/ SavedObjects");
+		ImGui::TextDisabled("Сохранения этого режима отделены от CyberBiology3 и используют собственный быстрый слот.");
 
-		ImGui::Begin("Сохранение и загрузка", &showSaveLoad, ImGuiWindowFlags_NoCollapse);
+		vlsui::SectionTitle("Новое сохранение", "пустое имя создаст имя по дате и времени");
+		bool newNameInputActive = false;
+		const bool canSaveBot = selectedObject && field->ValidateObjectExistance(selectedObject);
+
+		if (ImGui::BeginTable("##ClassicCreateSave", 3, ImGuiTableFlags_SizingStretchProp))
 		{
-			//List of files
-			ImGui::Text("Выберите файл");
+			ImGui::TableSetupColumn("##ClassicSaveName", ImGuiTableColumnFlags_WidthStretch, 1.7f);
+			ImGui::TableSetupColumn("##ClassicSaveWorld", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+			ImGui::TableSetupColumn("##ClassicSaveBot", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::SetNextItemWidth(-1.0f);
+			ImGui::InputTextWithHint("##ClassicNewSaveName", "Имя нового сохранения", newSaveFileName, sizeof(newSaveFileName));
+			newNameInputActive = ImGui::IsItemActive();
 
-			if (ImGui::BeginTable("##SaveFiles", 5,
-				ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
-				ImGuiTableFlags_Resizable, ImVec2(0.0f, 210.0f)))
+			ImGui::TableSetColumnIndex(1);
+			if (vlsui::ColoredButton("Сохранить мир", ImVec2(-1.0f, 34.0f), vlsui::Accent()))
 			{
-				ImGui::TableSetupColumn("Имя", ImGuiTableColumnFlags_WidthStretch);
-				ImGui::TableSetupColumn("Размер", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-				ImGui::TableSetupColumn("Тип", ImGuiTableColumnFlags_WidthFixed, 55.0f);
-				ImGui::TableSetupColumn("Режим", ImGuiTableColumnFlags_WidthFixed, 115.0f);
-				ImGui::TableSetupColumn("Дата", ImGuiTableColumnFlags_WidthFixed, 125.0f);
-				ImGui::TableHeadersRow();
-
-				for (int i = 0; i < allFilenames.size(); ++i)
-				{
-					ImGui::TableNextRow();
-
-					ImGui::TableSetColumnIndex(0);
-					if (ImGui::Selectable(allFilenames[i].nameShort.c_str(), allFilenames[i].isSelected, ImGuiSelectableFlags_SpanAllColumns))
-					{
-						SelectFile(i);
-					}
-
-					ImGui::TableSetColumnIndex(1);
-					ImGui::TextUnformatted(allFilenames[i].fileSize.c_str());
-
-					ImGui::TableSetColumnIndex(2);
-					ImGui::TextUnformatted(allFilenames[i].fileType.c_str());
-
-					ImGui::TableSetColumnIndex(3);
-					ImGui::TextUnformatted(allFilenames[i].modeText.c_str());
-
-					ImGui::TableSetColumnIndex(4);
-					ImGui::TextUnformatted(allFilenames[i].modifiedTimeText.c_str());
-				}
-
-				ImGui::EndTable();
+				SaveWorldToNamedFile();
 			}
 
+			ImGui::TableSetColumnIndex(2);
+			ImGui::BeginDisabled(!canSaveBot);
+			if (ImGui::Button("Сохранить бота", ImVec2(-1.0f, 34.0f)))
+			{
+				SaveSelectedObjectToNamedFile();
+			}
+			ImGui::EndDisabled();
+			vlsui::ItemTooltip(canSaveBot ? "Сохранить выбранного бота" : "Сначала выберите бота в мире");
+			ImGui::EndTable();
+		}
+
+		vlsui::SectionTitle("Библиотека сохранений");
+		ImGui::TextDisabled("Файлов: %d", (int)allFilenames.size());
+		ImGui::SameLine();
+		const float refreshWidth = 105.0f;
+		ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - refreshWidth);
+		if (ImGui::Button("Обновить", ImVec2(refreshWidth, 0.0f)))
+		{
+			LoadFilenames();
+		}
+
+		float fileTableHeight = ImGui::GetContentRegionAvail().y - 145.0f;
+		if (fileTableHeight < 160.0f)
+			fileTableHeight = 160.0f;
+
+		if (ImGui::BeginTable("##SaveFiles", 5,
+			ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+			ImGuiTableFlags_Resizable, ImVec2(0.0f, fileTableHeight)))
+		{
+			ImGui::TableSetupColumn("Имя", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableSetupColumn("Размер", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+			ImGui::TableSetupColumn("Тип", ImGuiTableColumnFlags_WidthFixed, 95.0f);
+			ImGui::TableSetupColumn("Режим", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+			ImGui::TableSetupColumn("Дата", ImGuiTableColumnFlags_WidthFixed, 125.0f);
+			ImGui::TableHeadersRow();
+
+			if (allFilenames.empty())
+			{
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::TextDisabled("Сохранений Classic пока нет");
+			}
+
+			for (int i = 0; i < allFilenames.size(); ++i)
+			{
+				ImGui::TableNextRow();
+
+				ImGui::TableSetColumnIndex(0);
+				if (ImGui::Selectable(allFilenames[i].nameShort.c_str(), allFilenames[i].isSelected, ImGuiSelectableFlags_SpanAllColumns))
+				{
+					SelectFile(i);
+				}
+
+				ImGui::TableSetColumnIndex(1);
+				ImGui::TextUnformatted(allFilenames[i].fileSize.c_str());
+				ImGui::TableSetColumnIndex(2);
+				ImGui::TextUnformatted(allFilenames[i].fileType.c_str());
+				ImGui::TableSetColumnIndex(3);
+				ImGui::TextUnformatted(allFilenames[i].modeText.c_str());
+				ImGui::TableSetColumnIndex(4);
+				ImGui::TextUnformatted(allFilenames[i].modifiedTimeText.c_str());
+			}
+
+			ImGui::EndTable();
+		}
+
+		bool renameInputActive = false;
+		if (selectedFile)
+		{
 			if (ImGui::BeginTable("##ClassicRenameRow", 3, ImGuiTableFlags_SizingStretchProp))
 			{
 				ImGui::TableSetupColumn("##ClassicRenameLabel", ImGuiTableColumnFlags_WidthFixed, 85.0f);
@@ -752,7 +829,7 @@ void Main::DrawSaveLoadWindow()
 				ImGui::TableSetColumnIndex(1);
 				ImGui::SetNextItemWidth(-1.0f);
 				ImGui::InputText("##RenameFileName", renameFileName, sizeof(renameFileName));
-				saveFileNameInputActive = ImGui::IsItemActive();
+				renameInputActive = ImGui::IsItemActive();
 				ImGui::TableSetColumnIndex(2);
 				if (ImGui::Button("Переименовать", ImVec2(-1.0f, 0.0f)))
 				{
@@ -760,109 +837,85 @@ void Main::DrawSaveLoadWindow()
 				}
 				ImGui::EndTable();
 			}
+		}
+		else
+		{
+			ImGui::TextDisabled("Выберите сохранение, чтобы загрузить, переименовать или удалить его.");
+		}
 
-			//Buttons
-			if (ImGui::BeginTable("##ClassicFileActions", 4, ImGuiTableFlags_SizingStretchSame))
+		saveFileNameInputActive = newNameInputActive || renameInputActive;
+		const bool canLoadSelected = selectedFile && selectedFile->mode == activeMode;
+
+		if (selectedFile && !canLoadSelected)
+		{
+			ImGui::TextColored(vlsui::Warning(), "Файл создан в другом или устаревшем режиме и не может быть загружен в Classic.");
+		}
+
+		if (ImGui::BeginTable("##ClassicFileActions", 2, ImGuiTableFlags_SizingStretchSame))
+		{
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::BeginDisabled(!canLoadSelected);
+			const char* loadLabel = (selectedFile && !selectedFile->isWorld) ? "Загрузить бота" : "Загрузить мир";
+			if (vlsui::ColoredButton(loadLabel, ImVec2(-1.0f, 34.0f), vlsui::Accent()))
 			{
-				ImGui::TableNextRow();
-				ImGui::TableSetColumnIndex(0);
-				if (ImGui::Button("Загрузить", ImVec2(-1.0f, 32.0f)))
+				if (selectedFile->isWorld)
 				{
-					if (selectedFile)
+					LoadWorldFromFile(selectedFile->pathFull);
+				}
+				else
+				{
+					Object* loadedObject = saver.LoadObject(selectedFile->pathFull);
+
+					if (loadedObject)
 					{
-						if (selectedFile->mode != activeMode)
+						int targetX = loadedObject->x;
+						int targetY = loadedObject->y;
+
+						if (selectedObject && field->ValidateObjectExistance(selectedObject))
 						{
-							LogPrint("Файл сохранен в режиме ");
-							LogPrint(SimulationModeName(selectedFile->mode));
-							LogPrint(". Текущий режим: ");
-							LogPrint(SimulationModeName(activeMode));
-							LogPrint(". Загрузка отменена.\r\n");
+							targetX = selectedObject->x;
+							targetY = selectedObject->y;
+							Deselect();
+							field->RemoveObject(targetX, targetY);
 						}
-						else if (selectedFile->isWorld)
+						else if (selectedObject)
 						{
 							Deselect();
-							ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull);
+						}
 
-							if (ret.id != -1)
-							{
-								if (ret.width != FieldCellsWidth)
-									LogPrint("Мир загружен (ширина не совпадает)\r\n");
-								else
-									LogPrint("Мир загружен\r\n");
+						loadedObject->x = targetX;
+						loadedObject->y = targetY;
 
-								seed = ret.seed;
-								ticknum = ret.tick;
-								id = ret.id;
-								field->seed = seed;
-							}
-							else
-								LogPrint("Ошибка загрузки мира\r\n");
+						if (field->IsInBounds(targetX, targetY) && field->AddObject(loadedObject))
+						{
+							selectedObject = loadedObject;
+							field->TrackObject(selectedObject);
+							LogPrint("Объект загружен\r\n");
 						}
 						else
 						{
-							Object* loadedObject = saver.LoadObject(selectedFile->pathFull);
-
-							if (loadedObject)
-							{
-								int targetX = loadedObject->x;
-								int targetY = loadedObject->y;
-
-								if (selectedObject && field->ValidateObjectExistance(selectedObject))
-								{
-									targetX = selectedObject->x;
-									targetY = selectedObject->y;
-									Deselect();
-									field->RemoveObject(targetX, targetY);
-								}
-								else if (selectedObject)
-								{
-									Deselect();
-								}
-
-								loadedObject->x = targetX;
-								loadedObject->y = targetY;
-
-								if (field->IsInBounds(targetX, targetY) && field->AddObject(loadedObject))
-								{
-									selectedObject = loadedObject;
-									field->TrackObject(selectedObject);
-									LogPrint("Объект загружен\r\n");
-								}
-								else
-								{
-									delete loadedObject;
-									LogPrint("Ошибка загрузки объекта: клетка занята или вне поля\r\n");
-								}
-							}
-							else
-								LogPrint("Ошибка загрузки объекта\r\n");
+							delete loadedObject;
+							LogPrint("Ошибка загрузки объекта: клетка занята или вне поля\r\n");
 						}
 					}
+					else
+						LogPrint("Ошибка загрузки объекта\r\n");
 				}
-
-				ImGui::TableSetColumnIndex(1);
-				if (ImGui::Button("Сохранить бота", ImVec2(-1.0f, 32.0f)))
-				{
-					SaveSelectedObjectToNamedFile();
-				}
-
-				ImGui::TableSetColumnIndex(2);
-				if (ImGui::Button("Сохранить мир", ImVec2(-1.0f, 32.0f)))
-				{
-					SaveWorldToNamedFile();
-				}
-
-				ImGui::TableSetColumnIndex(3);
-				if (ImGui::Button("Удалить", ImVec2(-1.0f, 32.0f)))
-				{
-					DeleteSelectedFile();
-				}
-
-				ImGui::EndTable();
 			}
+			ImGui::EndDisabled();
+
+			ImGui::TableSetColumnIndex(1);
+			ImGui::BeginDisabled(!selectedFile);
+			if (ImGui::Button("Удалить в корзину", ImVec2(-1.0f, 34.0f)))
+			{
+				DeleteSelectedFile();
+			}
+			ImGui::EndDisabled();
+			ImGui::EndTable();
 		}
-		ImGui::End();
 	}
+	ImGui::End();
 }
 
 void Main::DrawDangerousWindow()

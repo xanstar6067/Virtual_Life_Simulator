@@ -87,6 +87,8 @@
 #define Keyboard_SpawnRandoms SDL_SCANCODE_F1
 #define Keyboard_PlaceWall SDL_SCANCODE_F2
 #define Keyboard_DropOrganics SDL_SCANCODE_F3
+#define Keyboard_Quicksave SDL_SCANCODE_F5
+#define Keyboard_Quickload SDL_SCANCODE_F9
 
 #define Keyboard_ShowSaveLoad_Window SDL_SCANCODE_Z
 #define Keyboard_ShowDangerous_Window SDL_SCANCODE_X
@@ -238,8 +240,10 @@
 //Save and load
 
 #define DirectoryName "SavedObjects/"
+#define QuicksaveFilename "SavedObjects/Quicksave"
 
 #define MagicNumber_ObjectFile 0xfcfa47ff
+#define MagicNumber_ObjectFileLegacy 0xfcfa47fe
 #define MagicNumber_WorldFile 0xbffa51fd
 #define MagicNumber_WorldFileV2 0xbffa51ff
 

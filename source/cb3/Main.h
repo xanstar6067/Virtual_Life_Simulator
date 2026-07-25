@@ -146,6 +146,7 @@ protected:
 
 	vector<listed_file> allFilenames;
 	listed_file* selectedFile = NULL;
+	char newSaveFileName[128] = "";
 	char renameFileName[128] = "";
 	bool saveFileNameInputActive = false;
 
@@ -155,6 +156,7 @@ protected:
 	void DeleteSelectedFile();
 	void SaveSelectedObjectToNamedFile();
 	void SaveWorldToNamedFile();
+	bool LoadWorldFromFile(const std::filesystem::path& filePath);
 	std::filesystem::path BuildSavePath(const char* defaultPrefix);
 	void SelectFileByPath(const std::filesystem::path& filePath);
 

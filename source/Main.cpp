@@ -520,23 +520,28 @@ void Main::LoadFilenames()
 			magicNumber = file.ReadInt();
 
 		int modeId = 0;
+		const bool isLegacyWorld = magicNumber == MagicNumber_WorldFile;
+		const bool isLegacyObject = magicNumber == MagicNumber_ObjectFileLegacy;
+		const bool isLegacySave = isLegacyWorld || isLegacyObject;
 
 		if ((magicNumber == MagicNumber_WorldFileV2) || (magicNumber == MagicNumber_ObjectFile))
 		{
 			modeId = file.ReadInt();
 		}
+		else if (isLegacySave)
+		{
+			modeId = static_cast<int>(SimulationMode::Classic);
+		}
 
 		f.mode = SimulationModeFromId(modeId);
-		f.modeText = (modeId > 0) ? SimulationModeName(f.mode) : "-";
+		f.modeText = isLegacySave ? "Classic (старый)" :
+			((modeId > 0) ? SimulationModeName(f.mode) : "-");
 
-		if (magicNumber == MagicNumber_WorldFileV2)
-			f.isWorld = true;
-		else
-			f.isWorld = false;
+		f.isWorld = (magicNumber == MagicNumber_WorldFileV2) || isLegacyWorld;
 
 		if (f.isWorld)
 			f.fileType = "мир";
-		else if (magicNumber == MagicNumber_ObjectFile)
+		else if ((magicNumber == MagicNumber_ObjectFile) || isLegacyObject)
 			f.fileType = "бот";
 		else
 			f.fileType = "файл";
@@ -657,7 +662,7 @@ void Main::RenameSelectedFile()
 
 std::filesystem::path Main::BuildSavePath(const char* defaultPrefix)
 {
-	string fileName = TrimFileName(renameFileName);
+	string fileName = TrimFileName(newSaveFileName);
 
 	if (fileName.empty())
 	{
@@ -721,6 +726,7 @@ void Main::SaveSelectedObjectToNamedFile()
 	if (saver.SaveObject(selectedObject, savePath))
 	{
 		LogPrint("Объект сохранен\r\n");
+		newSaveFileName[0] = '\0';
 		LoadFilenames();
 		SelectFileByPath(savePath);
 	}
@@ -738,6 +744,7 @@ void Main::SaveWorldToNamedFile()
 	if (saver.SaveWorld(field, savePath, id, ticknum))
 	{
 		LogPrint("Мир сохранен\r\n");
+		newSaveFileName[0] = '\0';
 		LoadFilenames();
 		SelectFileByPath(savePath);
 	}
@@ -745,6 +752,59 @@ void Main::SaveWorldToNamedFile()
 	{
 		LogPrint("Ошибка сохранения мира\r\n");
 	}
+}
+
+bool Main::LoadWorldFromFile(const std::filesystem::path& filePath)
+{
+	Deselect();
+	ObjectSaver::WorldParams ret = saver.LoadWorld(field, filePath);
+
+	if (ret.id == -1)
+	{
+		LogPrint("Ошибка загрузки мира\r\n");
+		return false;
+	}
+
+	if (ret.width != FieldCellsWidth)
+		LogPrint("Мир загружен (ширина не совпадает)\r\n");
+	else
+		LogPrint("Мир загружен\r\n");
+
+	seed = ret.seed;
+	ticknum = ret.tick;
+	id = ret.id;
+	field->seed = seed;
+	return true;
+}
+
+void Main::QuickSaveWorld()
+{
+	const std::filesystem::path quickSavePath = QuicksaveFilename;
+	std::filesystem::create_directories(quickSavePath.parent_path());
+
+	if (saver.SaveWorld(field, quickSavePath, id, ticknum))
+	{
+		LogPrint("Быстрое сохранение Classic создано\r\n");
+		LoadFilenames();
+		SelectFileByPath(quickSavePath);
+	}
+	else
+	{
+		LogPrint("Ошибка быстрого сохранения мира\r\n");
+	}
+}
+
+void Main::QuickLoadWorld()
+{
+	const std::filesystem::path quickSavePath = QuicksaveFilename;
+
+	if (!std::filesystem::exists(quickSavePath))
+	{
+		LogPrint("Быстрое сохранение Classic еще не создано\r\n");
+		return;
+	}
+
+	LoadWorldFromFile(quickSavePath);
 }
 
 
@@ -964,6 +1024,14 @@ void Main::CatchKeyboard()
 	else if (keyboard[Keyboard_DropOrganics])
 	{
 		DropWorldOrganics();
+	}
+	else if (keyboard[Keyboard_Quicksave])
+	{
+		QuickSaveWorld();
+	}
+	else if (keyboard[Keyboard_Quickload])
+	{
+		QuickLoadWorld();
 	}
 	else if (keyboard[Keyboard_NextFrame])
 	{

@@ -59,6 +59,7 @@ private:
     Bot* LoadBotCompact(MyInputStream& file);
     void WriteObjectCompact(MyOutStream& file, Object* obj);
     Object* LoadObjectCompact(MyInputStream& file);
+    WorldParams LoadWorldLegacy(Field* world, MyInputStream& file);
     WorldParams LoadWorldCompact(Field* world, MyInputStream& file);
 
 public:

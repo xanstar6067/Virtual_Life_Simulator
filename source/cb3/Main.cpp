@@ -209,41 +209,57 @@ void Main::MutateWholeWorld()
 	LogPrint("[Солнечная вспышка!]");
 }
 
+bool Main::LoadWorldFromFile(const std::filesystem::path& filePath)
+{
+	Deselect();
+	ObjectSaver::WorldParams ret = saver.LoadWorld(field, filePath);
+
+	if (ret.id == -1)
+	{
+		LogPrint("Ошибка загрузки мира\r\n");
+		return false;
+	}
+
+	if (ret.width != FieldCellsWidth)
+		LogPrint("Мир загружен (ширина не совпадает)\r\n");
+	else
+		LogPrint("Мир загружен\r\n");
+
+	seed = ret.seed;
+	ticknum = ret.tick;
+	id = ret.id;
+	field->seed = seed;
+	return true;
+}
+
 void Main::QuickSaveWorld()
 {
-	if (saver.SaveWorld(field, (char*)OuicksaveFilename, id, ticknum))
+	const std::filesystem::path quickSavePath = QuicksaveFilename;
+	std::filesystem::create_directories(quickSavePath.parent_path());
+
+	if (saver.SaveWorld(field, quickSavePath, id, ticknum))
 	{
-		LogPrint("Мир сохранен\r\n");
+		LogPrint("Быстрое сохранение CyberBiology3 создано\r\n");
 		LoadFilenames();
+		SelectFileByPath(quickSavePath);
 	}
 	else
 	{
-		LogPrint("Ошибка сохранения мира\r\n");
+		LogPrint("Ошибка быстрого сохранения мира\r\n");
 	}
 }
 
 void Main::QuickLoadWorld()
 {
-	Deselect();
+	const std::filesystem::path quickSavePath = QuicksaveFilename;
 
-	ObjectSaver::WorldParams ret = saver.LoadWorld(field, (char*)OuicksaveFilename);
-
-	if (ret.id != -1)
+	if (!std::filesystem::exists(quickSavePath))
 	{
-		if (ret.width != FieldCellsWidth)
-			LogPrint("Мир загружен (ширина не совпадает)\r\n");
-		else
-			LogPrint("Мир загружен\r\n");
+		LogPrint("Быстрое сохранение CyberBiology3 еще не создано\r\n");
+		return;
+	}
 
-		seed = ret.seed;
-		ticknum = ret.tick;
-		id = ret.id;
-		field->seed = seed;
-	}
-	else
-	{
-		LogPrint("Ошибка загрузки мира\r\n");
-	}
+	LoadWorldFromFile(quickSavePath);
 }
 
 bool Main::MakeStep()
@@ -558,7 +574,7 @@ void Main::RenameSelectedFile()
 
 std::filesystem::path Main::BuildSavePath(const char* defaultPrefix)
 {
-	string fileName = TrimFileName(renameFileName);
+	string fileName = TrimFileName(newSaveFileName);
 
 	if (fileName.empty())
 	{
@@ -620,6 +636,7 @@ void Main::SaveSelectedObjectToNamedFile()
 	if (saver.SaveObject(selectedObject, savePath))
 	{
 		LogPrint("Объект сохранен\r\n");
+		newSaveFileName[0] = '\0';
 		LoadFilenames();
 		SelectFileByPath(savePath);
 	}
@@ -636,6 +653,7 @@ void Main::SaveWorldToNamedFile()
 	if (saver.SaveWorld(field, savePath, id, ticknum))
 	{
 		LogPrint("Мир сохранен\r\n");
+		newSaveFileName[0] = '\0';
 		LoadFilenames();
 		SelectFileByPath(savePath);
 	}

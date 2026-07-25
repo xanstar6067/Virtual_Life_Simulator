@@ -112,10 +112,92 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, const std::filesys
             return result;
         }
 
+        if (magicNumber == MagicNumber_WorldFile)
+        {
+            WorldParams result = LoadWorldLegacy(world, file);
+            file.close();
+            return result;
+        }
+
         file.close();
     }
 
     return {-1, -1};
+}
+
+ObjectSaver::WorldParams ObjectSaver::LoadWorldLegacy(Field* world, MyInputStream& file)
+{
+    const WorldParams loadFailure = {-1, -1, -1, -1};
+    WorldParams toRet = loadFailure;
+
+    const int loadWidth = file.ReadInt();
+    toRet.width = loadWidth;
+
+    constexpr int MaxLegacyWidth = FieldCellsWidth * 4;
+    if (!file || loadWidth <= 0 || loadWidth > MaxLegacyWidth || file.ReadInt() != FieldCellsHeight)
+        return loadFailure;
+
+    toRet.id = file.ReadInt();
+    toRet.seed = file.ReadInt();
+    toRet.tick = file.ReadInt();
+
+    if (!file || file.ReadInt() != sizeof world->params)
+        return loadFailure;
+
+    FieldDynamicParams loadedParams;
+    file.read((char*)&loadedParams, sizeof loadedParams);
+    if (!file)
+        return loadFailure;
+
+    std::vector<std::unique_ptr<Object>> loadedObjects;
+
+    for (int x = 0; x < loadWidth; ++x)
+    {
+        for (int y = 0; y < FieldCellsHeight; ++y)
+        {
+            const int objectType = file.ReadInt();
+            if (!file)
+                return loadFailure;
+
+            if (objectType == ObjectTypes::abstract)
+                continue;
+
+            if (objectType < ObjectTypes::bot || objectType > ObjectTypes::apple)
+                return loadFailure;
+
+            file.seekg(-static_cast<std::streamoff>(sizeof(int)), std::ios::cur);
+            if (!file)
+                return loadFailure;
+
+            std::unique_ptr<Object> object(LoadObjectFromFile(file));
+            if (!file || !object)
+                return loadFailure;
+
+            if (x >= FieldCellsWidth)
+                continue;
+
+            object->x = x;
+            object->y = y;
+            loadedObjects.push_back(std::move(object));
+        }
+    }
+
+    if (!file)
+        return loadFailure;
+
+    // Старый формат хранит все клетки подряд. Мир заменяется только после
+    // полного чтения и проверки файла, чтобы поврежденное сохранение не
+    // уничтожило текущую симуляцию.
+    world->RemoveAllObjects();
+    world->params = loadedParams;
+
+    for (std::unique_ptr<Object>& object : loadedObjects)
+    {
+        if (world->AddObject(object.get()))
+            object.release();
+    }
+
+    return toRet;
 }
 
 ObjectSaver::WorldParams ObjectSaver::LoadWorldCompact(Field* world, MyInputStream& file)
@@ -630,22 +712,32 @@ Object* ObjectSaver::LoadObject(char* filename)
 
 Object* ObjectSaver::LoadObject(const std::filesystem::path& filename)
 {    
-    Object* toRet;
-
     //Open file for reading, binary type
     MyInputStream file(filename, std::ios::in | std::ios::binary | std::ios::beg);
 
     if (file.is_open())
     {
-        if (file.ReadInt() != MagicNumber_ObjectFile)
-            return NULL;
+        const int magicNumber = file.ReadInt();
 
-        if (file.ReadInt() != SaveModeId)
-            return NULL;
-        
-        toRet = LoadObjectCompact(file);
+        Object* toRet = NULL;
 
-        if (!file)
+        if (magicNumber == MagicNumber_ObjectFile)
+        {
+            if (file.ReadInt() != SaveModeId)
+                return NULL;
+
+            toRet = LoadObjectCompact(file);
+        }
+        else if (magicNumber == MagicNumber_ObjectFileLegacy)
+        {
+            toRet = LoadObjectFromFile(file);
+        }
+        else
+        {
+            return NULL;
+        }
+
+        if (!file || !toRet)
         {
             delete toRet;
             return NULL;
