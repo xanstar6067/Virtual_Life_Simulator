@@ -488,7 +488,7 @@ void Field::ObjectAddOrReplace(Object* obj)
     Object** cell = &allCells[obj->x][obj->y];
 
     if (*cell)
-        delete *cell;
+        RemoveObject(obj->x, obj->y);
 
     *cell = obj;
 }
@@ -518,9 +518,11 @@ void Field::RemoveObject(int X, int Y)
 
     if (tmpO)
     {
-        delete tmpO;
+        if (trackedObject == tmpO)
+            trackedObjectRemoved = true;
 
         allCells[X][Y] = NULL;
+        delete tmpO;
     }
 }
 
@@ -1036,9 +1038,15 @@ Object* Field::GetObjectLocalCoords(int X, int Y)
     return allCells[X][Y];
 }
 
+void Field::TrackObject(Object* obj)
+{
+    trackedObjectRemoved = false;
+    trackedObject = obj;
+}
+
 bool Field::ValidateObjectExistance(Object* obj)
 {
-    return (allCells[obj->x][obj->y] == obj);
+    return obj && trackedObject == obj && !trackedObjectRemoved;
 }
 
 uint Field::GetNumObjects()
@@ -1137,6 +1145,8 @@ Field::~Field()
             threads[i].join();
     }
 #endif
+
+    RemoveAllObjects();
 }
 
 void FieldDynamicParams::Reset()

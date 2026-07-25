@@ -63,6 +63,7 @@ public:
 	ObjectTypes type;
 
 	Object(int X, int Y);
+	virtual ~Object() = default;
 
 
 	//Basic 'dummy' draw functions if needed

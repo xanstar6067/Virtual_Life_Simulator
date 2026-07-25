@@ -310,6 +310,12 @@ void Main::MakeStep()
 
 		field->tick(ticknum);
 
+		if (selectedObject &&
+			(!field->ValidateObjectExistance(selectedObject) || selectedObject->type != bot))
+		{
+			Deselect();
+		}
+
 		++ticknum;
 		++tpsTickCounter;
 
@@ -398,26 +404,26 @@ void Main::ClearChart()
 
 void Main::AddToChart(float newVal_bots, float newVal_apples, float newVal_organics)
 {
+	if (chart_currentPosition >= ChartNumValues)
+	{
+		ClearChart();
+	}
+
 	chartData_bots[chart_currentPosition] = newVal_bots;
 	chartData_apples[chart_currentPosition] = newVal_apples;
 	chartData_organics[chart_currentPosition] = newVal_organics;
 
 	if (chart_numValues < ChartNumValues)
-	{
 		++chart_numValues;
-		++chart_currentPosition;
-	}
-	else
-	{
-		if (chart_currentPosition == ChartNumValues)
-			ClearChart();
-		else
-			++chart_currentPosition;
-	}
+
+	++chart_currentPosition;
 }
 
 void Main::Deselect()
 {
+	if (field)
+		field->TrackObject(NULL);
+
 	selectedObject = NULL;
 	showBrain = false;
 	nn_renderer.selectedNeuron = NULL;
@@ -806,13 +812,14 @@ bool Main::IsClassicMode() const
 
 void Main::ResetClassicWorld()
 {
+	Deselect();
+
 	if (field)
 	{
 		delete field;
 		field = NULL;
 	}
 
-	Deselect();
 	ClearChart();
 	Field::renderX = 0;
 	Field::viewX = 0;

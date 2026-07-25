@@ -1,6 +1,8 @@
 #pragma once
 //#pragma message("   Field_h")
 
+#include <atomic>
+
 namespace cb3
 {
 class Object;
@@ -120,6 +122,10 @@ private:
 
     //All cells as 2d array
     Object* allCells[FieldCellsWidth][FieldCellsHeight];
+
+    //Tracks the GUI selection without dereferencing a potentially deleted object.
+    std::atomic<Object*> trackedObject = nullptr;
+    std::atomic_bool trackedObjectRemoved = false;
 
     //Rectangles
     const SDL_Rect mainRect = { FieldX , FieldY, FieldWidth, FieldHeight };
@@ -250,6 +256,7 @@ public:
 
     Object* GetObjectLocalCoords(int X, int Y);
 
+    void TrackObject(Object* obj);
     bool ValidateObjectExistance(Object* obj);
 
     uint GetNumObjects();

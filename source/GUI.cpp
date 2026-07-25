@@ -780,6 +780,7 @@ void Main::DrawSaveLoadWindow()
 						}
 						else if (selectedFile->isWorld)
 						{
+							Deselect();
 							ObjectSaver::WorldParams ret = saver.LoadWorld(field, selectedFile->pathFull);
 
 							if (ret.id != -1)
@@ -799,15 +800,40 @@ void Main::DrawSaveLoadWindow()
 						}
 						else
 						{
-							if (selectedObject)
+							Object* loadedObject = saver.LoadObject(selectedFile->pathFull);
+
+							if (loadedObject)
 							{
-								delete selectedObject;
+								int targetX = loadedObject->x;
+								int targetY = loadedObject->y;
+
+								if (selectedObject && field->ValidateObjectExistance(selectedObject))
+								{
+									targetX = selectedObject->x;
+									targetY = selectedObject->y;
+									Deselect();
+									field->RemoveObject(targetX, targetY);
+								}
+								else if (selectedObject)
+								{
+									Deselect();
+								}
+
+								loadedObject->x = targetX;
+								loadedObject->y = targetY;
+
+								if (field->IsInBounds(targetX, targetY) && field->AddObject(loadedObject))
+								{
+									selectedObject = loadedObject;
+									field->TrackObject(selectedObject);
+									LogPrint("Объект загружен\r\n");
+								}
+								else
+								{
+									delete loadedObject;
+									LogPrint("Ошибка загрузки объекта: клетка занята или вне поля\r\n");
+								}
 							}
-
-							selectedObject = saver.LoadObject(selectedFile->pathFull);
-
-							if (selectedObject)
-								LogPrint("Объект загружен\r\n");
 							else
 								LogPrint("Ошибка загрузки объекта\r\n");
 						}
@@ -1388,6 +1414,7 @@ void Main::MouseClick()
 					if (obj->type == bot)
 					{
 						selectedObject = obj;
+						field->TrackObject(selectedObject);
 					}
 				}
 				else
@@ -1526,6 +1553,12 @@ void Main::Render()
 	else
 	{
 		lastTickFps = currentTickFps;
+	}
+
+	if (selectedObject &&
+		(!field->ValidateObjectExistance(selectedObject) || selectedObject->type != bot))
+	{
+		Deselect();
 	}
 
 	//Begin frame

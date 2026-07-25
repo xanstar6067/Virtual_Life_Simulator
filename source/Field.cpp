@@ -451,9 +451,11 @@ void Field::RemoveObject(int X, int Y)
 
     if (tmpO)
     {
-        delete tmpO;
+        if (trackedObject == tmpO)
+            trackedObjectRemoved = true;
 
         allCells[X][Y] = NULL;
+        delete tmpO;
     }
 }
 
@@ -907,18 +909,15 @@ Object* Field::GetObjectLocalCoords(int X, int Y)
 }
 
 
+void Field::TrackObject(Object* obj)
+{
+    trackedObjectRemoved = false;
+    trackedObject = obj;
+}
+
 bool Field::ValidateObjectExistance(Object* obj)
 {
-    for (uint ix = 0; ix < FieldCellsWidth; ++ix)
-    {
-        for (uint iy = 0; iy < FieldCellsHeight; ++iy)
-        {
-            if (allCells[ix][iy] == obj)
-                return true;
-        }
-    }
-
-    return false;
+    return obj && trackedObject == obj && !trackedObjectRemoved;
 }
 
 
@@ -1054,10 +1053,7 @@ Field::Field()
 
 Field::~Field()
 {
-#ifdef UseOneThread
-    return;
-#endif
-
+#ifndef UseOneThread
     {
         std::lock_guard<std::mutex> lock(threadMutex);
         terminateThreads = true;
@@ -1075,6 +1071,9 @@ Field::~Field()
         if (threads[i].joinable())
             threads[i].join();
     }
+#endif
+
+    RemoveAllObjects();
 }
 
 void FieldDynamicParams::Reset()

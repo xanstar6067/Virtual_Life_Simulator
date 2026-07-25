@@ -34,6 +34,11 @@ void Chart::ClearChart()
 
 void Chart::AddToChart(float newVal_bots, float newVal_apples, float newVal_organics, float newVal_predators, float newVal_avg_lifetime)
 {
+	if (chart_currentPosition >= ChartNumValues)
+	{
+		ClearChart();
+	}
+
 	chartData_bots[chart_currentPosition] = newVal_bots;
 	chartData_apples[chart_currentPosition] = newVal_apples;
 	chartData_organics[chart_currentPosition] = newVal_organics;
@@ -41,17 +46,9 @@ void Chart::AddToChart(float newVal_bots, float newVal_apples, float newVal_orga
 	chartData_avg_lifetime[chart_currentPosition] = newVal_avg_lifetime;
 
 	if (chart_numValues < ChartNumValues)
-	{
 		++chart_numValues;
-		++chart_currentPosition;
-	}
-	else
-	{
-		if (chart_currentPosition == ChartNumValues)
-			ClearChart();
-		else
-			++chart_currentPosition;
-	}
+
+	++chart_currentPosition;
 }
 
 void Chart::Plot()

@@ -68,6 +68,7 @@ public:
 	virtual constexpr float image_sensor_val();
 
 	Object(int X, int Y);
+	virtual ~Object() = default;
 
 
 	//Basic 'dummy' draw functions if needed

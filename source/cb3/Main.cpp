@@ -250,6 +250,8 @@ void Main::QuickSaveWorld()
 
 void Main::QuickLoadWorld()
 {
+	Deselect();
+
 	ObjectSaver::WorldParams ret = saver.LoadWorld(field, (char*)OuicksaveFilename);
 
 	if (ret.id != -1)
@@ -292,6 +294,12 @@ void Main::MakeStep()
 
 		//Manage auto adaptation
 		auto_adapt->AdaptationStep(ticknum);
+
+		if (selectedObject &&
+			(!field->ValidateObjectExistance(selectedObject) || selectedObject->type() != bot))
+		{
+			Deselect();
+		}
 
 		++ticknum;
 		++tpsTickCounter;
@@ -371,6 +379,9 @@ void Main::SelectionShadowScreen()
 
 void Main::Deselect()
 {
+	if (field)
+		field->TrackObject(NULL);
+
 	selectedObject = NULL;
 	showBrain = false;
 	nn_renderer.selectedNeuron = NULL;

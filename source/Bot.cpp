@@ -136,7 +136,7 @@ Color Bot::GetRandomColor()
 	Color toRet;
 
 #ifdef PresetRandomColors
-	uint i = RandomVal(sizeof(presetColors) / (3 * sizeof(Uint8)));
+	uint i = RandomVal(sizeof(presetColors) / sizeof(presetColors[0]));
 
 	toRet.r = presetColors[i][0];
 	toRet.g = presetColors[i][1];
