@@ -36,8 +36,9 @@ namespace cb3
 #define RandomSeed
 //#define Seed 0
 
-//Number of threads (only 1, 4, 8, 16, 24 or 48)
-#define NumThreads 48
+//Maximum number of simulation threads. The runtime also caps this at the
+//number of logical processors available on the current machine.
+#define NumThreads 16
 
 //-----------------------------------------------------------------
 

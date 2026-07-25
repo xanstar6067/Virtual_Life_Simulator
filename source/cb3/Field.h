@@ -100,7 +100,7 @@ struct FieldDynamicParams
     FieldDynamicParams();
 };
 
-struct ThreadCounters
+struct alignas(64) ThreadCounters
 {
     uint objects = 0;
     uint bots = 0;
@@ -155,6 +155,7 @@ private:
     void ChangeSeason();
 
     //Multithreading
+    int numThreads = 1;
     ThreadCounters objectCounters[NumThreads];
     std::thread threads[NumThreads];
     std::mutex threadMutex;
@@ -265,6 +266,7 @@ public:
     uint GetNumOrganics();
     uint GetNumPredators();
     uint GetAverageLifetime();
+    uint GetNumThreads();
     PersistentState GetPersistentState() const;
     void SetPersistentState(const PersistentState& state);
 

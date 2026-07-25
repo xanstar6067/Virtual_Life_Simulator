@@ -189,9 +189,9 @@ public:
 
 	void ClearWorld();
 
-	void MakeStep();
-	void RunFrameSimulation();
-	void Render();	
+	bool MakeStep();
+	bool RunFrameSimulation();
+	bool Render();
 
 	void Start();
 	void Pause();

@@ -109,16 +109,8 @@ void Main::DrawSystemWindow()
 		
 		SameLine();
 
-		#if NumThreads == 1
-		{
-			Text(", один поток");
-	}
-		#else
-		{
-			uint threads = NumThreads;
-			Text(", потоков: %i", threads);
-		}
-		#endif
+		uint threads = field->GetNumThreads();
+		Text(", потоков: %i", threads);
 	}
 	End();
 }
@@ -490,8 +482,9 @@ void Main::DrawSidePanelWindow()
 						Text("Платформа: %s", SDL_GetPlatform());
 						Text("Процессоры: %d", logicalProcessors);
 						Text("Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
-						Text("Потоки симуляции: %u", (uint)NumThreads);
-						if (NumThreads > logicalProcessors)
+						const uint simulationThreads = field->GetNumThreads();
+						Text("Потоки симуляции: %u", simulationThreads);
+						if (simulationThreads > (uint)logicalProcessors)
 						{
 							TextColored(vlsui::Warning(), "Потоков больше, чем процессоров");
 						}
@@ -1365,7 +1358,7 @@ void Main::MouseClick()
 	}
 }
 
-void Main::Render()
+bool Main::Render()
 {	
 	//Limit FPS
 	TimePoint currentTickFps = clock.now();
@@ -1388,7 +1381,7 @@ void Main::Render()
 
 	if (TimeMSBetween(currentTickFps, lastTickFps) < fpsInterval)
 	{
-		return;
+		return false;
 	}
 	else
 	{
@@ -1441,6 +1434,8 @@ void Main::Render()
 		realFPS = fpsCounter;
 		fpsCounter = 0;
 	}
+
+	return true;
 }
 
 void Main::RunWithNoRender()

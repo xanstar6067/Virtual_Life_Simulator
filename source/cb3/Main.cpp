@@ -129,32 +129,6 @@ static string MakeTimestampFileName(const char* prefix)
 	return string(prefix) + "_" + buffer;
 }
 
-inline void ValidateThreadsNumber()
-{
-	if ((FieldCellsWidth % (NumThreads * 2)) != 0)
-	{
-		//Ширина поля должна делиться на (число потоков х2) без остатка!
-		ErrorMessage(L"Ширина поля должна делиться на (NumThreads * 2) без остатка!", L"Неверные параметры!");
-		exit(0);
-	}
-
-	if ((FieldCellsWidth / (NumThreads * 2)) < 4)
-	{
-		//Поле должно быть шире или потоков должно быть меньше
-		ErrorMessage(L"Участок поля слишком мал для выбранного числа потоков!", L"Неверные параметры!");
-		exit(0);
-	}
-	
-	for (uint n : {1, 4, 8, 16, 24, 48})
-	{
-		if (n == NumThreads)
-			return;	// Параметры корректны
-	}
-
-	ErrorMessage(L"Недопустимое число потоков!", L"Неверные параметры!");
-	exit(0);
-}
-
 void Main::SwitchPause()
 {
 	simulate = !simulate;
@@ -272,7 +246,7 @@ void Main::QuickLoadWorld()
 	}
 }
 
-void Main::MakeStep()
+bool Main::MakeStep()
 {
 	//Simulation step
 	currentTick = clock.now();
@@ -286,9 +260,12 @@ void Main::MakeStep()
 		limit_interval = 0;
 	}
 
-	if ((TimeMSBetween(currentTick, prevTick) >= limit_interval) or (limit_interval == 0) or (renderType == noRender))
+	bool stepped = false;
+
+	if ((TimeMSBetween(currentTick, prevTick) >= limit_interval) or (limit_interval == 0))
 	{
 		prevTick = currentTick;
+		stepped = true;
 
 		field->tick(ticknum);
 
@@ -323,18 +300,18 @@ void Main::MakeStep()
 		realTPS = tpsTickCounter;
 		tpsTickCounter = 0;
 	}
+
+	return stepped;
 }
 
-void Main::RunFrameSimulation()
+bool Main::RunFrameSimulation()
 {
 	if (simulate)
 	{
-		MakeStep();
+		return MakeStep();
 	}
-	else
-	{
-		SDL_Delay(5);
-	}
+
+	return false;
 }
 
 void Main::HighlightSelection()
@@ -843,18 +820,18 @@ void Main::MainLoop()
 		}
 
 		//Simulation
+		bool didWork = false;
+
 		if (simulate)
 		{
-			MakeStep();
-		}
-		else
-		{
-			//Delay so it would not eat too many resourses while on pause
-			SDL_Delay(5);
+			didWork = MakeStep();
 		}
 
 		if(windowIsVisible)
-			Render();
+			didWork = Render() || didWork;
+
+		if (!didWork)
+			SDL_Delay(1);
 	}
 }
 

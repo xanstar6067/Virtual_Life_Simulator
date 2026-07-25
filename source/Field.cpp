@@ -967,24 +967,31 @@ void Field::SpawnControlGroup()
 
 void Field::SpawnApples()
 {
-    Object* tmpObj;
     const int landHeight = std::clamp(FieldCellsHeight - params.oceanLevel, 0, FieldCellsHeight);
+    if (landHeight == 0)
+        return;
 
-    for (uint ix = 0; ix < FieldCellsWidth; ++ix)
+    //The old implementation rolled once for every land cell. With the default
+    //0.1% chance that made hundreds of thousands of RNG calls to create only a
+    //few hundred apples. Sample the equivalent expected number of cells instead.
+    constexpr uint ChanceScale = 1000;
+    const uint landCells = FieldCellsWidth * (uint)landHeight;
+    const uint chance = std::clamp((uint)SpawnAppleInCellChance, 0u, ChanceScale);
+    const uint64_t weightedAttempts = (uint64_t)landCells * chance;
+    uint attempts = (uint)(weightedAttempts / ChanceScale);
+    const uint remainder = (uint)(weightedAttempts % ChanceScale);
+
+    if (remainder > 0 && (uint)RandomVal(ChanceScale) < remainder)
+        ++attempts;
+
+    for (uint i = 0; i < attempts; ++i)
     {
-        for (int iy = 0; iy < landHeight; ++iy)
+        const uint x = (uint)RandomVal(FieldCellsWidth);
+        const uint y = (uint)RandomVal(landHeight);
+
+        if (allCells[x][y] == NULL)
         {
-
-            tmpObj = allCells[ix][iy];
-
-            if (tmpObj == NULL)
-            {
-                //Take a chance to spawn an apple
-                if (RandomPercentX10(SpawnAppleInCellChance))
-                {
-                    AddObject(new Apple(ix, iy));
-                }
-            }
+            AddObject(new Apple(x, y));
         }
     }
 }
@@ -1094,6 +1101,8 @@ void FieldDynamicParams::Reset()
     adaptation_forceBotMovements = 0;
 
     adaptation_organicSpawnRate = 0;
+
+    spawnApples = false;
 
     memset(reserved, 0, sizeof(reserved));
 }

@@ -70,7 +70,7 @@ struct FieldDynamicParams
     FieldDynamicParams();
 };
 
-struct ThreadCounters
+struct alignas(64) ThreadCounters
 {
     uint objects = 0;
     uint bots = 0;

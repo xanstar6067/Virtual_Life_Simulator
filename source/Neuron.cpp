@@ -3,7 +3,7 @@
 
 Neuron::Neuron()
 {
-	SetRandomType();
+	layer = 0;
 }
 
 void Neuron::Clone(Neuron* source)

@@ -1515,16 +1515,17 @@ void Main::MouseClick()
 	}
 }
 
-void Main::Render()
+bool Main::Render()
 {
 	if (!IsClassicMode())
 	{
 		if (cb3Runtime)
 		{
-			cb3Runtime->Render();
+			bool rendered = cb3Runtime->Render();
 			CheckRuntimeRequests();
+			return rendered;
 		}
-		return;
+		return false;
 	}
 	
 	//Limit FPS
@@ -1548,7 +1549,7 @@ void Main::Render()
 
 	if (TimeMSBetween(currentTickFps, lastTickFps) < fpsInterval)
 	{
-		return;
+		return false;
 	}
 	else
 	{
@@ -1599,6 +1600,8 @@ void Main::Render()
 		realFPS = fpsCounter;
 		fpsCounter = 0;
 	}
+
+	return true;
 }
 
 

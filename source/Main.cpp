@@ -192,9 +192,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 		}
 
 		//Simulation
+		bool didWork = false;
+
 		if (simulation.simulate)
 		{
-			simulation.MakeStep();
+			didWork = simulation.MakeStep();
 		}
 		else
 		{
@@ -202,7 +204,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 			SDL_Delay(1);
 		}
 
-		simulation.Render();
+		didWork = simulation.Render() || didWork;
+
+		if (simulation.simulate && !didWork)
+		{
+			//Both the TPS and FPS limiters rejected this iteration.
+			//Yield the CPU instead of spinning until the next deadline.
+			SDL_Delay(1);
+		}
 
 		if (simulation.terminate)
 			goto exitfor;
@@ -280,16 +289,17 @@ void Main::DropWorldOrganics()
 	LogPrint("В мир добавлена органика\r\n");
 }
 
-void Main::MakeStep()
+bool Main::MakeStep()
 {
 	if (!IsClassicMode())
 	{
 		if (cb3Runtime)
 		{
-			cb3Runtime->MakeStep();
+			bool stepped = cb3Runtime->MakeStep();
 			CheckRuntimeRequests();
+			return stepped;
 		}
-		return;
+		return false;
 	}
 
 	//Simulation step
@@ -304,9 +314,12 @@ void Main::MakeStep()
 		limit_interval = 0;
 	}
 
-	if ((TimeMSBetween(currentTick, prevTick) >= limit_interval) || (limit_interval == 0) || (renderType == noRender))
+	bool stepped = false;
+
+	if ((TimeMSBetween(currentTick, prevTick) >= limit_interval) || (limit_interval == 0))
 	{
 		prevTick = currentTick;
+		stepped = true;
 
 		field->tick(ticknum);
 
@@ -346,6 +359,8 @@ void Main::MakeStep()
 		realTPS = tpsTickCounter;
 		tpsTickCounter = 0;
 	}
+
+	return stepped;
 }
 
 void Main::HighlightSelection()

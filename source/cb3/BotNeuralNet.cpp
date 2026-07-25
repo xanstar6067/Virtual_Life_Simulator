@@ -68,8 +68,6 @@ void BotNeuralNet::Clone(BotNeuralNet* prototype)
 
 BotNeuralNet::BotNeuralNet(BotNeuralNet* prototype)
 {
-	BotNeuralNet();
-
 	Clone(prototype);
 }
 

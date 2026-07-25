@@ -731,8 +731,9 @@ void Field::ProcessPart_MultipleThreads(const uint X1, const uint X2, const uint
         ObjectTick(tmpObj);
     };
 
-    const uint chunkWidth = ((X2 - X1) / 2);
-    const uint _X[2] = {X1, X1 + chunkWidth};
+    const uint middleX = X1 + ((X2 - X1) / 2);
+    const uint passStart[2] = {X1, middleX};
+    const uint passEnd[2] = {middleX, X2};
 
     for(;;)
     {
@@ -742,7 +743,7 @@ void Field::ProcessPart_MultipleThreads(const uint X1, const uint X2, const uint
                 return;
 
             //Calculate chunk
-            for (uint X = _X[pass]; X < _X[pass] + chunkWidth; ++X)
+            for (uint X = passStart[pass]; X < passEnd[pass]; ++X)
             {
                 for (uint Y = 0; Y < FieldCellsHeight; ++Y)
                 {
@@ -762,10 +763,10 @@ void Field::ProcessPart_MultipleThreads(const uint X1, const uint X2, const uint
 
 void Field::StartThreads()
 {
-    repeat(NumThreads)
+    repeat(numThreads)
     {
-        uint X1 = (FieldCellsWidth / NumThreads) * i;
-        uint X2 = (FieldCellsWidth / NumThreads) * (i + 1);
+        uint X1 = (FieldCellsWidth * (uint)i) / (uint)numThreads;
+        uint X2 = (FieldCellsWidth * (uint)(i + 1)) / (uint)numThreads;
 
         threads[i] = std::thread(&Field::ProcessPart_MultipleThreads, this, X1, X2, i);
     }
@@ -777,7 +778,7 @@ void Field::SignalThreads()
         std::lock_guard<std::mutex> lock(threadMutex);
         threadsReady = 0;
 
-        repeat(NumThreads)
+        repeat(numThreads)
         {
             threadGoMarker[i] = true;
         }
@@ -791,7 +792,7 @@ void Field::WaitForThreads()
     std::unique_lock<std::mutex> lock(threadMutex);
     threadDoneCondition.wait(lock, [&]()
     {
-        return (threadsReady >= NumThreads) || terminateThreads;
+        return (threadsReady >= numThreads) || terminateThreads;
     });
 }
 
@@ -800,7 +801,7 @@ inline void Field::tick_multiple_threads()
 {
     auto clearCounters = [&]()
     {
-        repeat(NumThreads)
+        repeat(numThreads)
         {
             objectCounters[i].Clear();
         }
@@ -808,7 +809,7 @@ inline void Field::tick_multiple_threads()
 
     auto addCounters = [&]()
     {
-        repeat(NumThreads)
+        repeat(numThreads)
         {
             objectsTotal += objectCounters[i].objects;
             botsTotal += objectCounters[i].bots;
@@ -868,11 +869,14 @@ void Field::tick(uint thisFrame)
     }
 
     //Make simulation step
-    #if NumThreads == 1
+    if (numThreads == 1)
+    {
         tick_single_thread();
-    #else
+    }
+    else
+    {
         tick_multiple_threads();
-    #endif
+    }
 }
 
 
@@ -1079,6 +1083,11 @@ uint Field::GetAverageLifetime()
     return averageLifetime;
 }
 
+uint Field::GetNumThreads()
+{
+    return (uint)numThreads;
+}
+
 void Field::SpawnControlGroup()
 {
     for (int i = 0; i < ControlGroupSize; ++i)
@@ -1093,18 +1102,28 @@ void Field::SpawnControlGroup()
 
 void Field::SpawnApples()
 {
-    for (uint ix = 0; ix < FieldCellsWidth; ++ix)
+    const int landHeight = std::clamp(FieldCellsHeight - params.oceanLevel, 0, FieldCellsHeight);
+    if (landHeight == 0)
+        return;
+
+    constexpr uint ChanceScale = 1000;
+    const uint landCells = FieldCellsWidth * (uint)landHeight;
+    const uint chance = std::clamp((uint)SpawnAppleInCellChance, 0u, ChanceScale);
+    const uint64_t weightedAttempts = (uint64_t)landCells * chance;
+    uint attempts = (uint)(weightedAttempts / ChanceScale);
+    const uint remainder = (uint)(weightedAttempts % ChanceScale);
+
+    if (remainder > 0 && (uint)RandomVal(ChanceScale) < remainder)
+        ++attempts;
+
+    for (uint i = 0; i < attempts; ++i)
     {
-        for (uint iy = 0; iy < (FieldCellsHeight - (uint)params.oceanLevel); ++iy)
+        const uint x = (uint)RandomVal(FieldCellsWidth);
+        const uint y = (uint)RandomVal(landHeight);
+
+        if (allCells[x][y] == NULL)
         {
-            if (allCells[ix][iy] == NULL)
-            {
-                //Take a chance to spawn an apple
-                if (RandomPercentX10(SpawnAppleInCellChance))
-                {
-                    AddObject(new Apple(ix, iy));
-                }
-            }
+            AddObject(new Apple(x, y));
         }
     }
 }
@@ -1112,14 +1131,17 @@ void Field::SpawnApples()
 
 Field::Field()
 {
+    const int cpuCount = SDL_GetCPUCount();
+    numThreads = std::clamp(cpuCount, 1, NumThreads);
+    numThreads = (std::min)(numThreads, FieldCellsWidth / 2);
+
     //Clear array
     memset(allCells, 0, sizeof(Point*) * FieldCellsWidth * FieldCellsHeight);    
 
-    #if NumThreads!=1
+    if (numThreads > 1)
     {
         StartThreads();
     }
-    #endif
 
     Object::SetPointers(this, (Object***)allCells);
 
@@ -1127,24 +1149,25 @@ Field::Field()
 
 Field::~Field()
 {
-#if NumThreads!=1
+    if (numThreads > 1)
     {
-        std::lock_guard<std::mutex> lock(threadMutex);
-        terminateThreads = true;
-
-        repeat(NumThreads)
         {
-            threadGoMarker[i] = true;
+            std::lock_guard<std::mutex> lock(threadMutex);
+            terminateThreads = true;
+
+            repeat(numThreads)
+            {
+                threadGoMarker[i] = true;
+            }
+        }
+        threadStartCondition.notify_all();
+
+        repeat(numThreads)
+        {
+            if (threads[i].joinable())
+                threads[i].join();
         }
     }
-    threadStartCondition.notify_all();
-
-    repeat(NumThreads)
-    {
-        if (threads[i].joinable())
-            threads[i].join();
-    }
-#endif
 
     RemoveAllObjects();
 }

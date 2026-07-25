@@ -1,6 +1,9 @@
 
 #include "Field.h"
 
+#include <cmath>
+#include <memory>
+
 static constexpr int SaveModeId = static_cast<int>(SimulationMode::Classic);
 
 
@@ -117,63 +120,83 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, const std::filesys
 
 ObjectSaver::WorldParams ObjectSaver::LoadWorldCompact(Field* world, MyInputStream& file)
 {
-    WorldParams toRet = {-1, -1, -1, -1};
-    Object* tmpObj;
+    const WorldParams loadFailure = {-1, -1, -1, -1};
+    WorldParams toRet = loadFailure;
 
     int loadWidth = file.ReadInt();
     toRet.width = loadWidth;
 
-    if (file.ReadInt() != FieldCellsHeight)
-        return {-1, -1};
+    if (!file || loadWidth <= 0 || file.ReadInt() != FieldCellsHeight)
+        return loadFailure;
 
     toRet.id = file.ReadInt();
     toRet.seed = file.ReadInt();
     toRet.tick = file.ReadInt();
 
-    if (file.ReadInt() != sizeof world->params)
-        return {-1, -1};
+    if (!file || file.ReadInt() != sizeof world->params)
+        return loadFailure;
 
-    file.read((char*)&world->params, sizeof world->params);
+    FieldDynamicParams loadedParams;
+    file.read((char*)&loadedParams, sizeof loadedParams);
 
-    Field::PersistentState worldState;
-    worldState.spawnApplesInterval = (uint)file.ReadInt();
-    world->SetPersistentState(worldState);
+    Field::PersistentState loadedState;
+    loadedState.spawnApplesInterval = (uint)file.ReadInt();
 
-    if (file.ReadInt() != NumberOfMutationMarkers)
-        return {-1, -1};
+    if (!file || file.ReadInt() != NumberOfMutationMarkers)
+        return loadFailure;
 
     if (file.ReadInt() != NumNeuronLayers)
-        return {-1, -1};
+        return loadFailure;
 
     if (file.ReadInt() != NeuronsInLayer)
-        return {-1, -1};
+        return loadFailure;
 
     int objectCount = file.ReadInt();
-    if (objectCount < 0)
-        return {-1, -1};
+    constexpr int MaxObjectCount = FieldCellsWidth * FieldCellsHeight;
+    if (!file || objectCount < 0 || objectCount > MaxObjectCount)
+        return loadFailure;
 
-    world->RemoveAllObjects();
+    std::vector<std::unique_ptr<Object>> loadedObjects;
+    loadedObjects.reserve((size_t)objectCount);
+    std::vector<byte> occupiedCells((size_t)MaxObjectCount, 0);
 
     for (int i = 0; i < objectCount; ++i)
     {
         int x = file.ReadUShort();
         int y = file.ReadUShort();
 
-        tmpObj = LoadObjectCompact(file);
+        std::unique_ptr<Object> tmpObj(LoadObjectCompact(file));
 
-        if (!tmpObj)
-            return {-1, -1};
+        if (!file || !tmpObj)
+            return loadFailure;
 
         if ((x >= FieldCellsWidth) || (y >= FieldCellsHeight))
         {
-            delete tmpObj;
             continue;
         }
 
+        const size_t cellIndex = (size_t)x * FieldCellsHeight + (size_t)y;
+        if (occupiedCells[cellIndex])
+            return loadFailure;
+
         tmpObj->x = x;
         tmpObj->y = y;
+        occupiedCells[cellIndex] = 1;
+        loadedObjects.push_back(std::move(tmpObj));
+    }
 
-        world->AddObject(tmpObj);
+    if (!file)
+        return loadFailure;
+
+    //Commit only after the complete file has been parsed and validated.
+    world->RemoveAllObjects();
+    world->params = loadedParams;
+    world->SetPersistentState(loadedState);
+
+    for (std::unique_ptr<Object>& object : loadedObjects)
+    {
+        if (world->AddObject(object.get()))
+            object.release();
     }
 
     return toRet;
@@ -298,13 +321,16 @@ bool ObjectSaver::LoadBrainCompact(MyInputStream& file, BotNeuralNet* brain, boo
         {
             Neuron* neuron = &brain->allNeurons[layer][neuronIndex];
 
-            neuron->type = (NeuronType)file.ReadByte();
+            const byte type = file.ReadByte();
             neuron->bias = file.ReadFloat();
             neuron->numConnections = file.ReadByte();
             neuron->layer = layer;
 
-            if (neuron->numConnections > NeuronsInLayer)
+            if (!file || type > (byte)NeuronType::memory || !std::isfinite(neuron->bias) ||
+                neuron->numConnections > NeuronsInLayer)
                 return false;
+
+            neuron->type = (NeuronType)type;
 
             for (uint connectionIndex = 0; connectionIndex < neuron->numConnections; ++connectionIndex)
             {
@@ -314,14 +340,20 @@ bool ObjectSaver::LoadBrainCompact(MyInputStream& file, BotNeuralNet* brain, boo
                 connection->dest_neuron = file.ReadByte();
                 connection->weight = file.ReadFloat();
 
-                if ((connection->dest_layer >= NumNeuronLayers) || (connection->dest_neuron >= NeuronsInLayer))
+                if (!file || !std::isfinite(connection->weight) ||
+                    (connection->dest_layer >= NumNeuronLayers) ||
+                    (connection->dest_neuron >= NeuronsInLayer))
                     return false;
             }
         }
     }
 
     if (includeMemory)
+    {
         file.read((char*)brain->allMemory, NumNeuronLayers * NeuronsInLayer * sizeof(float));
+        if (!file)
+            return false;
+    }
 
     return true;
 }
@@ -396,6 +428,13 @@ Bot* ObjectSaver::LoadBotCompact(MyInputStream& file)
     state.numMovesY = (uint)file.ReadInt();
     state.numPSonLand = (uint)file.ReadInt();
     state.wasOnLand = file.ReadBool();
+
+    if (!file)
+    {
+        delete toRet;
+        return NULL;
+    }
+
     toRet->SetPersistentState(state);
 
     if (!LoadBrainCompact(file, toRet->GetActiveBrain(), true))
@@ -606,6 +645,12 @@ Object* ObjectSaver::LoadObject(const std::filesystem::path& filename)
         
         toRet = LoadObjectCompact(file);
 
+        if (!file)
+        {
+            delete toRet;
+            return NULL;
+        }
+
         file.close();
 
         return toRet;
@@ -647,7 +692,7 @@ MyOutStream::MyOutStream(const std::filesystem::path& filename, int flags) :std:
 
 int MyInputStream::ReadInt()
 {
-    int toRet;
+    int toRet = 0;
 
     read((char*)&toRet, sizeof(int));
 

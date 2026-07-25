@@ -27,14 +27,14 @@ Cb3Runtime::Cb3Runtime() :
 
 Cb3Runtime::~Cb3Runtime() = default;
 
-void Cb3Runtime::MakeStep()
+bool Cb3Runtime::MakeStep()
 {
-    impl->simulation->RunFrameSimulation();
+    return impl->simulation->RunFrameSimulation();
 }
 
-void Cb3Runtime::Render()
+bool Cb3Runtime::Render()
 {
-    impl->simulation->Render();
+    return impl->simulation->Render();
 }
 
 void Cb3Runtime::HandleKeyboard()

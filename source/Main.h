@@ -199,13 +199,13 @@ public:
 	SimulationMode activeMode = SimulationMode::Classic;
 
 
-	void MakeStep();
+	bool MakeStep();
 
 	void HandleFieldNavigation();
 	
 	void MouseClick();
 
-	void Render();
+	bool Render();
 	
 
 	Main();

@@ -13,8 +13,8 @@ public:
     Cb3Runtime(const Cb3Runtime&) = delete;
     Cb3Runtime& operator=(const Cb3Runtime&) = delete;
 
-    void MakeStep();
-    void Render();
+    bool MakeStep();
+    bool Render();
     void HandleKeyboard();
     void HandleMouseClick();
     void HandleFieldNavigation();

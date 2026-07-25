@@ -6,9 +6,9 @@ namespace cb3
 
 Neuron::Neuron()
 {
-	SetRandomType();
-
 	type = basic;
+	layer = 0u;
+	bias = 0;
 	numConnections = 0u;
 }
 
