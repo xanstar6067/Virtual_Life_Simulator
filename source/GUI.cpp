@@ -957,6 +957,7 @@ void Main::DrawChartWindow()
 		{
 			if (ImPlot::BeginPlot("Объекты", { 800, 550 }))
 			{
+				const int chartValuesToPlot = chart_numValues;
 				
 				//Axes
 				ImPlot::SetupAxisLimits(ImAxis_X1, 0.0, 250.0, ImPlotCond_Always);
@@ -968,14 +969,14 @@ void Main::DrawChartWindow()
 				//Bots number
 				ImPlot::SetNextLineStyle({ 1, 0, 0, 1 }, ChartLineThickness);
 
-				ImPlot::PlotLine("Боты", chartData_bots, chart_numValues - 1, 1.0f, 0.0f, ImPlotLineFlags_None);
+				ImPlot::PlotLine("Боты", chartData_bots, chartValuesToPlot, 1.0f, 0.0f, ImPlotLineFlags_None);
 
 				//Apples number
 				if(chartShow_apples)
 				{
 					ImPlot::SetNextLineStyle({ 0, 1, 0, 1 }, ChartLineThickness);
 
-					ImPlot::PlotLine("Яблоки", chartData_apples, chart_numValues - 1, 1.0f, 0.0f, ImPlotLineFlags_None);
+					ImPlot::PlotLine("Яблоки", chartData_apples, chartValuesToPlot, 1.0f, 0.0f, ImPlotLineFlags_None);
 				}
 
 				//Organics number
@@ -983,7 +984,7 @@ void Main::DrawChartWindow()
 				{
 					ImPlot::SetNextLineStyle({ 0, 0, 1, 1 }, ChartLineThickness);
 
-					ImPlot::PlotLine("Органика", chartData_organics, chart_numValues - 1, 1.0f, 0.0f, ImPlotLineFlags_None);
+					ImPlot::PlotLine("Органика", chartData_organics, chartValuesToPlot, 1.0f, 0.0f, ImPlotLineFlags_None);
 				}
 
 				ImPlot::EndPlot();

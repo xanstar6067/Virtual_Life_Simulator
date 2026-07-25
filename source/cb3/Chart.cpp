@@ -60,21 +60,23 @@ void Chart::Plot()
 
 	if (BeginPlot("Объекты", { 800, 550 }))
 	{
-		//Axes
-		SetupAxisLimits(ImAxis_X1, 0.0, 250.0, ImPlotCond_Always);
-		SetupAxisLimits(ImAxis_Y1, 0.0, 26000.0);
-		SetupAxisLimits(ImAxis_Y2, 0.0, 1000.0);
+		const int chartValuesToPlot = chart_numValues;
 
+		//Axes
 		SetupAxis(ImAxis_X1, "Время");
 		SetupAxis(ImAxis_Y1);
 		SetupAxis(ImAxis_Y2, NULL, ImPlotAxisFlags_Opposite | ImPlotAxisFlags_NoGridLines);
+
+		SetupAxisLimits(ImAxis_X1, 0.0, 250.0, ImPlotCond_Always);
+		SetupAxisLimits(ImAxis_Y1, 0.0, 26000.0);
+		SetupAxisLimits(ImAxis_Y2, 0.0, 1000.0);
 
 		SetAxis(ImAxis_Y1);
 
 		//Bots
 		SetNextLineStyle({ ChartBotsColor }, ChartLineThickness);
 
-		PlotLine("Боты", chartData_bots, chart_numValues - 1,
+		PlotLine("Боты", chartData_bots, chartValuesToPlot,
 			1.0f, 0.0f, ImPlotLineFlags_None);
 
 		//Apples
@@ -82,7 +84,7 @@ void Chart::Plot()
 		{
 			SetNextLineStyle({ ChartApplesColor }, ChartLineThickness);
 
-			PlotLine("Яблоки", chartData_apples, chart_numValues - 1,
+			PlotLine("Яблоки", chartData_apples, chartValuesToPlot,
 				1.0f, 0.0f, ImPlotLineFlags_None);
 		}
 
@@ -91,7 +93,7 @@ void Chart::Plot()
 		{
 			SetNextLineStyle({ ChartOrganicsColor }, ChartLineThickness);
 
-			PlotLine("Органика", chartData_organics, chart_numValues - 1,
+			PlotLine("Органика", chartData_organics, chartValuesToPlot,
 				1.0f, 0.0f, ImPlotLineFlags_None);
 		}
 
@@ -102,7 +104,7 @@ void Chart::Plot()
 		{
 			SetNextLineStyle({ ChartPredatorsColor }, ChartLineThickness);
 
-			PlotLine("Хищники", chartData_predators, chart_numValues - 1,
+			PlotLine("Хищники", chartData_predators, chartValuesToPlot,
 				1.0f, 0.0f, ImPlotLineFlags_None);
 		}
 
@@ -111,7 +113,7 @@ void Chart::Plot()
 		{
 			SetNextLineStyle({ ChartAVGLifetimeColor }, ChartLineThickness);
 
-			PlotLine("Средний возраст", chartData_avg_lifetime, chart_numValues - 1,
+			PlotLine("Средний возраст", chartData_avg_lifetime, chartValuesToPlot,
 				1.0f, 0.0f, ImPlotLineFlags_None);
 		}
 
