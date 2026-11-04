@@ -24,6 +24,7 @@ enum MouseFunction
 
 class Main
 {
+    friend struct InterfaceSmokeTest;
 protected:
 
 	Clock clock;
@@ -86,6 +87,8 @@ protected:
 	void DrawAAWindow();
 
 	//Show more windows
+	bool showFirstPopulationHint = true;
+	bool revealSelection = false;
 	bool showSaveLoad = false;
 	bool showDangerous = false;
 	bool showBrain = false;

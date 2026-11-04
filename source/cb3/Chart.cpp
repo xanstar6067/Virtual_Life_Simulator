@@ -1,5 +1,6 @@
 
 #include "Chart.h"
+#include "../UITheme.h"
 
 
 
@@ -49,6 +50,11 @@ void Chart::AddToChart(float newVal_bots, float newVal_apples, float newVal_orga
 		++chart_numValues;
 
 	++chart_currentPosition;
+}
+
+void Chart::PlotPreview(const ImVec2& size)
+{
+	vlsui::DrawPopulationPreview(chartData_bots, chart_numValues, size);
 }
 
 void Chart::Plot()

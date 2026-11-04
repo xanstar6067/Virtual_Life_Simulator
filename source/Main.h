@@ -18,6 +18,7 @@ enum MouseFunction
 
 class Main final
 {
+    friend struct InterfaceSmokeTest;
 
 private:
 
@@ -84,6 +85,8 @@ private:
 	void DrawModeSwitchConfirmWindow();
 
 	//Show more windows
+	bool showFirstPopulationHint = true;
+	bool revealSelection = false;
 	bool showSaveLoad = false;
 	bool showDangerous = false;
 	bool showBrain = false;

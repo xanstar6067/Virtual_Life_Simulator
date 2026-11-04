@@ -265,6 +265,7 @@ void Main::Pause()
 void Main::SpawnInitialPopulation()
 {
 	field->SpawnControlGroup();
+	showFirstPopulationHint = false;
 	LogPrint("Добавлена стартовая группа ботов\r\n");
 }
 
@@ -774,6 +775,7 @@ bool Main::LoadWorldFromFile(const std::filesystem::path& filePath)
 	ticknum = ret.tick;
 	id = ret.id;
 	field->seed = seed;
+	showFirstPopulationHint = false;
 	return true;
 }
 
@@ -887,6 +889,8 @@ bool Main::IsClassicMode() const
 
 void Main::ResetClassicWorld()
 {
+	showFirstPopulationHint = true;
+	revealSelection = false;
 	Deselect();
 
 	if (field)

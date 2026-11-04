@@ -34,6 +34,7 @@ public:
 	void AddToChart(float, float, float, float, float);
 
 	void Plot();
+	void PlotPreview(const ImVec2& size);
 };
 
 }

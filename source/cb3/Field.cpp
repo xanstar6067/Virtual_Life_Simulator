@@ -13,23 +13,10 @@ int Field::viewX = 0;
 int Field::viewY = 0;
 double Field::zoom = 1.0;
 
-static int GetSidePanelXForField()
-{
-    int fixedX = 2 * FieldX + FieldWidth;
-    int maxVisibleX = windowWidth - GUISidePanelWidth - InterfaceBorder;
-
-    if (maxVisibleX < InterfaceBorder)
-    {
-        maxVisibleX = InterfaceBorder;
-    }
-
-    return (fixedX < maxVisibleX) ? fixedX : maxVisibleX;
-}
-
 static void GetFieldViewportLayout(SDL_Rect& viewport, bool& needHorizontal, bool& needVertical)
 {
-    int availableWidth = GetSidePanelXForField() - FieldX - InterfaceBorder;
-    int availableHeight = windowHeight - FieldY;
+    int availableWidth = vlsui::CalculateLayout(windowWidth, windowHeight).world.w;
+    int availableHeight = vlsui::CalculateLayout(windowWidth, windowHeight).world.h;
 
     if (availableWidth < 1)
     {
@@ -96,8 +83,8 @@ static double ClampFieldZoom(double value)
 
 static double GetFitScale()
 {
-    int availableWidth = GetSidePanelXForField() - FieldX - InterfaceBorder;
-    int availableHeight = windowHeight - FieldY;
+    int availableWidth = vlsui::CalculateLayout(windowWidth, windowHeight).world.w;
+    int availableHeight = vlsui::CalculateLayout(windowWidth, windowHeight).world.h;
 
     if (availableWidth < 1)
     {

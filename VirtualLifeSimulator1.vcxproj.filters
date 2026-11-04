@@ -137,6 +137,9 @@
     <ClInclude Include="source\MyTypes.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="source\UILayout.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
     <ClInclude Include="source\NeuralNetRenderer.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>

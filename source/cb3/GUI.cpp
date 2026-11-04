@@ -12,7 +12,7 @@ void InitImGUI()
 	CreateContext();
 
 	io = &GetIO();
-	io->Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 16.0f, NULL, io->Fonts->GetGlyphRangesCyrillic());
+	vlsui::AddInterfaceFont(*io);
 
 	ImPlot::CreateContext();
 
@@ -106,7 +106,7 @@ void Main::DrawSystemWindow()
 
 		TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Ядер процессора: %d", SDL_GetCPUCount());
 		TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
-		
+
 		SameLine();
 
 		uint threads = field->GetNumThreads();
@@ -180,7 +180,7 @@ void Main::DrawSelectionWindow()
 				SameLine();
 				TextColored(ImVec4(((c.c[0] * 1.0f) / 255.0f), ((c.c[1] * 1.0f) / 255.0f), 
 					((c.c[2] * 1.0f) / 255.0f), 1.0f), "*****");
-				
+
 				if (Button("Показать мозг", { 100, 25 }))
 				{
 					showBrain = !showBrain;
@@ -326,311 +326,300 @@ void Main::DrawAdditionalsWindow()
 	End();
 }
 
-static float GetSidePanelX()
-{
-	float maxVisibleX = windowWidth - GUISidePanelWidth * 1.0f - InterfaceBorder * 1.0f;
-
-	if (maxVisibleX < InterfaceBorder)
-	{
-		maxVisibleX = InterfaceBorder * 1.0f;
-	}
-
-	return maxVisibleX;
-}
-
 void Main::DrawSidePanelWindow()
 {
-	float panelHeight = windowHeight - InterfaceBorder * 2.0f;
-
-	if (panelHeight < 200.0f)
+	const auto layout = vlsui::CalculateLayout(windowWidth, windowHeight);
+	int displayMode = (int)renderType;
+	const auto actions =
+		vlsui::DrawWorkspaceHeader(layout, "CYBERBIOLOGY3", simulate, limit_ticks_per_second, GUI_Max_tps, displayMode);
+	renderType = (RenderTypes)displayMode;
+	if (actions.seed)
+		SpawnInitialPopulation();
+	if (actions.pause)
+		SwitchPause();
+	if (actions.step)
+		MakeStep();
+	if (actions.saves)
 	{
-		panelHeight = 200.0f;
+		LoadFilenames();
+		showSaveLoad = true;
+	}
+	mouseFunc = (MouseFunction)vlsui::DrawWorkspaceTools(layout, (int)mouseFunc, brushSize, 1);
+
+	// Tick counters are stale after editing a paused world. Refresh only the
+	// displayed counts; this does not step the world or alter simulation state.
+	static unsigned displayedBots = 0, displayedObjects = 0;
+	static double nextCountRefresh = 0.0;
+	static const Field *countedField = nullptr;
+	if (simulate)
+	{
+		displayedBots = field->GetNumBots();
+		displayedObjects = field->GetNumObjects();
+	}
+	else if (field != countedField || ImGui::GetTime() >= nextCountRefresh || actions.seed || actions.step)
+	{
+		displayedBots = displayedObjects = 0;
+		for (int x = 0; x < FieldCellsWidth; ++x)
+			for (int y = 0; y < FieldCellsHeight; ++y)
+				if (const auto object = field->GetObjectLocalCoords(x, y))
+				{
+					++displayedObjects;
+					if (object->type() == bot)
+						++displayedBots;
+				}
+		nextCountRefresh = ImGui::GetTime() + 0.25;
+		countedField = field;
 	}
 
-	SetNextWindowBgAlpha(1.0f);
-	SetNextWindowSize({ GUISidePanelWidth * 1.0f, panelHeight });
-	SetNextWindowPos({ GetSidePanelX(), InterfaceBorder * 1.0f });
-
-	ImGuiWindowFlags panelFlags =
-		ImGuiWindowFlags_NoTitleBar |
-		ImGuiWindowFlags_NoResize |
-		ImGuiWindowFlags_NoMove |
-		ImGuiWindowFlags_NoCollapse;
-
-	Begin("Панель", NULL, panelFlags);
+	vlsui::BeginWorkspaceWindow("##WorkspaceInspector", layout.inspector);
+	if (ImGui::BeginTabBar("##InspectorTabs"))
 	{
-		TextColored(vlsui::Accent(), "VIRTUAL LIFE");
-		SameLine();
-		TextDisabled("/ CYBERBIOLOGY3");
-		TextDisabled("Расширенная модель эволюции");
-		vlsui::DrawStatus(simulate);
-
-		Spacing();
-		float halfWidth = vlsui::HalfWidth();
-		const ImVec4 runButtonColor = simulate ? vlsui::Warning() : vlsui::Success();
-
-		if (vlsui::ColoredButton(simulate ? "Пауза" : "Продолжить", ImVec2(halfWidth, 38.0f), runButtonColor))
+		if (ImGui::BeginTabItem("Организм", nullptr,
+								revealSelection ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None))
 		{
-			SwitchPause();
-		}
-		vlsui::ItemTooltip("Space / Pause");
-
-		SameLine();
-		BeginDisabled(simulate);
-		if (Button("Один шаг", ImVec2(halfWidth, 38.0f)))
-		{
-			MakeStep();
-		}
-		EndDisabled();
-		vlsui::ItemTooltip(simulate ? "Сначала поставьте симуляцию на паузу" : "Num +");
-
-		if (vlsui::ColoredButton("Заселить мир", ImVec2(-1.0f, 38.0f), vlsui::Accent()))
-		{
-			SpawnInitialPopulation();
-		}
-		vlsui::ItemTooltip("Добавить стартовую группу случайных ботов (F1)");
-
-		if (Button("Сохранения и загрузка", ImVec2(-1.0f, 34.0f)))
-		{
-			LoadFilenames();
-			showSaveLoad = true;
-		}
-		vlsui::ItemTooltip("Открыть полную библиотеку сохранений (Z)");
-
-		Spacing();
-		Separator();
-		BeginChild("##Cb3PanelContent", ImVec2(0.0f, 0.0f), false);
-		{
-			if (BeginTabBar("##Cb3PanelTabs"))
+			ImGui::BeginChild("##OrganismInspectorContent", ImVec2(0.0f, 0.0f), false);
+			vlsui::SectionTitle("Выбранный объект");
+			if (selectedObject && field->ValidateObjectExistance(selectedObject))
 			{
-				if (BeginTabItem("Симуляция"))
+				ImGui::Text("Бот  •  X %i  •  Y %i", selectedObject->x, selectedObject->y);
+				ImGui::Text("Возраст: %i / %i", selectedObject->GetLifetime(), field->params.botMaxLifetime);
+				ImGui::Text("Энергия: %i / %i", selectedObject->energy, field->params.botMaxEnergy);
+				ImGui::ProgressBar((float)selectedObject->energy / field->params.botMaxEnergy, ImVec2(-1.0f, 6.0f), "");
+				ImGui::TextDisabled("Фотосинтез %i  •  охота %i", ((Bot *)selectedObject)->GetEnergyFromPS(),
+									((Bot *)selectedObject)->GetEnergyFromKills());
+
+				ImGui::TextDisabled("Метки родства");
+				for (int i = 0; i < NumberOfMutationMarkers; ++i)
 				{
-					vlsui::SectionTitle("Состояние мира");
-					if (BeginTable("##Cb3Metrics", 2, ImGuiTableFlags_SizingStretchSame))
-					{
-						TableNextRow();
-						TableSetColumnIndex(0);
-						TextDisabled("Шаг");
-						Text("%u", ticknum);
-						TableSetColumnIndex(1);
-						TextDisabled("Скорость");
-						Text("%u TPS / %u FPS", realTPS, realFPS);
-
-						TableNextRow();
-						TableSetColumnIndex(0);
-						TextDisabled("Объекты");
-						Text("%i", field->GetNumObjects());
-						TableSetColumnIndex(1);
-						TextDisabled("Боты");
-						Text("%i", field->GetNumBots());
-
-						TableNextRow();
-						TableSetColumnIndex(0);
-						TextDisabled("Средний возраст");
-						Text("%i", field->GetAverageLifetime());
-						TableSetColumnIndex(1);
-						TextDisabled("Размер мира");
-						Text("%i клеток", FieldCellsWidth);
-						EndTable();
-					}
-
-					if (field->params.useSeasons)
-					{
-						TextDisabled("Сезон: %s  •  %i / %i",
-							SeasonNames[field->GetSeason()],
-							field->GetSeasonCounter(),
-							field->params.seasonInterval);
-					}
-
-					vlsui::SectionTitle("Скорость и среда");
-					TextDisabled("Лимит симуляции");
-					SetNextItemWidth(GetContentRegionAvail().x);
-					SliderInt("##Cb3TPS", &limit_ticks_per_second, 0, GUI_Max_tps, "%d тиков/с");
-					if (limit_ticks_per_second == 0)
-					{
-						TextDisabled("Без ограничения скорости");
-					}
-					TextDisabled("Лимит отрисовки");
-					SetNextItemWidth(GetContentRegionAvail().x);
-					SliderInt("##Cb3FPS", &limitFPS, 0, GUI_Max_fps, "%d кадров/с");
-					TextDisabled("Энергия фотосинтеза");
-					SetNextItemWidth(GetContentRegionAvail().x);
-					SliderInt("##Cb3PS", &field->params.PSreward, 0, GUI_Max_food, "%d");
-
-					vlsui::SectionTitle("Быстрые действия", "были доступны только с клавиатуры");
-					float actionWidth = vlsui::HalfWidth();
-					if (Button("Стена", ImVec2(actionWidth, 34.0f)))
-						PlaceWorldWall();
-					vlsui::ItemTooltip("Вертикальная стена (F2)");
-					SameLine();
-					if (Button("Органика", ImVec2(actionWidth, 34.0f)))
-						DropWorldOrganics();
-					vlsui::ItemTooltip("Добавить органику (F3)");
-					if (Button("Камни", ImVec2(actionWidth, 34.0f)))
-						SpawnWorldRocks();
-					vlsui::ItemTooltip("Случайные камни (F4)");
-					SameLine();
-					if (vlsui::ColoredButton("Мутация мира", ImVec2(actionWidth, 34.0f), vlsui::Warning()))
-						MutateWholeWorld();
-					vlsui::ItemTooltip("Солнечная вспышка — мутировать ботов (F11)");
-
-					vlsui::SectionTitle("Быстрое сохранение", "отдельный слот CyberBiology3");
-					if (Button("Быстро сохранить", ImVec2(actionWidth, 34.0f)))
-						QuickSaveWorld();
-					vlsui::ItemTooltip("F5 — перезаписывает быстрый слот CyberBiology3");
-					SameLine();
-					const bool hasCb3QuickSave = std::filesystem::exists(QuicksaveFilename);
-					BeginDisabled(!hasCb3QuickSave);
-					if (Button("Быстро загрузить", ImVec2(actionWidth, 34.0f)))
-						QuickLoadWorld();
-					EndDisabled();
-					vlsui::ItemTooltip(hasCb3QuickSave
-						? "F9 — заменяет текущий мир быстрым сохранением"
-						: "Быстрое сохранение CyberBiology3 еще не создано");
-
-					if (CollapsingHeader("Техническая информация"))
-					{
-						int logicalProcessors = SDL_GetCPUCount();
-						Text("Платформа: %s", SDL_GetPlatform());
-						Text("Процессоры: %d", logicalProcessors);
-						Text("Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
-						const uint simulationThreads = field->GetNumThreads();
-						Text("Потоки симуляции: %u", simulationThreads);
-						if (simulationThreads > (uint)logicalProcessors)
-						{
-							TextColored(vlsui::Warning(), "Потоков больше, чем процессоров");
-						}
-						TextDisabled("Seed %u  •  ID %u", seed, id);
-						TextDisabled("Слоев %i  •  нейронов %i", NumNeuronLayers, NumHiddenNeurons);
-					}
-
-					EndTabItem();
+					if (i)
+						ImGui::SameLine();
+					ImGui::Text("%i", ((Bot *)selectedObject)->GetMarkers()[i]);
 				}
-
-				if (BeginTabItem("Объект"))
-				{
-					vlsui::SectionTitle("Выбранный объект");
-					if (selectedObject && field->ValidateObjectExistance(selectedObject))
-					{
-						Text("Бот  •  X %i  •  Y %i", selectedObject->x, selectedObject->y);
-						Text("Возраст: %i / %i", selectedObject->GetLifetime(), field->params.botMaxLifetime);
-						Text("Энергия: %i", selectedObject->energy);
-						TextDisabled("Фотосинтез %i  •  охота %i",
-							((Bot*)selectedObject)->GetEnergyFromPS(),
-							((Bot*)selectedObject)->GetEnergyFromKills());
-
-						Color& color = *((Bot*)selectedObject)->GetColor();
-						ColorButton("##Cb3BotColor",
-							ImVec4(color.c[0] / 255.0f, color.c[1] / 255.0f, color.c[2] / 255.0f, 1.0f),
-							ImGuiColorEditFlags_NoTooltip, ImVec2(28.0f, 28.0f));
-						SameLine();
-						if (Button("Новый цвет", ImVec2(110.0f, 28.0f)))
-							field->RepaintBot((Bot*)selectedObject, Color::GetRandomColor(), RepaintTolerance);
-						SameLine();
-						if (Button("Мозг", ImVec2(-1.0f, 28.0f)))
-							showBrain = !showBrain;
-					}
-					else
-					{
-						if (selectedObject)
-							Deselect();
-						TextDisabled("Ничего не выбрано.");
-						TextDisabled("Выберите инструмент «Выбор» и нажмите на бота.");
-					}
-
-					vlsui::SectionTitle("Инструмент мыши");
-					float toolWidth = vlsui::HalfWidth();
-					if (vlsui::ModeButton("Выбор", mouseFunc == mouse_select, ImVec2(toolWidth, 34.0f)))
-						mouseFunc = mouse_select;
-					SameLine();
-					if (vlsui::ModeButton("Удаление", mouseFunc == mouse_remove, ImVec2(toolWidth, 34.0f)))
-						mouseFunc = mouse_remove;
-					if (vlsui::ModeButton("Камень", mouseFunc == mouse_place_rock, ImVec2(toolWidth, 34.0f)))
-						mouseFunc = mouse_place_rock;
-					SameLine();
-					if (vlsui::ModeButton("Из файла", mouseFunc == mouse_from_file, ImVec2(toolWidth, 34.0f)))
-						mouseFunc = mouse_from_file;
-					if (vlsui::ModeButton("Мутация", mouseFunc == mouse_force_mutation, ImVec2(toolWidth, 34.0f)))
-						mouseFunc = mouse_force_mutation;
-
-					TextDisabled("Размер кисти");
-					SetNextItemWidth(GetContentRegionAvail().x);
-					SliderInt("##Cb3Brush", &brushSize, 1, GUI_Max_brush, "%d");
-
-					EndTabItem();
-				}
-
-				if (BeginTabItem("Вид и окна"))
-				{
-					vlsui::SectionTitle("Отображение");
-					float viewWidth = vlsui::HalfWidth();
-					if (vlsui::ModeButton("Обычный", renderType == natural, ImVec2(viewWidth, 34.0f)))
-						renderType = natural;
-					SameLine();
-					if (vlsui::ModeButton("Хищники", renderType == predators, ImVec2(viewWidth, 34.0f)))
-						renderType = predators;
-					if (vlsui::ModeButton("Энергия", renderType == energy, ImVec2(viewWidth, 34.0f)))
-						renderType = energy;
-					SameLine();
-					if (vlsui::ModeButton("Без отрисовки", renderType == noRender, ImVec2(viewWidth, 34.0f)))
-						renderType = noRender;
-
-					vlsui::SectionTitle("Окна");
-					if (BeginTable("##Cb3Windows", 2, ImGuiTableFlags_SizingStretchSame))
-					{
-						TableNextRow();
-						TableSetColumnIndex(0);
-						if (Button("Сохранения", ImVec2(-1.0f, 34.0f)))
-						{
-							LoadFilenames();
-							showSaveLoad = !showSaveLoad;
-						}
-						TableSetColumnIndex(1);
-						if (Button("Инструменты", ImVec2(-1.0f, 34.0f)))
-							showDangerous = !showDangerous;
-
-						TableNextRow();
-						TableSetColumnIndex(0);
-						if (Button("Среда", ImVec2(-1.0f, 34.0f)))
-							showAdaptation = !showAdaptation;
-						TableSetColumnIndex(1);
-						if (Button("График", ImVec2(-1.0f, 34.0f)))
-							showChart = !showChart;
-
-						TableNextRow();
-						TableSetColumnIndex(0);
-						if (Button("Автоадаптация", ImVec2(-1.0f, 34.0f)))
-							showAutomaticAdaptation = !showAutomaticAdaptation;
-						TableSetColumnIndex(1);
-						if (Button("Выход", ImVec2(-1.0f, 34.0f)))
-							terminate = true;
-						EndTable();
-					}
-
-					vlsui::SectionTitle("Режим симуляции");
-					if (vlsui::ColoredButton("Перейти в Classic", ImVec2(-1.0f, 36.0f), vlsui::Accent()))
-					{
-						showModeSwitchConfirm = true;
-					}
-
-					if (CollapsingHeader("Журнал"))
-					{
-						BeginChild("##Cb3Log", ImVec2(0.0f, 100.0f), true);
-						TextUnformatted(logText.Buf.Data);
-						if (GetScrollY() >= GetScrollMaxY())
-							SetScrollHereY(1.0f);
-						EndChild();
-					}
-
-					EndTabItem();
-				}
-
-				EndTabBar();
+				Color &color = *((Bot *)selectedObject)->GetColor();
+				ImGui::ColorButton("##Cb3BotColor",
+								   ImVec4(color.c[0] / 255.0f, color.c[1] / 255.0f, color.c[2] / 255.0f, 1.0f),
+								   ImGuiColorEditFlags_NoTooltip, ImVec2(28.0f, 28.0f));
+				ImGui::SameLine();
+				if (ImGui::Button("Новый цвет", ImVec2(110.0f, 28.0f)))
+					field->RepaintBot((Bot *)selectedObject, Color::GetRandomColor(), RepaintTolerance);
+				ImGui::SameLine();
+				if (ImGui::Button("Мозг", ImVec2(-1.0f, 28.0f)))
+					showBrain = !showBrain;
 			}
+			else
+			{
+				if (selectedObject)
+					Deselect();
+				ImGui::TextDisabled("Ничего не выбрано.");
+				ImGui::TextWrapped("Выберите инструмент «Выбор» слева и нажмите на бота в мире.");
+			}
+
+			ImGui::EndChild();
+			ImGui::EndTabItem();
 		}
-		EndChild();
+		revealSelection = false;
+		if (ImGui::BeginTabItem("Среда"))
+		{
+			ImGui::BeginChild("##EnvironmentInspectorContent", ImVec2(0.0f, 0.0f), false);
+
+			vlsui::SectionTitle("Условия мира");
+			ImGui::TextDisabled("Уровень океана");
+			ImGui::SetNextItemWidth(-1.0f);
+			ImGui::SliderInt("##InspectorOcean", &field->params.oceanLevel, 0, FieldCellsHeight, "%d клеток");
+			ImGui::TextDisabled("Уровень ила / грязи");
+			ImGui::SetNextItemWidth(-1.0f);
+			ImGui::SliderInt("##InspectorMud", &field->params.mudLevel, 0, FieldCellsHeight, "%d клеток");
+			ImGui::TextDisabled("Энергия фотосинтеза");
+			ImGui::SetNextItemWidth(-1.0f);
+			ImGui::SliderInt("##InspectorPS", &field->params.PSreward, 0, GUI_Max_food, "%d");
+			ImGui::Checkbox("Появление яблок", &field->params.spawnApples);
+			if (ImGui::Button("Все условия среды", ImVec2(-1.0f, 34.0f)))
+				showAdaptation = true;
+			vlsui::ItemTooltip("C · ограничения размножения, отбор, органика и остальные условия");
+			vlsui::SectionTitle("Отрисовка");
+			ImGui::TextDisabled("Лимит кадров в секунду");
+			ImGui::SetNextItemWidth(-1.0f);
+			ImGui::SliderInt("##InspectorFPS", &limitFPS, 0, GUI_Max_fps, "%d кадров/с");
+			ImGui::TextWrapped("0 — без ограничения. Отключить отрисовку можно в списке режимов над миром.");
+			if (ImGui::Button("Автоадаптация", ImVec2(-1.0f, 34.0f)))
+				showAutomaticAdaptation = true;
+
+			ImGui::EndChild();
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("Мир"))
+		{
+			ImGui::BeginChild("##WorldInspectorContent", ImVec2(0.0f, 0.0f), false);
+			vlsui::SectionTitle("Состояние мира");
+			if (ImGui::BeginTable("##Cb3Metrics", 2, ImGuiTableFlags_SizingStretchSame))
+			{
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::TextDisabled("Шаг");
+				ImGui::Text("%u", ticknum);
+				ImGui::TableSetColumnIndex(1);
+				ImGui::TextDisabled("Скорость");
+				ImGui::Text("%u TPS / %u FPS", realTPS, realFPS);
+
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::TextDisabled("Объекты");
+				ImGui::Text("%i", displayedObjects);
+				ImGui::TableSetColumnIndex(1);
+				ImGui::TextDisabled("Боты");
+				ImGui::Text("%i", displayedBots);
+
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::TextDisabled("Средний возраст");
+				ImGui::Text("%i", field->GetAverageLifetime());
+				ImGui::TableSetColumnIndex(1);
+				ImGui::TextDisabled("Размер мира");
+				ImGui::Text("%i клеток", FieldCellsWidth);
+				ImGui::EndTable();
+			}
+
+			if (field->params.useSeasons)
+			{
+				ImGui::TextDisabled("Сезон: %s  •  %i / %i", SeasonNames[field->GetSeason()], field->GetSeasonCounter(),
+									field->params.seasonInterval);
+			}
+
+			vlsui::SectionTitle("Быстрые действия");
+			float actionWidth = vlsui::HalfWidth();
+			if (ImGui::Button("Стена", ImVec2(actionWidth, 34.0f)))
+				PlaceWorldWall();
+			vlsui::ItemTooltip("Вертикальная стена (F2)");
+			ImGui::SameLine();
+			if (ImGui::Button("Органика", ImVec2(actionWidth, 34.0f)))
+				DropWorldOrganics();
+			vlsui::ItemTooltip("Добавить органику (F3)");
+			if (ImGui::Button("Камни", ImVec2(actionWidth, 34.0f)))
+				SpawnWorldRocks();
+			vlsui::ItemTooltip("Случайные камни (F4)");
+			ImGui::SameLine();
+			if (vlsui::ColoredButton("Мутация F11", ImVec2(actionWidth, 34.0f), vlsui::Warning()))
+				MutateWholeWorld();
+			vlsui::ItemTooltip("Солнечная вспышка — мутировать ботов (F11)");
+
+			vlsui::SectionTitle("Быстрое сохранение", "отдельный слот CyberBiology3");
+			if (ImGui::Button("Сохранить F5", ImVec2(actionWidth, 34.0f)))
+				QuickSaveWorld();
+			vlsui::ItemTooltip("F5 — перезаписывает быстрый слот CyberBiology3");
+			ImGui::SameLine();
+			const bool hasCb3QuickSave = std::filesystem::exists(QuicksaveFilename);
+			ImGui::BeginDisabled(!hasCb3QuickSave);
+			if (ImGui::Button("Загрузить F9", ImVec2(actionWidth, 34.0f)))
+				QuickLoadWorld();
+			ImGui::EndDisabled();
+			vlsui::ItemTooltip(hasCb3QuickSave ? "F9 — заменяет текущий мир быстрым сохранением"
+											   : "Быстрое сохранение CyberBiology3 еще не создано");
+
+			if (ImGui::CollapsingHeader("Техническая информация"))
+			{
+				int logicalProcessors = SDL_GetCPUCount();
+				ImGui::Text("Платформа: %s", SDL_GetPlatform());
+				ImGui::Text("Процессоры: %d", logicalProcessors);
+				ImGui::Text("Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
+				const uint simulationThreads = field->GetNumThreads();
+				ImGui::Text("Потоки симуляции: %u", simulationThreads);
+				if (simulationThreads > (uint)logicalProcessors)
+				{
+					ImGui::TextColored(vlsui::Warning(), "Потоков больше, чем процессоров");
+				}
+				ImGui::TextDisabled("Seed %u  •  ID %u", seed, id);
+				ImGui::TextDisabled("Слоев %i  •  нейронов %i", NumNeuronLayers, NumHiddenNeurons);
+			}
+
+			ImGui::EndChild();
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("Ещё"))
+		{
+			ImGui::BeginChild("##WindowsInspectorContent", ImVec2(0.0f, 0.0f), false);
+			vlsui::SectionTitle("Окна");
+			if (ImGui::BeginTable("##Cb3Windows", 2, ImGuiTableFlags_SizingStretchSame))
+			{
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				if (ImGui::Button("Сохранения", ImVec2(-1.0f, 34.0f)))
+				{
+					LoadFilenames();
+					showSaveLoad = !showSaveLoad;
+				}
+				ImGui::TableSetColumnIndex(1);
+				if (ImGui::Button("Инструменты", ImVec2(-1.0f, 34.0f)))
+					showDangerous = !showDangerous;
+
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				if (ImGui::Button("Среда", ImVec2(-1.0f, 34.0f)))
+					showAdaptation = !showAdaptation;
+				ImGui::TableSetColumnIndex(1);
+				if (ImGui::Button("График", ImVec2(-1.0f, 34.0f)))
+					showChart = !showChart;
+
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				if (ImGui::Button("Автоадаптация", ImVec2(-1.0f, 34.0f)))
+					showAutomaticAdaptation = !showAutomaticAdaptation;
+				ImGui::TableSetColumnIndex(1);
+				if (ImGui::Button("Выход", ImVec2(-1.0f, 34.0f)))
+					terminate = true;
+				ImGui::EndTable();
+			}
+
+			vlsui::SectionTitle("Режим симуляции");
+			if (vlsui::ColoredButton("Перейти в Classic", ImVec2(-1.0f, 36.0f), vlsui::Accent()))
+			{
+				showModeSwitchConfirm = true;
+			}
+
+			if (ImGui::CollapsingHeader("Журнал"))
+			{
+				ImGui::BeginChild("##Cb3Log", ImVec2(0.0f, 100.0f), true);
+				ImGui::TextUnformatted(logText.Buf.Data);
+				if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+					ImGui::SetScrollHereY(1.0f);
+				ImGui::EndChild();
+			}
+
+			ImGui::EndChild();
+			ImGui::EndTabItem();
+		}
+		ImGui::EndTabBar();
 	}
-	End();
+	ImGui::End();
+
+	vlsui::BeginWorkspaceWindow("##WorkspaceFooter", layout.footer);
+	if (ImGui::BeginTable("##WorkspaceStats", 2, ImGuiTableFlags_SizingStretchProp))
+	{
+		ImGui::TableSetupColumn("##LiveMetrics", ImGuiTableColumnFlags_WidthFixed, layout.compact ? 275.0f : 340.0f);
+		ImGui::TableSetupColumn("##Population", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(0);
+		ImGui::Text("Боты: %u", displayedBots);
+		ImGui::SameLine(140.0f);
+		ImGui::Text("Шаг: %u", ticknum);
+		ImGui::TextDisabled("Объекты: %u", displayedObjects);
+		ImGui::SameLine(140.0f);
+		ImGui::TextDisabled("%u TPS / %u FPS", realTPS, realFPS);
+		vlsui::DrawStatus(simulate);
+		ImGui::TableSetColumnIndex(1);
+		ImGui::TextDisabled("Популяция");
+		ImGui::SameLine();
+		if (ImGui::SmallButton("Развернуть график"))
+			showChart = true;
+		chart.PlotPreview(ImVec2(-1.0f, 42.0f));
+		ImGui::EndTable();
+	}
+	ImGui::End();
+
+	if (showFirstPopulationHint && ticknum == 0 && mouseFunc == mouse_select && renderType != noRender)
+	{
+		if (vlsui::DrawEmptyWorld(layout.world))
+			SpawnInitialPopulation();
+	}
 }
 
 void Main::DrawSaveLoadWindow()
@@ -806,7 +795,9 @@ void Main::DrawSaveLoadWindow()
 						if (field->IsInBounds(targetX, targetY) && field->AddObject(loadedObject))
 						{
 							selectedObject = loadedObject;
+							revealSelection = true;
 							field->TrackObject(selectedObject);
+							showFirstPopulationHint = false;
 							LogPrint("Объект загружен\r\n");
 						}
 						else
@@ -982,7 +973,7 @@ void Main::DrawAdaptationWindow()
 			}
 
 			NewLine();
-			
+
 			if (CollapsingHeader("Ныряльщики", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				SliderInt("Блок деления на суше", &field->params.adaptation_landBirthBlock, 0, 1000);
@@ -1306,6 +1297,7 @@ void Main::MouseClick()
 					if (obj->type() == bot)
 					{
 						selectedObject = obj;
+						revealSelection = true;
 						field->TrackObject(selectedObject);
 					}
 				}
@@ -1356,7 +1348,8 @@ void Main::MouseClick()
 
 							if (field->AddObject(obj))
 							{
-								LogPrint("Объект загружен\r\n");
+								showFirstPopulationHint = false;
+							LogPrint("Объект загружен\r\n");
 							}
 						}
 						else
@@ -1446,7 +1439,7 @@ bool Main::Render()
 
 	//Draw GUI
 	GUIStartFrame();
-	
+
 	DrawWindows();
 
 	EndFrame();
@@ -1494,6 +1487,7 @@ void Main::ClearWorld()
 	Deselect();
 
 	field->RemoveAllObjects();
+	showFirstPopulationHint = true;
 
 	ticknum = 0;
 }

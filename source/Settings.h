@@ -1,4 +1,5 @@
 #pragma once
+#include "UILayout.h"
 
 
 
@@ -111,8 +112,8 @@
 //-----------------------------------------------------------------
 //Field
 
-#define FieldX InterfaceBorder
-#define FieldY InterfaceBorder
+#define FieldX (vlsui::CalculateLayout(windowWidth, windowHeight).world.x)
+#define FieldY (vlsui::CalculateLayout(windowWidth, windowHeight).world.y)
 
 #define FieldCellsWidth 13*16*6
 #define FieldCellsHeight 133
@@ -140,19 +141,19 @@
 
 #define BotOutlineColor 111,111,111,255
 
-#define FieldBackgroundColor 255,255,255,255
+#define FieldBackgroundColor 29,43,36,255
 
-#define RockDrawColor 62, 62, 62, 255
+#define RockDrawColor 110, 124, 124, 255
 #define OrganicWasteDrawColor 0xC8C8C8FF
 #define OrganicWasteOutlineColor 0x808080FF
 #define AppleDrawColorRGBA 0x006400FF
 
 #define DrawOcean
-#define OceanColor 150,150,255,255		//Blue water
+#define OceanColor 31,62,73,255		//Blue water
 //#define OceanColor 100,255,100,255	//Green water
 
 #define DrawMudLayer
-#define MudColor 140,80,62,255		
+#define MudColor 70,53,43,255
 
 #define RenderTypeAtStart natural
 
