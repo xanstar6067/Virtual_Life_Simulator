@@ -55,6 +55,7 @@ struct InterfaceSmokeTest
         SDL_RenderPresent(renderer);
         const auto header = ImGui::FindWindowByName("##WorkspaceHeader");
         assert(header && !header->ScrollbarX && !header->ScrollbarY);
+        assert(header->Size.y == 64 && header->ContentSize.y <= 36.0f);
         assert(ImGui::FindWindowByName("##WorkspaceInspector"));
         assert(ImGui::FindWindowByName("##WorkspaceTools"));
         const auto layout = vlsui::CalculateLayout(windowWidth, windowHeight);
@@ -66,7 +67,7 @@ struct InterfaceSmokeTest
                 windowWidth, windowHeight, footer->ContentSize.y, footer->InnerRect.GetHeight());
             IMG_SavePNG(surface, "footer-overflow.png");
         }
-        assert(footer && !footer->ScrollbarY);
+        assert(footer && !footer->ScrollbarX && !footer->ScrollbarY);
     }
 
     static void Click(Main& app, SDL_Surface* surface, float x, float y)
@@ -90,6 +91,55 @@ struct InterfaceSmokeTest
 #endif
                 }
         return count;
+    }
+
+    static void CheckDisplayModes(Main& app, SDL_Surface* surface)
+    {
+        const auto footer = ImGui::FindWindowByName("##WorkspaceFooter");
+        const auto layout = vlsui::CalculateLayout(windowWidth, windowHeight);
+        const auto table = ImGui::TableFindByID(footer->GetID("##WorkspaceStats"));
+        assert(table);
+        float x = layout.compact
+            ? footer->Pos.x + footer->WindowPadding.x + ImGui::CalcTextSize("Режим просмотра").x + ImGui::GetStyle().ItemSpacing.x
+            : table->Columns[1].WorkMinX;
+        const float y = layout.compact ? footer->Pos.y + footer->WindowPadding.y + 15.0f
+            : table->OuterRect.Min.y + ImGui::GetTextLineHeight() + ImGui::GetStyle().ItemSpacing.y + 15.0f;
+        const auto originalCount = CountBots(app);
+        for (int mode = 0; mode < 4; ++mode)
+        {
+            const float width = ImGui::CalcTextSize(vlsui::DisplayModeNames[mode]).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+            assert(x + width <= footer->Pos.x + footer->Size.x - footer->WindowPadding.x);
+            Click(app, surface, x + width * 0.5f, y);
+            assert((int)app.renderType == mode);
+            assert(CountBots(app) == originalCount);
+            x += width + ImGui::GetStyle().ItemSpacing.x;
+        }
+        app.renderType = (RenderTypes)0;
+        Frame(app, surface);
+    }
+
+    static void CheckFeeding(Main& app, SDL_Surface* surface)
+    {
+        const auto bot = (Bot*)app.selectedObject;
+        const auto originalState = bot->GetPersistentState();
+        struct Example { int ps, prey, organic; vlsui::FeedingType type; };
+        using enum vlsui::FeedingType;
+        for (const auto& example : {Example{0, 0, 0, Unknown}, {19, 0, 0, Unknown},
+            {20, 0, 0, Photosynthetic}, {0, 50, 0, Predator}, {0, 0, 50, Organic},
+            {100, 100, 100, Mixed}, {40, 20, 0, Photosynthetic}, {39, 21, 0, Mixed}})
+        {
+            auto state = originalState;
+            state.energyFromPS = example.ps;
+            state.energyFromPredation = example.prey;
+            state.energyFromOrganics = example.organic;
+            bot->SetPersistentState(state);
+            Frame(app, surface);
+            assert(bot->GetEnergyFromOrganics() == example.organic);
+            assert(vlsui::ClassifyFeeding(bot->GetEnergyFromPS(), bot->GetEnergyFromKills(), bot->GetEnergyFromOrganics()) == example.type);
+            if (example.type == Predator) assert(IMG_SavePNG(surface, "predator-inspector.png") == 0);
+            if (example.type == Photosynthetic) assert(IMG_SavePNG(surface, "photosynthetic-inspector.png") == 0);
+        }
+        bot->SetPersistentState(originalState);
     }
 
     static void CheckBrainWindow(Main& app, SDL_Surface* surface)
@@ -187,20 +237,21 @@ struct InterfaceSmokeTest
         assert(IMG_SavePNG(surface, "empty-world.png") == 0);
 
         // Exercise the actual header button, rather than calling the seed handler.
-        Click(app, surface, 95, 95);
+        Click(app, surface, 95, 42);
         assert(CountBots(app) > 0);
         assert(!app.showFirstPopulationHint);
         assert(!app.simulate);
         assert(!ImGui::FindWindowByName("##FirstPopulation")->Active);
 
-        Click(app, surface, 240, 95);
+        Click(app, surface, 240, 42);
         assert(app.simulate);
-        Click(app, surface, 240, 95);
+        Click(app, surface, 240, 42);
         assert(!app.simulate);
         SDL_Delay(30);
         const auto previousTick = app.ticknum;
-        Click(app, surface, 340, 95);
+        Click(app, surface, 340, 42);
         assert(app.ticknum == previousTick + 1);
+        CheckDisplayModes(app, surface);
 
         // Test SDL hit testing at the new origin, also after zooming and resizing.
         CheckSelection(app, surface);
@@ -210,6 +261,7 @@ struct InterfaceSmokeTest
         Field::zoom = 1.0;
         Frame(app, surface);
         assert(IMG_SavePNG(surface, "selected-organism.png") == 0);
+        CheckFeeding(app, surface);
         CheckBrainWindow(app, surface);
 
         // Brush tools remain reachable independently of the inspector tab.
@@ -258,7 +310,13 @@ struct InterfaceSmokeTest
             ImGui_ImplSDLRenderer_Init(renderer);
             Frame(app, resized);
             Frame(app, resized);
+            CheckDisplayModes(app, resized);
             CheckSelection(app, resized);
+            if (size.x == 1920)
+            {
+                Frame(app, resized);
+                assert(IMG_SavePNG(resized, "wide-workspace.png") == 0);
+            }
             if (size.x == 640)
             {
                 Frame(app, resized);
@@ -282,7 +340,7 @@ struct InterfaceSmokeTest
         renderer = SDL_CreateSoftwareRenderer(surface);
         assert(renderer);
         ImGui_ImplSDLRenderer_Init(renderer);
-        std::puts("PASS: seeding, pause/run, step, selection, zoom, right-hand tools, save/load, tool windows, resize, brain selection/version/move/close");
+        std::puts("PASS: seeding, pause/run, step, selection, zoom, right-hand tools, save/load, tool windows, resize, brain selection/version/move/close, footer display modes, feeding types, slim header");
     }
 };
 

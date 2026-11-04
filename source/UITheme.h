@@ -2,6 +2,7 @@
 
 #include "imgui.h"
 #include "UILayout.h"
+#include "BotDiet.h"
 #include <cfloat>
 
 namespace vlsui
@@ -218,7 +219,13 @@ inline void ItemTooltip(const char* text)
 {
 	if (ImGui::IsItemHovered())
 	{
-		ImGui::SetTooltip("%s", text);
+		ImGui::BeginTooltip();
+		const float availableWidth = ImGui::GetIO().DisplaySize.x - 32.0f;
+		const float preferredWidth = ImGui::GetFontSize() * 28.0f;
+		ImGui::PushTextWrapPos(availableWidth < preferredWidth ? availableWidth : preferredWidth);
+		ImGui::TextUnformatted(text);
+		ImGui::PopTextWrapPos();
+		ImGui::EndTooltip();
 	}
 }
 
@@ -253,49 +260,31 @@ struct HeaderActions
 	bool seed = false, pause = false, step = false, saves = false;
 };
 
-inline HeaderActions DrawWorkspaceHeader(const WorkspaceLayout& layout, const char* mode,
-	bool running, int& tpsLimit, int maxTPS, int& renderMode)
+inline HeaderActions DrawWorkspaceHeader(const WorkspaceLayout& layout,
+	bool running, int& tpsLimit, int maxTPS)
 {
 	HeaderActions actions;
 	BeginWorkspaceWindow("##WorkspaceHeader", layout.header);
-	ImGui::TextUnformatted("VIRTUAL LIFE");
-	ImGui::SameLine();
-	ImGui::TextDisabled("/ %s", mode);
-	ImGui::SameLine((float)layout.header.w - 210.0f);
-	ImGui::SetNextItemWidth(180.0f);
-	ImGui::Combo("##WorldDisplay", &renderMode,
-		"Родственные линии\0Источники питания\0Запас энергии\0Без отрисовки\0");
-	ItemTooltip("Режим отображения мира · Num 1–4");
-	ImGui::Spacing();
-	actions.seed = ColoredButton("Заселить мир", ImVec2(155.0f, 36.0f), Accent());
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, (36.0f - ImGui::GetFontSize()) * 0.5f));
+	actions.seed = ColoredButton("Заселить мир", ImVec2(layout.compact ? 125.0f : 155.0f, 36.0f), Accent());
 	ItemTooltip("F1 · Добавить стартовую группу случайных ботов к текущему миру");
 	ImGui::SameLine();
-	actions.pause = ImGui::Button(running ? "Пауза" : "Запустить", ImVec2(108.0f, 36.0f));
+	actions.pause = ImGui::Button(running ? "Пауза" : "Запустить", ImVec2(layout.compact ? 98.0f : 108.0f, 36.0f));
 	ItemTooltip("Space / Pause · запуск и остановка симуляции");
 	ImGui::SameLine();
 	ImGui::BeginDisabled(running);
-	actions.step = ImGui::Button("Один шаг", ImVec2(100.0f, 36.0f));
+	actions.step = ImGui::Button("Один шаг", ImVec2(layout.compact ? 90.0f : 100.0f, 36.0f));
 	ImGui::EndDisabled();
 	ItemTooltip("Num + · шаг симуляции на паузе");
 	ImGui::SameLine();
-	if (!layout.compact)
-	{
-		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 188.0f);
-		ImGui::SliderInt("##HeaderTPS", &tpsLimit, 0, maxTPS, "%d тиков/с");
-		ItemTooltip("Лимит скорости симуляции · 0 = без ограничения");
-		ImGui::SameLine();
-	}
-	actions.saves = ImGui::Button("Сохранения", ImVec2(180.0f, 36.0f));
+	const float savesWidth = layout.compact ? 115.0f : 180.0f;
+	ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - savesWidth - ImGui::GetStyle().ItemSpacing.x);
+	ImGui::SliderInt("##HeaderTPS", &tpsLimit, 0, maxTPS, "%d тиков/с");
+	ItemTooltip("Лимит скорости симуляции · 0 = без ограничения");
+	ImGui::SameLine();
+	actions.saves = ImGui::Button("Сохранения", ImVec2(savesWidth, 36.0f));
 	ItemTooltip("Z · сохранение и загрузка миров и отдельных ботов");
-	if (layout.compact)
-	{
-		ImGui::AlignTextToFramePadding();
-		ImGui::TextDisabled("Скорость");
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(-1.0f);
-		ImGui::SliderInt("##HeaderTPS", &tpsLimit, 0, maxTPS, "%d тиков/с");
-		ItemTooltip("0 = без ограничения скорости");
-	}
+	ImGui::PopStyleVar();
 	ImGui::End();
 	return actions;
 }
@@ -361,6 +350,129 @@ inline void DrawPopulationPreview(const float* values, int count, const ImVec2& 
 		ImGui::TextDisabled("Ожидание данных");
 		ItemTooltip("История популяции обновляется во время симуляции");
 	}
+}
+
+inline ImVec4 FeedingColor(FeedingType type)
+{
+	switch (type)
+	{
+	case FeedingType::Photosynthetic: return Success();
+	case FeedingType::Predator: return ImVec4(1.0f, 0.48f, 0.43f, 1.0f);
+	case FeedingType::Organic: return ImVec4(0.45f, 0.68f, 1.0f, 1.0f);
+	case FeedingType::Mixed: return ImVec4(0.85f, 0.71f, 1.0f, 1.0f);
+	default: return Muted();
+	}
+}
+
+inline void DrawFeedingTitle(int photosynthesis, int predation, int organics)
+{
+	const auto type = ClassifyFeeding(photosynthesis, predation, organics);
+	ImGui::TextColored(FeedingColor(type), "%s", FeedingTypeName(type));
+	ItemTooltip("Тип питания по учтённым источникам энергии. Нужны данные минимум о 20 единицах; "
+		"один источник должен давать не менее 2/3, иначе питание смешанное. Тип может меняться. "
+		"Яблоки и мёртвая органика учитываются вместе.");
+}
+
+inline void DrawFeedingSources(int photosynthesis, int predation, int organics)
+{
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 3.0f));
+	ImGui::TextDisabled("Фотосинтез: %i", photosynthesis);
+	ImGui::TextDisabled("Охота: %i", predation);
+	ImGui::TextDisabled("Органика и яблоки: %i", organics);
+	ImGui::PopStyleVar();
+}
+
+inline constexpr const char* DisplayModeNames[] = {"Родство", "Питание", "Энергия", "Без отрисовки"};
+
+inline float DisplayModesWidth()
+{
+	float width = ImGui::GetStyle().ItemSpacing.x * 3.0f;
+	for (const char* name : DisplayModeNames)
+		width += ImGui::CalcTextSize(name).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+	return width;
+}
+
+inline void DrawDisplayModes(int& renderMode, bool compact)
+{
+	ImGui::PushID("WorldDisplay");
+	if (compact) ImGui::AlignTextToFramePadding();
+	ImGui::TextDisabled("Режим просмотра");
+	if (compact) ImGui::SameLine();
+	const char* hints[] = {
+		"Num 1 · Собственные цвета ботов и родственных линий",
+		"Num 2 · Источники питания: красный — охота, зелёный — фотосинтез, синий — органика и яблоки",
+		"Num 3 · Карта запаса энергии: от жёлтого (мало) к красному (много)",
+		"Num 4 · Скрыть поле для ускорения расчёта; интерфейс продолжает работать"
+	};
+	for (int i = 0; i < 4; ++i)
+	{
+		if (i) ImGui::SameLine();
+		if (ModeButton(DisplayModeNames[i], renderMode == i, ImVec2(0.0f, 30.0f))) renderMode = i;
+		ItemTooltip(hints[i]);
+	}
+	if (!compact)
+	{
+		if (renderMode == 1)
+		{
+			ImGui::TextColored(FeedingColor(FeedingType::Predator), "Охота");
+			ImGui::SameLine();
+			ImGui::TextColored(Success(), "Фотосинтез");
+			ImGui::SameLine();
+			ImGui::TextColored(FeedingColor(FeedingType::Organic), "Органика");
+		}
+		else if (renderMode == 2)
+		{
+			ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Мало энергии");
+			ImGui::SameLine();
+			ImGui::TextDisabled("→");
+			ImGui::SameLine();
+			ImGui::TextColored(FeedingColor(FeedingType::Predator), "Много энергии");
+		}
+		else ImGui::TextDisabled("%s", renderMode == 0 ? "Цвета родственных линий" : "Поле скрыто · интерфейс доступен");
+	}
+	ImGui::PopID();
+}
+
+template <typename Preview>
+inline void DrawWorkspaceFooter(const WorkspaceLayout& layout, const char* simulationMode, bool running,
+	unsigned bots, unsigned objects, unsigned tick, unsigned tps, unsigned fps, int& renderMode,
+	bool& showChart, Preview preview)
+{
+	BeginWorkspaceWindow("##WorkspaceFooter", layout.footer);
+	if (layout.compact) DrawDisplayModes(renderMode, true);
+	// These three groups share a baseline and must fit inside the shallow footer.
+	ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 0.0f));
+	if (ImGui::BeginTable("##WorkspaceStats", layout.compact ? 2 : 3, ImGuiTableFlags_SizingStretchProp))
+	{
+		ImGui::TableSetupColumn("##LiveMetrics", ImGuiTableColumnFlags_WidthFixed, layout.compact ? 275.0f : 300.0f);
+		if (!layout.compact)
+			ImGui::TableSetupColumn("##DisplayModes", ImGuiTableColumnFlags_WidthFixed, DisplayModesWidth());
+		ImGui::TableSetupColumn("##Population", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(0);
+		ImGui::Text("Боты: %u", bots);
+		ImGui::SameLine(140.0f);
+		ImGui::Text("Шаг: %u", tick);
+		ImGui::TextDisabled("Объекты: %u", objects);
+		ImGui::SameLine(140.0f);
+		ImGui::TextDisabled("%u TPS / %u FPS", tps, fps);
+		DrawStatus(running);
+		ImGui::SameLine();
+		ImGui::TextDisabled("· %s", simulationMode);
+		if (!layout.compact)
+		{
+			ImGui::TableSetColumnIndex(1);
+			DrawDisplayModes(renderMode, false);
+		}
+		ImGui::TableSetColumnIndex(layout.compact ? 1 : 2);
+		ImGui::TextDisabled("Популяция");
+		ImGui::SameLine();
+		if (ImGui::SmallButton("Развернуть график")) showChart = true;
+		preview(ImVec2(-1.0f, 42.0f));
+		ImGui::EndTable();
+	}
+	ImGui::PopStyleVar();
+	ImGui::End();
 }
 
 }

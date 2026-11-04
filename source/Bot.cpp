@@ -749,6 +749,11 @@ int Bot::GetEnergyFromKills()
 	return energyFromPredation;
 }
 
+int Bot::GetEnergyFromOrganics() const
+{
+	return energyFromOrganics;
+}
+
 
 int* Bot::GetMarkers()
 {

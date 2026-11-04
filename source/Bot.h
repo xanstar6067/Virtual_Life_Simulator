@@ -191,6 +191,7 @@ public:
 	//Return current energy amount from different sources
 	int GetEnergyFromPS();
 	int GetEnergyFromKills();
+	int GetEnergyFromOrganics() const;
 
 	int* GetMarkers();
 	Color* GetColor();

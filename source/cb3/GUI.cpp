@@ -332,8 +332,7 @@ void Main::DrawSidePanelWindow()
 	const auto layout = vlsui::CalculateLayout(windowWidth, windowHeight);
 	int displayMode = (int)renderType;
 	const auto actions =
-		vlsui::DrawWorkspaceHeader(layout, "CYBERBIOLOGY3", simulate, limit_ticks_per_second, GUI_Max_tps, displayMode);
-	renderType = (RenderTypes)displayMode;
+		vlsui::DrawWorkspaceHeader(layout, simulate, limit_ticks_per_second, GUI_Max_tps);
 	if (actions.seed)
 		SpawnInitialPopulation();
 	if (actions.pause)
@@ -382,12 +381,15 @@ void Main::DrawSidePanelWindow()
 			vlsui::SectionTitle("Выбранный объект");
 			if (selectedObject && field->ValidateObjectExistance(selectedObject))
 			{
+				auto* selectedBot = (Bot*)selectedObject;
+				vlsui::DrawFeedingTitle(selectedBot->GetEnergyFromPS(), selectedBot->GetEnergyFromKills(),
+					selectedBot->GetEnergyFromOrganics());
 				ImGui::Text("Бот  •  X %i  •  Y %i", selectedObject->x, selectedObject->y);
 				ImGui::Text("Возраст: %i / %i", selectedObject->GetLifetime(), field->params.botMaxLifetime);
 				ImGui::Text("Энергия: %i / %i", selectedObject->energy, field->params.botMaxEnergy);
 				ImGui::ProgressBar((float)selectedObject->energy / field->params.botMaxEnergy, ImVec2(-1.0f, 6.0f), "");
-				ImGui::TextDisabled("Фотосинтез %i  •  охота %i", ((Bot *)selectedObject)->GetEnergyFromPS(),
-									((Bot *)selectedObject)->GetEnergyFromKills());
+				vlsui::DrawFeedingSources(selectedBot->GetEnergyFromPS(), selectedBot->GetEnergyFromKills(),
+					selectedBot->GetEnergyFromOrganics());
 
 				ImGui::TextDisabled("Метки родства");
 				for (int i = 0; i < NumberOfMutationMarkers; ++i)
@@ -441,7 +443,7 @@ void Main::DrawSidePanelWindow()
 			ImGui::TextDisabled("Лимит кадров в секунду");
 			ImGui::SetNextItemWidth(-1.0f);
 			ImGui::SliderInt("##InspectorFPS", &limitFPS, 0, GUI_Max_fps, "%d кадров/с");
-			ImGui::TextWrapped("0 — без ограничения. Отключить отрисовку можно в списке режимов над миром.");
+			ImGui::TextWrapped("0 — без ограничения. Режимы просмотра и отключение отрисовки находятся на нижней панели.");
 			if (ImGui::Button("Автоадаптация", ImVec2(-1.0f, 34.0f)))
 				showAutomaticAdaptation = true;
 
@@ -592,29 +594,9 @@ void Main::DrawSidePanelWindow()
 	}
 	ImGui::End();
 
-	vlsui::BeginWorkspaceWindow("##WorkspaceFooter", layout.footer);
-	if (ImGui::BeginTable("##WorkspaceStats", 2, ImGuiTableFlags_SizingStretchProp))
-	{
-		ImGui::TableSetupColumn("##LiveMetrics", ImGuiTableColumnFlags_WidthFixed, layout.compact ? 275.0f : 340.0f);
-		ImGui::TableSetupColumn("##Population", ImGuiTableColumnFlags_WidthStretch);
-		ImGui::TableNextRow();
-		ImGui::TableSetColumnIndex(0);
-		ImGui::Text("Боты: %u", displayedBots);
-		ImGui::SameLine(140.0f);
-		ImGui::Text("Шаг: %u", ticknum);
-		ImGui::TextDisabled("Объекты: %u", displayedObjects);
-		ImGui::SameLine(140.0f);
-		ImGui::TextDisabled("%u TPS / %u FPS", realTPS, realFPS);
-		vlsui::DrawStatus(simulate);
-		ImGui::TableSetColumnIndex(1);
-		ImGui::TextDisabled("Популяция");
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Развернуть график"))
-			showChart = true;
-		chart.PlotPreview(ImVec2(-1.0f, 42.0f));
-		ImGui::EndTable();
-	}
-	ImGui::End();
+	vlsui::DrawWorkspaceFooter(layout, "CyberBiology3", simulate, displayedBots, displayedObjects, ticknum, realTPS, realFPS,
+		displayMode, showChart, [this](const ImVec2& size) { chart.PlotPreview(size); });
+	renderType = (RenderTypes)displayMode;
 
 	if (showFirstPopulationHint && ticknum == 0 && mouseFunc == mouse_select && renderType != noRender)
 	{

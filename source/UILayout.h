@@ -19,10 +19,10 @@ inline WorkspaceLayout CalculateLayout(int width, int height)
 {
     const int gap = 10;
     const bool compact = width < 1100;
-    const int headerHeight = compact ? 160 : 120;
+    const int headerHeight = 64;
     const int toolsWidth = 110;
     const int inspectorWidth = compact ? 280 : 320;
-    const int footerHeight = 110;
+    const int footerHeight = compact ? 136 : 110;
     const int top = gap + headerHeight + gap;
     const int contentHeight = height - top - footerHeight - gap * 2;
     const int worldX = gap;

@@ -9,3 +9,5 @@ PNG previews and isolated save fixtures are written under `x64/Debug/ui-smoke-cl
 Brain viewer regressions cover neuron selection, switching current/initial brains without stale pointers, dragging the window with its diagram, closing using its title-bar cross, and keeping the viewer inside a resized desktop. Input is injected into ImGui in memory, not into Windows.
 
 Pass `-ApplicationTargetName VirtualLifeSimulator1-UI` to build a separate executable when the normal application is open.
+
+The slim, single-row header is checked for overflow. All four display-mode buttons are clicked in wide and compact footers, including returning from hidden-field mode. Feeding descriptions are checked against real bot state for unknown, photosynthetic, predatory, organic, mixed, and two-thirds boundary cases in both engines.
