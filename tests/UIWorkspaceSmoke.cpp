@@ -6,6 +6,7 @@
 #include "../source/Main.h"
 #endif
 #include "../source/UITheme.h"
+#include "../source/BrainWindow.h"
 #include "imgui_internal.h"
 #include <SDL_image.h>
 
@@ -56,6 +57,8 @@ struct InterfaceSmokeTest
         assert(header && !header->ScrollbarX && !header->ScrollbarY);
         assert(ImGui::FindWindowByName("##WorkspaceInspector"));
         assert(ImGui::FindWindowByName("##WorkspaceTools"));
+        const auto layout = vlsui::CalculateLayout(windowWidth, windowHeight);
+        assert(layout.world.x == 10 && layout.tools.x > layout.inspector.x);
         const auto footer = ImGui::FindWindowByName("##WorkspaceFooter");
         if (footer && footer->ScrollbarY)
         {
@@ -89,7 +92,65 @@ struct InterfaceSmokeTest
         return count;
     }
 
-    static void CheckSelection(Main& app)
+    static void CheckBrainWindow(Main& app, SDL_Surface* surface)
+    {
+        app.showBrain = true;
+        Frame(app, surface);
+        Frame(app, surface);
+        auto brainWindow = ImGui::FindWindowByName(vlsui::BrainWindowTitle);
+        assert(brainWindow && brainWindow->Active);
+        assert(!brainWindow->ScrollbarY);
+        assert(!(brainWindow->Flags & (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar)));
+        assert(!ImGui::FindWindowByName("Сводка бота"));
+        const auto bot = (Bot*)app.selectedObject;
+        assert(app.nn_renderer.selectedBrain == bot->GetActiveBrain());
+        auto point = app.nn_renderer.view.NeuronPosition(1, 0);
+        Click(app, surface, point.x, point.y);
+        assert(app.nn_renderer.selectedNeuron == &bot->GetActiveBrain()->allNeurons[1][0]);
+        const auto botsBeforeCanvasClick = CountBots(app);
+        app.mouseFunc = mouse_remove;
+        mouseState.mouseX = (int)point.x;
+        mouseState.mouseY = (int)point.y;
+        assert(io->WantCaptureMouse);
+        app.MouseClick();
+        assert(CountBots(app) == botsBeforeCanvasClick);
+        app.mouseFunc = mouse_select;
+
+        // The small version switch lives in this window and clears stale selection.
+        const float switchX = brainWindow->Pos.x + brainWindow->WindowPadding.x + 146.0f;
+        const float switchY = brainWindow->Pos.y + brainWindow->TitleBarHeight() + brainWindow->WindowPadding.y + 14.0f;
+        Click(app, surface, switchX, switchY);
+        assert(app.brainToShow == 1);
+        assert(app.nn_renderer.selectedBrain == bot->GetInitialBrain());
+        assert(!app.nn_renderer.selectedNeuron);
+        point = app.nn_renderer.view.NeuronPosition(1, 1);
+        Click(app, surface, point.x, point.y);
+        assert(app.nn_renderer.selectedNeuron == &bot->GetInitialBrain()->allNeurons[1][1]);
+
+        // Inject input into ImGui only: no operating-system mouse events.
+        const ImVec2 previous = brainWindow->Pos;
+        const ImVec2 nodeBeforeMove = app.nn_renderer.view.NeuronPosition(1, 1);
+        const float titleX = previous.x + 220.0f, titleY = previous.y + 10.0f;
+        Frame(app, surface, titleX, titleY);
+        Frame(app, surface, titleX, titleY, true);
+        Frame(app, surface, titleX + 24.0f, titleY + 18.0f, true);
+        Frame(app, surface, titleX + 24.0f, titleY + 18.0f, false);
+        assert(brainWindow->Pos.x != previous.x || brainWindow->Pos.y != previous.y);
+        const ImVec2 nodeAfterMove = app.nn_renderer.view.NeuronPosition(1, 1);
+        assert(std::abs((nodeAfterMove.x - nodeBeforeMove.x) - (brainWindow->Pos.x - previous.x)) < 1.0f);
+        assert(std::abs((nodeAfterMove.y - nodeBeforeMove.y) - (brainWindow->Pos.y - previous.y)) < 1.0f);
+        assert(IMG_SavePNG(surface, "brain-window.png") == 0);
+
+        const float closeX = brainWindow->Pos.x + brainWindow->Size.x - ImGui::GetStyle().FramePadding.x - ImGui::GetFontSize() * .5f;
+        const float closeY = brainWindow->Pos.y + brainWindow->TitleBarHeight() * .5f;
+        Click(app, surface, closeX, closeY);
+        assert(!app.showBrain);
+        Frame(app, surface);
+        assert(!brainWindow->Active);
+        app.brainToShow = 0;
+    }
+
+    static void CheckSelection(Main& app, SDL_Surface* surface)
     {
         for (int x = 0; x < 100; ++x)
             for (int y = 0; y < 80; ++y)
@@ -106,6 +167,8 @@ struct InterfaceSmokeTest
                     const Point cell = app.field->ScreenCoordsToLocal(mouseState.mouseX, mouseState.mouseY);
                     assert(cell.x == x && cell.y == y);
                     app.mouseFunc = mouse_select;
+                    Frame(app, surface, (float)mouseState.mouseX, (float)mouseState.mouseY);
+                    assert(!io->WantCaptureMouse);
                     app.MouseClick();
                     assert(app.selectedObject == obj);
                     assert(app.revealSelection);
@@ -140,17 +203,18 @@ struct InterfaceSmokeTest
         assert(app.ticknum == previousTick + 1);
 
         // Test SDL hit testing at the new origin, also after zooming and resizing.
-        CheckSelection(app);
+        CheckSelection(app, surface);
         Field::zoom = 2.0;
         app.field->ClampViewOffset();
-        CheckSelection(app);
+        CheckSelection(app, surface);
         Field::zoom = 1.0;
         Frame(app, surface);
         assert(IMG_SavePNG(surface, "selected-organism.png") == 0);
+        CheckBrainWindow(app, surface);
 
         // Brush tools remain reachable independently of the inspector tab.
         const auto layout = vlsui::CalculateLayout(windowWidth, windowHeight);
-        Click(app, surface, 55, (float)layout.tools.y + 82);
+        Click(app, surface, (float)layout.tools.x + 55, (float)layout.tools.y + 82);
         assert(app.mouseFunc == mouse_place_rock);
         app.mouseFunc = mouse_select;
 
@@ -194,8 +258,22 @@ struct InterfaceSmokeTest
             ImGui_ImplSDLRenderer_Init(renderer);
             Frame(app, resized);
             Frame(app, resized);
-            CheckSelection(app);
-            if (size.x == 640) assert(IMG_SavePNG(resized, "compact-workspace.png") == 0);
+            CheckSelection(app, resized);
+            if (size.x == 640)
+            {
+                Frame(app, resized);
+                assert(IMG_SavePNG(resized, "compact-workspace.png") == 0);
+                app.showBrain = true;
+                Frame(app, resized);
+                Frame(app, resized);
+                const auto brainWindow = ImGui::FindWindowByName(vlsui::BrainWindowTitle);
+                assert(brainWindow->Pos.x >= 0 && brainWindow->Pos.y >= 0);
+                assert(brainWindow->Pos.x + brainWindow->Size.x <= size.x);
+                assert(brainWindow->Pos.y + brainWindow->Size.y <= size.y);
+                assert(IMG_SavePNG(resized, "compact-brain-window.png") == 0);
+                app.showBrain = false;
+                Frame(app, resized);
+            }
             previousSurface = resized;
         }
         ImGui_ImplSDLRenderer_Shutdown();
@@ -204,7 +282,7 @@ struct InterfaceSmokeTest
         renderer = SDL_CreateSoftwareRenderer(surface);
         assert(renderer);
         ImGui_ImplSDLRenderer_Init(renderer);
-        std::puts("PASS: seeding, pause/run, step, selection, zoom, brush tools, save/load, tool windows, resize");
+        std::puts("PASS: seeding, pause/run, step, selection, zoom, right-hand tools, save/load, tool windows, resize, brain selection/version/move/close");
     }
 };
 

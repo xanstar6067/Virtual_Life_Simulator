@@ -76,7 +76,6 @@ private:
 	//Hidden windows
 	void DrawSaveLoadWindow();
 	void DrawDangerousWindow();
-	void DrawSummaryWindow();
 	void DrawAdaptationWindow();
 	void DrawChartWindow();
 	void DrawBotBrainWindow();

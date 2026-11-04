@@ -1,4 +1,4 @@
-param([switch]$SkipBuild)
+param([switch]$SkipBuild, [string]$ApplicationTargetName = 'VirtualLifeSimulator1')
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
@@ -13,7 +13,7 @@ if (!$compilerVersion) { throw 'The project requires the v143 C++ toolset.' }
 Push-Location $repoRoot
 try {
     if (!$SkipBuild) {
-        & $msbuild VirtualLifeSimulator1.vcxproj /p:Configuration=Debug /p:Platform=x64 /m /v:minimal /nologo
+        & $msbuild VirtualLifeSimulator1.vcxproj /p:Configuration=Debug /p:Platform=x64 "/p:TargetName=$ApplicationTargetName" /m /v:minimal /nologo
         if ($LASTEXITCODE) { throw 'Debug build failed.' }
     }
     $outputDir = Join-Path $repoRoot 'x64\Debug'

@@ -111,6 +111,8 @@
     <ClInclude Include="source\Systems.h" />
     <ClInclude Include="source\UITheme.h" />
     <ClInclude Include="source\UILayout.h" />
+    <ClInclude Include="source\NeuralGraphView.h" />
+    <ClInclude Include="source\BrainWindow.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="source\Cb3Runtime.h" />
     <ClInclude Include="source\SimulationMode.h" />

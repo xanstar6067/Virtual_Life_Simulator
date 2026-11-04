@@ -442,7 +442,7 @@ void Main::Deselect()
 
 	selectedObject = NULL;
 	showBrain = false;
-	nn_renderer.selectedNeuron = NULL;
+	nn_renderer.ResetSelection();
 }
 
 

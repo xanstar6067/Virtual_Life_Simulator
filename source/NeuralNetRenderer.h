@@ -1,29 +1,19 @@
 #pragma once
-
-
 #include "BotNeuralNet.h"
+#include "NeuralGraphView.h"
 #include "SDL.h"
-
-
 
 struct NeuralNetRenderer final
 {
+	void Render(BotNeuralNet* brain, const ImVec2& size);
+	void ResetSelection();
 
-	void DrawThickLine(int, int, int, int);
-
-	void Render(BotNeuralNet* brain);
-
-	bool MouseClick(Point);
-
-
-	Neuron* selectedNeuron = NULL;
-	BotNeuralNet* selectedBrain = NULL;
-
-private:
-
-	Point MouseXY;
-
-	Rect bg_rect = { 80, 350, Render_LayerDistance * (NumNeuronLayers - 1) + Render_NeuronSize + 40,
-		Render_VerticalDistance * (NeuronsInLayer - 1) + Render_NeuronSize + 40 };
-
+	vlsui::NeuralGraphView view;
+	ImVec2 windowPosition, windowSize, displaySize = ImVec2(0, 0);
+	Neuron* selectedNeuron = nullptr;
+	BotNeuralNet* selectedBrain = nullptr;
+	const char* selectedNeuronCaption = "";
+	const char* selectedNeuronTypeName = "";
+	float selectedNeuronValue = 0.0f;
+	float selectedNeuronMemory = 0.0f;
 };

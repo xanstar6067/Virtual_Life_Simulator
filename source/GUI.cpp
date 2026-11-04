@@ -1,6 +1,7 @@
 
 #include "GUI.h"
 #include "UITheme.h"
+#include "BrainWindow.h"
 
 
 
@@ -448,7 +449,7 @@ void Main::DrawSidePanelWindow()
 					Deselect();
 				}
 				ImGui::TextDisabled("Ничего не выбрано.");
-				ImGui::TextWrapped("Выберите инструмент «Выбор» слева и нажмите на бота в мире.");
+				ImGui::TextWrapped("Выберите инструмент «Выбор» справа и нажмите на бота в мире.");
 			}
 
 			ImGui::EndChild();
@@ -954,47 +955,6 @@ void Main::DrawDangerousWindow()
 	}
 }
 
-void Main::DrawSummaryWindow()
-{
-	if (showBrain)
-	{
-		ImGui::SetNextWindowBgAlpha(1.0f);
-		vlsui::PrepareToolWindow(ImVec2(390.0f, 270.0f), ImVec2(340.0f, 220.0f));
-
-		ImGui::Begin("Сводка бота", &showBrain, ImGuiWindowFlags_NoCollapse);
-		{
-			if (selectedObject)
-			{
-				if (field->ValidateObjectExistance(selectedObject))
-				{
-					auto summ = ((Bot*)selectedObject)->GetNeuronSummary();
-
-					ImGui::Text("Нейроны:");
-					ImGui::Text("Простые: %i", summ.simple);
-					ImGui::Text("Радиальные: %i", summ.radialBasis);
-					ImGui::Text("Случайные: %i", summ.random);
-					ImGui::Text("Память: %i", summ.memory);
-
-					ImGui::NewLine();
-
-					ImGui::Text("Всего нейронов: %i, тупиков: %i", summ.neurons, summ.deadend);
-					ImGui::Text("Всего связей: %i", summ.connections);
-				}
-				else
-					goto Nothing;
-
-			}
-			else
-			{
-			Nothing:
-				ImGui::Text("Ничего не выбрано");
-			}
-
-		}
-		ImGui::End();
-	}
-}
-
 void Main::DrawAdaptationWindow()
 {
 	if (showAdaptation)
@@ -1285,73 +1245,16 @@ void Main::DrawModeSwitchConfirmWindow()
 }
 
 void Main::DrawBotBrainWindow()
-{	
-	if (showBrain)
-	{
-		if (selectedObject)
-		{
-			//Bot brain window
-			ImGui::SetNextWindowBgAlpha(1.0f);
-			vlsui::PrepareToolWindow(ImVec2(500.0f, 420.0f), ImVec2(380.0f, 300.0f));
-
-			ImGui::Begin("Данные мозга", &showBrain, ImGuiWindowFlags_NoCollapse);
-			{
-				ImGui::BeginGroup();
-
-				ImGui::RadioButton("Текущий мозг", &brainToShow, 0);
-				ImGui::RadioButton("Начальный мозг", &brainToShow, 1);
-
-				ImGui::EndGroup();
-
-				if (nn_renderer.selectedNeuron)
-				{
-					//Show neuron type
-					ImGui::Text("Тип нейрона:");
-					ImGui::SameLine();
-					ImGui::Text(Neuron::GetTextFromType(nn_renderer.selectedNeuron->type));
-
-					//Show bias
-					ImGui::Text("Смещение: %f", nn_renderer.selectedNeuron->bias);
-
-					//Show connections
-					for (uint i = 0; i < nn_renderer.selectedNeuron->numConnections; ++i)
-					{
-						ImGui::Text("Связь к слою: %i, нейрону: %i, вес: %f", nn_renderer.selectedNeuron->allConnections[i].dest_layer,
-							nn_renderer.selectedNeuron->allConnections[i].dest_neuron, nn_renderer.selectedNeuron->allConnections[i].weight);
-					}
-
-					//Show memory data
-					//ImGui::Text("Memory data: %i", nn_renderer.selectedBrain->allMemory[][]);
-
-					//TODO
-					if((nn_renderer.selectedNeuron->type!=input) && (nn_renderer.selectedNeuron->type != output))
-					{
-						if (ImGui::Button("случайно", { 100,30 }))
-						{
-							nn_renderer.selectedNeuron->SetRandom();
-						}
-
-						ImGui::SameLine();
-
-						if (ImGui::Button("обнулить", { 100,30 }))
-						{
-							nn_renderer.selectedNeuron->SetZero();
-						}
-					}
-				}
-				else
-				{
-					ImGui::Text("Ничего не выбрано");
-				}
-			}
-			ImGui::End();
-
-			if(brainToShow == 0)
-				nn_renderer.Render(((Bot*)selectedObject)->GetActiveBrain());
-			else
-				nn_renderer.Render(((Bot*)selectedObject)->GetInitialBrain());
-		}
-	}
+{
+    if (!showBrain) return;
+    if (!selectedObject || !field->ValidateObjectExistance(selectedObject))
+    {
+        Deselect();
+        return;
+    }
+    auto bot = (Bot*)selectedObject;
+    vlsui::DrawBrainWindow(showBrain, brainToShow, bot->GetActiveBrain(), bot->GetInitialBrain(),
+        nn_renderer, bot->GetNeuronSummary(), 1.0f, 1.0f, false);
 }
 
 void Main::DrawWindows()
@@ -1368,7 +1271,6 @@ void Main::DrawWindows()
 
 	DrawSaveLoadWindow();
 	DrawDangerousWindow();
-	DrawSummaryWindow();
 	DrawAdaptationWindow();
 	DrawChartWindow();
 	DrawBotBrainWindow();
@@ -1433,7 +1335,7 @@ void Main::MouseClick()
 		return;
 	}
 
-	if (!(nn_renderer.MouseClick({ mouseState.mouseX, mouseState.mouseY }) && (showBrain)))
+	if (!io->WantCaptureMouse)
 	{
 		if (field->IsInBoundsScreenCoords(mouseState.mouseX, mouseState.mouseY))
 		{

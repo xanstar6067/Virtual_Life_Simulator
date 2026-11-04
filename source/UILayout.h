@@ -25,11 +25,12 @@ inline WorkspaceLayout CalculateLayout(int width, int height)
     const int footerHeight = 110;
     const int top = gap + headerHeight + gap;
     const int contentHeight = height - top - footerHeight - gap * 2;
-    const int worldX = gap + toolsWidth + gap;
-    const int inspectorX = width - inspectorWidth - gap;
+    const int worldX = gap;
+    const int toolsX = width - toolsWidth - gap;
+    const int inspectorX = toolsX - gap - inspectorWidth;
     return {
         {gap, gap, width - gap * 2, headerHeight},
-        {gap, top, toolsWidth, contentHeight},
+        {toolsX, top, toolsWidth, contentHeight},
         {worldX, top, inspectorX - gap - worldX, contentHeight},
         {inspectorX, top, inspectorWidth, contentHeight},
         {gap, height - gap - footerHeight, width - gap * 2, footerHeight},

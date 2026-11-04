@@ -1,150 +1,58 @@
 #include "NeuralNetRenderer.h"
 
-
-
 namespace cb3
 {
 
-bool NeuralNetRenderer::MouseClick(Point p)
+void NeuralNetRenderer::ResetSelection()
 {
-	MouseXY = p;
-
-	return bg_rect.IsInBounds(p);
+	view.ClearSelection();
+	selectedNeuron = nullptr;
+	selectedBrain = nullptr;
+	selectedNeuronCaption = selectedNeuronTypeName = "";
+	selectedNeuronValue = selectedNeuronMemory = 0.0f;
 }
 
-void NeuralNetRenderer::DrawThickLine(int x1, int y1, int x2, int y2)
+void NeuralNetRenderer::Render(BotNeuralNet* brain, const ImVec2& size)
 {
-	repeat(Render_LineThickness)
-		SDL_RenderDrawLine(renderer, x1, y1 + i - (Render_LineThickness/2), x2, y2 + i - (Render_LineThickness/2));
-}
-
-void NeuralNetRenderer::Render(BotNeuralNet* brain)
-{ 
+	if (selectedBrain != brain)
+		ResetSelection();
 	selectedBrain = brain;
 
-	//Draw background
-	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-	SDL_RenderFillRect(renderer, &bg_rect);
-
-	//Draw connections
-	Neuron* n;
-	NeuronConnection* c;
-	Point drawTo = { bg_rect.x + 20, bg_rect.y + 20};
-
-	int shifts[NumNeuronLayers];
-
-	repeat(NumNeuronLayers)
-		shifts[i] = ((NumNeuronsInLayerMax - neuronsInLayer[i]) * Render_VerticalDistance) / 2;
-
-	for (uint xi = 0; xi < NumNeuronLayers; ++xi)
+	std::vector<int> counts;
+	std::vector<vlsui::GraphNeuron> neurons;
+	std::vector<vlsui::GraphConnection> connections;
+	for (int layer = 0; layer < (int)NumNeuronLayers; ++layer)
 	{
-		for (uint yi = 0; yi < neuronsInLayer[xi]; ++yi)
+		const int count = neuronsInLayer[layer];
+		counts.push_back(count);
+		for (int index = 0; index < count; ++index)
 		{
-			n = &brain->allNeurons[xi][yi];
-
-			for (uint ci = 0; ci < n->numConnections; ++ci)
+			const auto& neuron = brain->allNeurons[layer][index];
+			const char* caption = layer == 0						  ? inputLayerCaptions[index]
+								  : layer == (int)NumNeuronLayers - 1 ? outputLayerCaptions[index]
+																	  : "";
+			const char* typeName = NeuronTypeNames[neuron.type];
+			neurons.push_back({layer, index, (int)neuron.type, caption, typeName, brain->allValues[layer][index]});
+			for (unsigned c = 0; c < neuron.numConnections; ++c)
 			{
-				c = &n->allConnections[ci];
-
-				if ((c->weight * WeightMultiplier) > Render_GreyThreshold)
-				{
-					SDL_SetRenderDrawColor(renderer, Render_PositiveWeightColor, 255);
-				}
-				else if ((c->weight * WeightMultiplier) < -Render_GreyThreshold)
-				{
-					SDL_SetRenderDrawColor(renderer, Render_NegativeWeightColor, 255);
-				}
-				else
-				{
-					SDL_SetRenderDrawColor(renderer, Render_NeutralWeightColor, 255);
-				}
-
-				DrawThickLine(drawTo.x + xi * Render_LayerDistance + (Render_NeuronSize/2),
-					drawTo.y + yi * Render_VerticalDistance + (Render_NeuronSize/2) + shifts[xi],
-					drawTo.x + (c->dest_layer) * Render_LayerDistance + (Render_NeuronSize/2),
-					drawTo.y + c->dest_neuron * Render_VerticalDistance + (Render_NeuronSize/2) + shifts[c->dest_layer]);
+				const auto& edge = neuron.allConnections[c];
+				connections.push_back(
+					{layer, index, edge.dest_layer, edge.dest_neuron, edge.weight * WeightMultiplier});
 			}
 		}
 	}
-
-	//Draw neurons	
-	Rect rect = {0,0,Render_NeuronSize,Render_NeuronSize };
-
-	bool select = false;
-
-	for (uint xi = 0; xi < NumNeuronLayers; ++xi)
-	{
-		for (uint yi = 0; yi < neuronsInLayer[xi]; ++yi)
+	view.Draw(neurons, connections, counts, size);
+	selectedNeuron = nullptr;
+	selectedNeuronCaption = selectedNeuronTypeName = "";
+	for (const auto& node : neurons)
+		if (node.layer == view.selectedLayer && node.index == view.selectedIndex)
 		{
-			n = &brain->allNeurons[xi][yi];
-
-			//Choose color
-			switch (n->type)
-			{
-			//Yellow
-			case input: case output:
-				SDL_SetRenderDrawColor(renderer, 235, 235, 0, 255);
-				break;
-
-			//Grey
-			case basic:
-				SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
-				break;
-
-			//White
-			case radialbasis:
-				SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-				break;
-
-			//Blue
-			case random:
-				SDL_SetRenderDrawColor(renderer, 0, 0, 200, 255);
-				break;
-
-			//Purple
-			case memory:
-				SDL_SetRenderDrawColor(renderer, 155, 0, 155, 255);
-				break;
-
-			}
-
-			//Draw
-			rect.x = drawTo.x + xi*Render_LayerDistance;
-			rect.y = drawTo.y + yi*Render_VerticalDistance + shifts[xi];
-
-			SDL_RenderFillRect(renderer, &rect);
-
-			//if selected
-			if (rect.IsInBounds(MouseXY))
-			{
-				//Highlight
-				SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-				SDL_RenderDrawRect(renderer, &rect);
-
-				selectedNeuron = n;
-				
-				if (n->type == input)
-				{
-					selectedNeuronCaption = inputLayerCaptions[yi];
-				}
-				else if (n->type == output)
-				{
-					selectedNeuronCaption = outputLayerCaptions[yi];
-				}
-
-				selectedNeuronValue = brain->allValues[xi][yi];
-				selectedNeuronMemory = brain->allMemory[xi][yi];
-
-				select = true;
-			}
+			selectedNeuron = &brain->allNeurons[node.layer][node.index];
+			selectedNeuronCaption = node.caption;
+			selectedNeuronTypeName = node.typeName;
+			selectedNeuronValue = node.value;
+			selectedNeuronMemory = (float)brain->allMemory[node.layer][node.index];
+			break;
 		}
-	}
-
-	if (!select)
-	{
-		selectedNeuronCaption = "";
-		selectedNeuron = NULL;
-	}
 }
-
-}
+} // namespace cb3
