@@ -402,6 +402,64 @@ BrainOutput BotNeuralNet::GetOutput()
 }
 
 
+// Fields that define a neuron's behaviour. Rows shorter than the widest layer
+// have unused tail neurons: their layer number is not meaningful.
+static bool SameNeuron(const Neuron& a, const Neuron& b, bool used)
+{
+	if (a.type != b.type || a.bias != b.bias || a.numConnections != b.numConnections || (used && a.layer != b.layer))
+		return false;
+
+	for (uint i = 0; i < a.numConnections; ++i)
+	{
+		const NeuronConnection& ca = a.allConnections[i];
+		const NeuronConnection& cb = b.allConnections[i];
+
+		if (ca.dest_layer != cb.dest_layer || ca.dest_neuron != cb.dest_neuron || ca.weight != cb.weight)
+			return false;
+	}
+
+	return true;
+}
+
+bool brain::SameNeurons(const NeuronRow* a, const NeuronRow* b)
+{
+	for (uint x = 0; x < NumNeuronLayers; ++x)
+		for (uint y = 0; y < NumNeuronsInLayerMax; ++y)
+			if (!SameNeuron(a[x][y], b[x][y], y < neuronsInLayer[x]))
+				return false;
+
+	return true;
+}
+
+uint64_t brain::HashNeurons(const NeuronRow* allNeurons, uint64_t hash)
+{
+	//FNV-1a over the fields compared by SameNeurons
+	auto add = [&hash](uint value)
+	{
+		hash = (hash ^ (value & 0xFFu)) * 1099511628211ull;
+	};
+
+	for (uint x = 0; x < NumNeuronLayers; ++x)
+		for (uint y = 0; y < neuronsInLayer[x]; ++y)
+		{
+			const Neuron& n = allNeurons[x][y];
+			add((uint)n.type);
+			add((uint)(uint8_t)n.bias);
+			add((uint)n.numConnections);
+
+			for (uint i = 0; i < n.numConnections; ++i)
+			{
+				const NeuronConnection& c = n.allConnections[i];
+				add((uint)c.dest_layer);
+				add((uint)c.dest_neuron);
+				add((uint)(uint8_t)c.weight);
+			}
+		}
+
+	return hash;
+}
+
+
 //Shared genome
 
 BrainGenome::BrainGenome()
@@ -429,13 +487,12 @@ void BrainGenome::RecheckActive()
 	Neuron optimized[NumNeuronLayers][NumNeuronsInLayerMax];
 	memcpy(optimized, initial, sizeof(optimized));
 	brain::Optimize(optimized);
-	activeIsOptimizedInitial = (memcmp(optimized, active, sizeof(active)) == 0);
+	activeIsOptimizedInitial = brain::SameNeurons(optimized, active);
 }
 
 bool BrainGenome::SameNeurons(const BrainGenome& other) const
 {
-	return (memcmp(initial, other.initial, sizeof(initial)) == 0) &&
-		(memcmp(active, other.active, sizeof(active)) == 0);
+	return brain::SameNeurons(initial, other.initial) && brain::SameNeurons(active, other.active);
 }
 
 

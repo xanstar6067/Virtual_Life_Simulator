@@ -94,17 +94,7 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, char* filename, bo
 
 static uint64_t HashGenome(const BrainGenome& genome)
 {
-    //FNV-1a
-    uint64_t hash = 14695981039346656037ull;
-    auto add = [&hash](const void* data, size_t size)
-    {
-        const unsigned char* bytes = (const unsigned char*)data;
-        for (size_t i = 0; i < size; ++i)
-            hash = (hash ^ bytes[i]) * 1099511628211ull;
-    };
-    add(genome.initial, sizeof(genome.initial));
-    add(genome.active, sizeof(genome.active));
-    return hash;
+    return brain::HashNeurons(genome.active, brain::HashNeurons(genome.initial, 14695981039346656037ull));
 }
 
 void ObjectSaver::ShareLoadedGenome(std::unordered_map<uint64_t, std::vector<GenomeRef>>& loaded, Bot* bot)

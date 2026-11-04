@@ -65,6 +65,10 @@ namespace brain
 	void Mutate(NeuronRow* allNeurons);
 	void Randomize(NeuronRow* allNeurons);
 	void Optimize(NeuronRow* allNeurons);
+	// Equal networks: compares only fields the network uses (not padding or
+	// connection slots past numConnections, which may hold stale bytes).
+	bool SameNeurons(const NeuronRow* a, const NeuronRow* b);
+	uint64_t HashNeurons(const NeuronRow* allNeurons, uint64_t hash);
 }
 
 
