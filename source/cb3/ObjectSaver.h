@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Field.h"
+#include "BotNeuralNet.h"
 #include "../SimulationMode.h"
 
 #include <algorithm>
@@ -8,12 +9,13 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
 
 namespace cb3
 {
 
-class BotNeuralNet;
 
 // The compact CB3 format consists mostly of one-to-four-byte fields. Calling
 // std::fstream::read/write for every field is extremely expensive for dense
@@ -180,8 +182,10 @@ private:
     void WriteObjectToFile(MyOutStream& file, Object* obj);
     Object* LoadObjectFromFile(MyInputStream& file);
 
-    void WriteBrainCompact(MyOutStream& file, BotNeuralNet* brain, bool includeMemory);
-    bool LoadBrainCompact(MyInputStream& file, BotNeuralNet* brain, bool includeMemory);
+    // allMemory == nullptr: this brain version has no saved memory (initial brain)
+    void WriteBrainCompact(MyOutStream& file, const Neuron (*allNeurons)[NumNeuronsInLayerMax], const int8_t (*allMemory)[NumNeuronsInLayerMax]);
+    bool LoadBrainCompact(MyInputStream& file, Neuron (*allNeurons)[NumNeuronsInLayerMax], int8_t (*allMemory)[NumNeuronsInLayerMax]);
+    void ShareLoadedGenome(std::unordered_map<uint64_t, std::vector<GenomeRef>>& loaded, Bot* bot);
     void WriteBotCompact(MyOutStream& file, Bot* obj);
     Bot* LoadBotCompact(MyInputStream& file);
     void WriteObjectCompact(MyOutStream& file, Object* obj);

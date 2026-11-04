@@ -989,15 +989,25 @@ void Main::DrawChartWindow()
 
 void Main::DrawBotBrainWindow()
 {
+    // The selected bot keeps its last neuron values for the window (the
+    // network values themselves are only a temporary buffer during think()).
+    const bool selectedBot = selectedObject && selectedObject->type() == bot &&
+        field->ValidateObjectExistance(selectedObject);
+    Bot::SetObservedBot(selectedBot ? (Bot*)selectedObject : nullptr);
+
     if (!showBrain) return;
-    if (!selectedObject || !field->ValidateObjectExistance(selectedObject))
+    if (!selectedBot)
     {
         Deselect();
         return;
     }
     auto bot = (Bot*)selectedObject;
-    vlsui::DrawBrainWindow(showBrain, brainToShow, bot->GetActiveBrain(), bot->GetInitialBrain(),
+    // Views give the bot its own genome copy: edits do not touch relatives.
+    auto current = bot->GetActiveBrain();
+    auto initial = bot->GetInitialBrain();
+    vlsui::DrawBrainWindow(showBrain, brainToShow, &current, &initial,
         nn_renderer, bot->GetNeuronSummary(), BiasMultiplier, WeightMultiplier, true);
+    bot->RecheckBrain();
 }
 
 void Main::DrawAAWindow()

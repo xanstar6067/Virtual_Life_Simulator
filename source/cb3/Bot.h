@@ -89,10 +89,16 @@ protected:
 	void CalculateLookAt();
 
 
-	//Active brain - one that is used during simulation, may be changed or optimized
-	BotNeuralNet activeBrain;
-	//Bot gets initial brain from his parent, it is his original genes
-	BotNeuralNet initialBrain;
+	//Brain neurons, shared with relatives until one of them changes (copy-on-write).
+	//genome->initial - original genes received from the parent;
+	//genome->active - initial after Optimize(), used during simulation.
+	GenomeRef genome;
+	//Own state of memory neurons of the active brain
+	int8_t brainMemory[NumNeuronLayers][NumNeuronsInLayerMax];
+
+	//Bot whose last neuron values are kept for the brain window (or NULL)
+	static std::atomic<const Bot*> observedBot;
+	static float observedValues[NumNeuronLayers][NumNeuronsInLayerMax];
 
 	//if this is not 0, bot does nothing at his turn
 	uint stunned;
@@ -204,8 +210,31 @@ public:
 	int* GetMarkers();
 	Color* GetColor();
 
-	BotNeuralNet* GetActiveBrain();
-	BotNeuralNet* GetInitialBrain();
+	//Editable view of one brain version for the brain window, tests and loader.
+	//It gives this bot its own genome copy first (relatives are not affected).
+	struct BrainView
+	{
+		Neuron (*allNeurons)[NumNeuronsInLayerMax];
+		const float (*allValues)[NumNeuronsInLayerMax];
+		int8_t (*allMemory)[NumNeuronsInLayerMax];
+
+		void Mutate() { brain::Mutate(allNeurons); }
+	};
+
+	BrainView GetActiveBrain();
+	BrainView GetInitialBrain();
+	//Read-only access, does not copy a shared genome
+	const BrainGenome& GetGenome() const;
+	const int8_t (*GetBrainMemory() const)[NumNeuronsInLayerMax];
+	//Call after neurons were changed through BrainView to restore genome sharing
+	void RecheckBrain();
+	//Replace genome by an equal one (used to merge identical genomes on load)
+	void ShareGenome(const GenomeRef& equalGenome);
+	const GenomeRef& GetGenomeRef() const;
+
+	//Keep neuron values of this bot for the brain window; also its children
+	//get own genome copies so the viewed brain keeps its address
+	static void SetObservedBot(const Bot* bot);
 	PersistentState GetPersistentState() const;
 	void SetPersistentState(const PersistentState& state);
 

@@ -10,6 +10,8 @@ Brain viewer regressions cover neuron selection, switching current/initial brain
 
 CB3 brain regressions check output activation thresholds, output biases, and large positive/negative sums through `Process` and `GetOutput`. Real bot ticks cover all eight desired headings and the zero vector, including rotation energy cost.
 
+Shared brain genomes (CB3): a child without mutation shares its parent's genome, while mutation, global mutation and editing through the brain window give the bot its own copy and leave relatives unchanged; a child of an edited bot is rebuilt from the initial brain, and neuron memory stays per bot.
+
 Pass `-ApplicationTargetName VirtualLifeSimulator1-UI` to build a separate executable when the normal application is open.
 
 The slim, single-row header is checked for overflow. All four display-mode buttons are clicked in wide and compact footers, including returning from hidden-field mode. Feeding descriptions are checked against real bot state for unknown, photosynthetic, predatory, organic, mixed, and two-thirds boundary cases in both engines.

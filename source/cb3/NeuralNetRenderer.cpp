@@ -12,11 +12,11 @@ void NeuralNetRenderer::ResetSelection()
 	selectedNeuronValue = selectedNeuronMemory = 0.0f;
 }
 
-void NeuralNetRenderer::Render(BotNeuralNet* brain, const ImVec2& size)
+void NeuralNetRenderer::Render(const Bot::BrainView* brain, const ImVec2& size)
 {
-	if (selectedBrain != brain)
+	if (selectedBrain != brain->allNeurons)
 		ResetSelection();
-	selectedBrain = brain;
+	selectedBrain = brain->allNeurons;
 
 	std::vector<int> counts;
 	std::vector<vlsui::GraphNeuron> neurons;

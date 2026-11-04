@@ -25,6 +25,16 @@ namespace cb3
 {
 #endif
 
+// Neurons of a brain returned by Bot::GetActiveBrain/GetInitialBrain (a pointer or a view)
+template <class Brain>
+static auto NeuronsOf(Brain&& brain)
+{
+    if constexpr (std::is_pointer_v<std::remove_reference_t<Brain>>)
+        return brain->allNeurons;
+    else
+        return brain.allNeurons;
+}
+
 struct InterfaceSmokeTest
 {
     // Exercise AddObject on a real worker tick without depending on random brains.
@@ -200,12 +210,12 @@ struct InterfaceSmokeTest
             {
                 app.ClearWorld();
                 auto* organism = new Bot(20, 20, 500);
-                auto* active = organism->GetActiveBrain();
-                for (auto& layer : active->allNeurons)
-                    for (auto& neuron : layer)
+                const auto active = organism->GetActiveBrain();
+                for (uint layer = 0; layer < NumNeuronLayers; ++layer)
+                    for (auto& neuron : active.allNeurons[layer])
                         neuron.SetZero();
-                active->allNeurons[NeuronOutputLayerIndex][0].bias = x * 100;
-                active->allNeurons[NeuronOutputLayerIndex][1].bias = y * 100;
+                active.allNeurons[NeuronOutputLayerIndex][0].bias = x * 100;
+                active.allNeurons[NeuronOutputLayerIndex][1].bias = y * 100;
                 const int target = RotationsReverse[x + 1][y + 1];
                 auto state = organism->GetPersistentState();
                 state.direction = target < 0 ? 3 : (target + 1) % 8;
@@ -217,6 +227,63 @@ struct InterfaceSmokeTest
                 assert(organism->GetDirection() == (target < 0 ? 3 : target));
                 assert(organism->energy == 500 - EveryTickEnergyPenalty - (target < 0 ? 0 : RotateCost));
             }
+    }
+#endif
+
+#ifdef TEST_CB3
+    // Relatives share one brain genome until one of them changes (copy-on-write).
+    static void CheckCb3GenomeSharing(Main& app)
+    {
+        app.ClearWorld();
+        const bool noMutations = app.field->params.noMutations;
+        app.field->params.noMutations = false;
+        auto* parent = new Bot(20, 20, 500);
+        const auto* genome = parent->GetGenomeRef().get();
+        assert(genome->RefCount() == 1 && genome->activeIsOptimizedInitial);
+
+        // A child without mutation only adds a reference to the parent's genome.
+        auto* twin = new Bot(21, 20, 500, parent, false);
+        assert(twin->GetGenomeRef().get() == genome && genome->RefCount() == 2);
+        assert(!memcmp(twin->GetGenome().active, parent->GetGenome().active, sizeof(genome->active)));
+
+        // A mutated child gets its own copy, the parent is not changed.
+        std::remove_const_t<decltype(genome->initial)> parentInitial;
+        memcpy(parentInitial, genome->initial, sizeof(parentInitial));
+        auto* mutant = new Bot(22, 20, 500, parent, true);
+        assert(mutant->GetGenomeRef().get() != genome && genome->RefCount() == 2);
+        assert(!memcmp(parentInitial, genome->initial, sizeof(parentInitial)));
+        assert(mutant->GetGenome().activeIsOptimizedInitial);
+
+        // Editing one relative (brain window view) copies, the other keeps the brain.
+        const Neuron parentNeuron = genome->active[1][0];
+        const auto edited = twin->GetActiveBrain();
+        assert(twin->GetGenomeRef().get() != genome && genome->RefCount() == 1);
+        edited.allNeurons[1][0].SetZero();
+        edited.allNeurons[1][0].bias = 77;
+        assert(!memcmp(&parentNeuron, &genome->active[1][0], sizeof(Neuron)));
+        twin->RecheckBrain();
+        assert(!twin->GetGenome().activeIsOptimizedInitial);
+        // Its child must not inherit the edited active brain, only the initial one.
+        auto* grandchild = new Bot(23, 20, 500, twin, false);
+        assert(grandchild->GetGenomeRef().get() != twin->GetGenomeRef().get());
+        assert(grandchild->GetGenome().activeIsOptimizedInitial);
+
+        // Global mutation of a sharing bot copies too.
+        auto* sibling = new Bot(24, 20, 500, parent, false);
+        assert(sibling->GetGenomeRef().get() == genome && genome->RefCount() == 2);
+        sibling->Mutagen();
+        assert(sibling->GetGenomeRef().get() != genome && genome->RefCount() == 1);
+        assert(!memcmp(parentInitial, genome->initial, sizeof(parentInitial)));
+
+        // Memory stays per bot and is cleared for a newborn.
+        const auto parentBrain = parent->GetActiveBrain();
+        parentBrain.allMemory[1][0] = 1;
+        auto* newborn = new Bot(25, 20, 500, parent, false);
+        assert(newborn->GetBrainMemory()[1][0] == 0 && parent->GetBrainMemory()[1][0] == 1);
+
+        for (Bot* b : {parent, twin, mutant, grandchild, sibling, newborn})
+            delete b;
+        app.field->params.noMutations = noMutations;
     }
 #endif
 
@@ -434,10 +501,14 @@ struct InterfaceSmokeTest
         assert(!(brainWindow->Flags & (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar)));
         assert(!ImGui::FindWindowByName("Сводка бота"));
         const auto bot = (Bot*)app.selectedObject;
+#ifdef TEST_CB3
+        assert(app.nn_renderer.selectedBrain == bot->GetActiveBrain().allNeurons);
+#else
         assert(app.nn_renderer.selectedBrain == bot->GetActiveBrain());
+#endif
         auto point = app.nn_renderer.view.NeuronPosition(1, 0);
         Click(app, surface, point.x, point.y);
-        assert(app.nn_renderer.selectedNeuron == &bot->GetActiveBrain()->allNeurons[1][0]);
+        assert(app.nn_renderer.selectedNeuron == &NeuronsOf(bot->GetActiveBrain())[1][0]);
         const auto botsBeforeCanvasClick = CountBots(app);
         app.mouseFunc = mouse_remove;
         mouseState.mouseX = (int)point.x;
@@ -452,11 +523,15 @@ struct InterfaceSmokeTest
         const float switchY = brainWindow->Pos.y + brainWindow->TitleBarHeight() + brainWindow->WindowPadding.y + 14.0f;
         Click(app, surface, switchX, switchY);
         assert(app.brainToShow == 1);
+#ifdef TEST_CB3
+        assert(app.nn_renderer.selectedBrain == bot->GetInitialBrain().allNeurons);
+#else
         assert(app.nn_renderer.selectedBrain == bot->GetInitialBrain());
+#endif
         assert(!app.nn_renderer.selectedNeuron);
         point = app.nn_renderer.view.NeuronPosition(1, 1);
         Click(app, surface, point.x, point.y);
-        assert(app.nn_renderer.selectedNeuron == &bot->GetInitialBrain()->allNeurons[1][1]);
+        assert(app.nn_renderer.selectedNeuron == &NeuronsOf(bot->GetInitialBrain())[1][1]);
 
         // Inject input into ImGui only: no operating-system mouse events.
         const ImVec2 previous = brainWindow->Pos;
@@ -565,6 +640,7 @@ struct InterfaceSmokeTest
         assert(!app.showFirstPopulationHint);
 #ifdef TEST_CB3
         CheckCb3Brain(app);
+        CheckCb3GenomeSharing(app);
 #endif
         CheckTelemetry(app);
         CheckCharts(app, surface, "wide");

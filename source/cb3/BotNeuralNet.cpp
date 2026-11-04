@@ -5,12 +5,12 @@
 namespace cb3
 {
 
-float BotNeuralNet::ActivationSimple(float value)
+static float ActivationSimple(float value)
 {
 	return (value >= 0.5f) ? 1.0f : 0.0f;
 }
 
-float BotNeuralNet::PlusMinusActivation(float value)
+static float PlusMinusActivation(float value)
 {
 	if (value >= 0.5f)
 		return 1.0f;
@@ -20,12 +20,12 @@ float BotNeuralNet::PlusMinusActivation(float value)
 	return 0;
 }
 
-float BotNeuralNet::RadialBasisActivation(float value)
+static float RadialBasisActivation(float value)
 {
 	return ((value >=0.45f) and (value <= 0.55f)) ? 1.0f : 0.0f;
 }
 
-float BotNeuralNet::LinearActivation(float value)
+[[maybe_unused]] static float LinearActivation(float value)
 {
 	if (value > 1.0f)
 		value = 1.0f;
@@ -35,13 +35,7 @@ float BotNeuralNet::LinearActivation(float value)
 	return value;
 }
 
-void BotNeuralNet::ClearMemory()
-{
-	memset(allMemory, 0, sizeof(allMemory));
-}
-
-
-BotNeuralNet::BotNeuralNet()
+void brain::InitNeurons(NeuronRow* allNeurons)
 {
 	repeat(NumInputNeurons)
 		allNeurons[NeuronInputLayerIndex][i].type = input;
@@ -56,30 +50,12 @@ BotNeuralNet::BotNeuralNet()
 			allNeurons[nx][ny].layer = nx;
 		}
 	}
-
-	ClearMemory();
 }
 
-void BotNeuralNet::Clone(BotNeuralNet* prototype)
-{
-	ClearMemory();
-	memcpy(allNeurons, prototype->allNeurons, sizeof(allNeurons));
-}
-
-BotNeuralNet::BotNeuralNet(BotNeuralNet* prototype)
-{
-	Clone(prototype);
-}
-
-void BotNeuralNet::ClearValues()
-{
-	memset(allValues, 0, sizeof(allValues));
-}
-
-void BotNeuralNet::Process(BrainInput input)
+void brain::Process(const NeuronRow* allNeurons, NeuronValueRow* allValues, NeuronMemoryRow* allMemory, const BrainInput& input)
 {
 	//Clear all neuron values
-	ClearValues();
+	memset(allValues, 0, sizeof(float) * NumNeuronLayers * NumNeuronsInLayerMax);
 
 	//Copy input data
 	repeat(NumInputNeurons)
@@ -88,7 +64,7 @@ void BotNeuralNet::Process(BrainInput input)
 	}
 
 	int8_t* m;
-	Neuron* n;
+	const Neuron* n;
 	float tmpVal;
 
 	//Parse input layer
@@ -98,7 +74,7 @@ void BotNeuralNet::Process(BrainInput input)
 
 		tmpVal = allValues[NeuronInputLayerIndex][yi] + (n->bias * BiasMultiplier);
 
-		NeuronConnection* tmpC;
+		const NeuronConnection* tmpC;
 
 		for (uint i = 0; i < n->numConnections; ++i)
 		{
@@ -156,7 +132,7 @@ void BotNeuralNet::Process(BrainInput input)
 			}
 
 			//Feed forward
-			NeuronConnection* tmpC;
+			const NeuronConnection* tmpC;
 
 			for (uint i = 0; i < n->numConnections; ++i)
 			{
@@ -191,7 +167,7 @@ void BotNeuralNet::Process(BrainInput input)
 
 
 
-void BotNeuralNet::Mutate()
+void brain::Mutate(NeuronRow* allNeurons)
 {
 	uint randomNeuronIndex = RandomVal(NumNeuronLayers * NumNeuronsInLayerMax);
 	uint counter = 0;
@@ -309,7 +285,7 @@ void BotNeuralNet::Mutate()
 }
 
 
-void BotNeuralNet::Optimize()
+void brain::Optimize(NeuronRow* allNeurons)
 {
 	Neuron* n;
 	
@@ -344,7 +320,7 @@ void BotNeuralNet::Optimize()
 }
 
 
-void BotNeuralNet::Randomize()
+void brain::Randomize(NeuronRow* allNeurons)
 {
 	//Input layer
 	for (uint y = 0; y < NumInputNeurons; ++y)
@@ -370,7 +346,7 @@ void BotNeuralNet::Randomize()
 }
 
 
-BrainOutput BotNeuralNet::GetOutput()
+BrainOutput brain::GetOutput(const NeuronValueRow* allValues)
 {
 	BrainOutput toRet;
 
@@ -381,7 +357,163 @@ BrainOutput BotNeuralNet::GetOutput()
 }
 
 
-void BotNeuralNet::SetDummy()
+//Standalone network
+
+BotNeuralNet::BotNeuralNet()
+{
+	brain::InitNeurons(allNeurons);
+	memset(allMemory, 0, sizeof(allMemory));
+}
+
+void BotNeuralNet::Clone(BotNeuralNet* prototype)
+{
+	memset(allMemory, 0, sizeof(allMemory));
+	memcpy(allNeurons, prototype->allNeurons, sizeof(allNeurons));
+}
+
+BotNeuralNet::BotNeuralNet(BotNeuralNet* prototype)
+{
+	Clone(prototype);
+}
+
+void BotNeuralNet::Process(BrainInput input)
+{
+	brain::Process(allNeurons, allValues, allMemory, input);
+}
+
+void BotNeuralNet::Mutate()
+{
+	brain::Mutate(allNeurons);
+}
+
+void BotNeuralNet::Randomize()
+{
+	brain::Randomize(allNeurons);
+}
+
+void BotNeuralNet::Optimize()
+{
+	brain::Optimize(allNeurons);
+}
+
+BrainOutput BotNeuralNet::GetOutput()
+{
+	return brain::GetOutput(allValues);
+}
+
+
+//Shared genome
+
+BrainGenome::BrainGenome()
+{
+	brain::InitNeurons(initial);
+	brain::InitNeurons(active);
+}
+
+BrainGenome::BrainGenome(const BrainGenome& other) :
+	activeIsOptimizedInitial(other.activeIsOptimizedInitial)
+{
+	memcpy(initial, other.initial, sizeof(initial));
+	memcpy(active, other.active, sizeof(active));
+}
+
+void BrainGenome::RebuildActive()
+{
+	memcpy(active, initial, sizeof(active));
+	brain::Optimize(active);
+	activeIsOptimizedInitial = true;
+}
+
+void BrainGenome::RecheckActive()
+{
+	Neuron optimized[NumNeuronLayers][NumNeuronsInLayerMax];
+	memcpy(optimized, initial, sizeof(optimized));
+	brain::Optimize(optimized);
+	activeIsOptimizedInitial = (memcmp(optimized, active, sizeof(active)) == 0);
+}
+
+bool BrainGenome::SameNeurons(const BrainGenome& other) const
+{
+	return (memcmp(initial, other.initial, sizeof(initial)) == 0) &&
+		(memcmp(active, other.active, sizeof(active)) == 0);
+}
+
+
+void GenomeRef::Acquire()
+{
+	if (genome)
+		genome->refs.fetch_add(1, std::memory_order_relaxed);
+}
+
+void GenomeRef::ReleaseRef()
+{
+	if (genome && genome->refs.fetch_sub(1, std::memory_order_acq_rel) == 1)
+		delete genome;
+	genome = nullptr;
+}
+
+GenomeRef::GenomeRef(BrainGenome* g) : genome(g)
+{
+	Acquire();
+}
+
+GenomeRef::GenomeRef(const GenomeRef& other) : genome(other.genome)
+{
+	Acquire();
+}
+
+GenomeRef::GenomeRef(GenomeRef&& other) noexcept : genome(other.genome)
+{
+	other.genome = nullptr;
+}
+
+GenomeRef& GenomeRef::operator=(const GenomeRef& other)
+{
+	if (genome != other.genome)
+	{
+		BrainGenome* g = other.genome;
+		if (g)
+			g->refs.fetch_add(1, std::memory_order_relaxed);
+		ReleaseRef();
+		genome = g;
+	}
+	return *this;
+}
+
+GenomeRef& GenomeRef::operator=(GenomeRef&& other) noexcept
+{
+	if (this != &other)
+	{
+		ReleaseRef();
+		genome = other.genome;
+		other.genome = nullptr;
+	}
+	return *this;
+}
+
+GenomeRef::~GenomeRef()
+{
+	ReleaseRef();
+}
+
+GenomeRef GenomeRef::Create()
+{
+	return GenomeRef(new BrainGenome());
+}
+
+BrainGenome* GenomeRef::MakeUnique()
+{
+	// refs == 1 means this reference is the only owner: nobody else can share
+	// the genome concurrently, so it may be changed in place.
+	if (genome && genome->refs.load(std::memory_order_acquire) != 1)
+		*this = GenomeRef(new BrainGenome(*genome));
+	else if (!genome)
+		*this = Create();
+	return genome;
+}
+
+
+[[maybe_unused]] static void SetDummy()
 {
 	//Preset brain
 
