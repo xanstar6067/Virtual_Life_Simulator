@@ -7,6 +7,31 @@
 static constexpr int SaveModeId = static_cast<int>(SimulationMode::Classic);
 
 
+static uint64_t HashGenome(const BrainGenome& genome)
+{
+    return brain::HashNeurons(genome.active, brain::HashNeurons(genome.initial, 14695981039346656037ull));
+}
+
+void ObjectSaver::ShareLoadedGenome(std::unordered_map<uint64_t, std::vector<GenomeRef>>& loaded, Object* obj)
+{
+    if (obj->type != bot)
+        return;
+
+    Bot* loadedBot = (Bot*)obj;
+    auto& candidates = loaded[HashGenome(loadedBot->GetGenome())];
+
+    for (const GenomeRef& candidate : candidates)
+    {
+        if (candidate->SameNeurons(loadedBot->GetGenome()))
+        {
+            loadedBot->ShareGenome(candidate);
+            return;
+        }
+    }
+
+    candidates.push_back(loadedBot->GetGenomeRef());
+}
+
 Bot* ObjectSaver::LoadBotFromFile(MyInputStream& file)
 {
     int lifetime = file.ReadInt();
@@ -37,11 +62,16 @@ Bot* ObjectSaver::LoadBotFromFile(MyInputStream& file)
 
     toRet->energy = file.ReadInt();
 
-    file.read((char*)(toRet->GetActiveBrain()->allNeurons), NumNeuronLayers * NeuronsInLayer * sizeof(Neuron));
+    const Bot::BrainView active = toRet->GetActiveBrain();
+    const Bot::BrainView initial = toRet->GetInitialBrain();
 
-    file.read((char*)(toRet->GetInitialBrain()->allNeurons), NumNeuronLayers* NeuronsInLayer * sizeof(Neuron));
+    file.read((char*)(active.allNeurons), NumNeuronLayers * NeuronsInLayer * sizeof(Neuron));
 
-    file.read((char*)toRet->GetActiveBrain()->allMemory, NumNeuronLayers* NeuronsInLayer * sizeof(float));
+    file.read((char*)(initial.allNeurons), NumNeuronLayers* NeuronsInLayer * sizeof(Neuron));
+
+    file.read((char*)active.allMemory, NumNeuronLayers* NeuronsInLayer * sizeof(float));
+
+    toRet->RecheckBrain();
 
     return toRet;
 }
@@ -191,8 +221,13 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorldLegacy(Field* world, MyInputStrea
     world->RemoveAllObjects();
     world->params = loadedParams;
 
+    //Relatives are saved with identical brains: let them share one genome again
+    std::unordered_map<uint64_t, std::vector<GenomeRef>> loadedGenomes;
+
     for (std::unique_ptr<Object>& object : loadedObjects)
     {
+        ShareLoadedGenome(loadedGenomes, object.get());
+
         if (world->AddObject(object.get()))
             object.release();
     }
@@ -275,8 +310,13 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorldCompact(Field* world, MyInputStre
     world->params = loadedParams;
     world->SetPersistentState(loadedState);
 
+    //Relatives are saved with identical brains: let them share one genome again
+    std::unordered_map<uint64_t, std::vector<GenomeRef>> loadedGenomes;
+
     for (std::unique_ptr<Object>& object : loadedObjects)
     {
+        ShareLoadedGenome(loadedGenomes, object.get());
+
         if (world->AddObject(object.get()))
             object.release();
     }
@@ -368,13 +408,13 @@ bool ObjectSaver::SaveWorld(Field* world, const std::filesystem::path& filename,
     return false;
 }
 
-void ObjectSaver::WriteBrainCompact(MyOutStream& file, BotNeuralNet* brain, bool includeMemory)
+void ObjectSaver::WriteBrainCompact(MyOutStream& file, const Neuron (*allNeurons)[NeuronsInLayer], const float (*allMemory)[NeuronsInLayer])
 {
     for (int layer = 0; layer < NumNeuronLayers; ++layer)
     {
         for (int neuronIndex = 0; neuronIndex < NeuronsInLayer; ++neuronIndex)
         {
-            Neuron* neuron = &brain->allNeurons[layer][neuronIndex];
+            const Neuron* neuron = &allNeurons[layer][neuronIndex];
 
             file.WriteByte((byte)neuron->type);
             file.WriteFloat(neuron->bias);
@@ -382,7 +422,7 @@ void ObjectSaver::WriteBrainCompact(MyOutStream& file, BotNeuralNet* brain, bool
 
             for (uint connectionIndex = 0; connectionIndex < neuron->numConnections; ++connectionIndex)
             {
-                NeuronConnection* connection = &neuron->allConnections[connectionIndex];
+                const NeuronConnection* connection = &neuron->allConnections[connectionIndex];
 
                 file.WriteByte(connection->dest_layer);
                 file.WriteByte(connection->dest_neuron);
@@ -391,17 +431,17 @@ void ObjectSaver::WriteBrainCompact(MyOutStream& file, BotNeuralNet* brain, bool
         }
     }
 
-    if (includeMemory)
-        file.write((char*)brain->allMemory, NumNeuronLayers * NeuronsInLayer * sizeof(float));
+    if (allMemory)
+        file.write((const char*)allMemory, NumNeuronLayers * NeuronsInLayer * sizeof(float));
 }
 
-bool ObjectSaver::LoadBrainCompact(MyInputStream& file, BotNeuralNet* brain, bool includeMemory)
+bool ObjectSaver::LoadBrainCompact(MyInputStream& file, Neuron (*allNeurons)[NeuronsInLayer], float (*allMemory)[NeuronsInLayer])
 {
     for (int layer = 0; layer < NumNeuronLayers; ++layer)
     {
         for (int neuronIndex = 0; neuronIndex < NeuronsInLayer; ++neuronIndex)
         {
-            Neuron* neuron = &brain->allNeurons[layer][neuronIndex];
+            Neuron* neuron = &allNeurons[layer][neuronIndex];
 
             const byte type = file.ReadByte();
             neuron->bias = file.ReadFloat();
@@ -430,9 +470,9 @@ bool ObjectSaver::LoadBrainCompact(MyInputStream& file, BotNeuralNet* brain, boo
         }
     }
 
-    if (includeMemory)
+    if (allMemory)
     {
-        file.read((char*)brain->allMemory, NumNeuronLayers * NeuronsInLayer * sizeof(float));
+        file.read((char*)allMemory, NumNeuronLayers * NeuronsInLayer * sizeof(float));
         if (!file)
             return false;
     }
@@ -473,8 +513,9 @@ void ObjectSaver::WriteBotCompact(MyOutStream& file, Bot* obj)
     file.WriteInt((int)state.numPSonLand);
     file.WriteBool(state.wasOnLand);
 
-    WriteBrainCompact(file, obj->GetActiveBrain(), true);
-    WriteBrainCompact(file, obj->GetInitialBrain(), false);
+    // Every bot is written with its full brain: shared genomes are not part of the file format
+    WriteBrainCompact(file, obj->GetGenome().active, obj->GetBrainMemory());
+    WriteBrainCompact(file, obj->GetGenome().initial, nullptr);
 }
 
 Bot* ObjectSaver::LoadBotCompact(MyInputStream& file)
@@ -519,17 +560,20 @@ Bot* ObjectSaver::LoadBotCompact(MyInputStream& file)
 
     toRet->SetPersistentState(state);
 
-    if (!LoadBrainCompact(file, toRet->GetActiveBrain(), true))
+    const Bot::BrainView active = toRet->GetActiveBrain();
+    if (!LoadBrainCompact(file, active.allNeurons, active.allMemory))
     {
         delete toRet;
         return NULL;
     }
 
-    if (!LoadBrainCompact(file, toRet->GetInitialBrain(), false))
+    if (!LoadBrainCompact(file, toRet->GetInitialBrain().allNeurons, nullptr))
     {
         delete toRet;
         return NULL;
     }
+
+    toRet->RecheckBrain();
 
     return toRet;
 }
@@ -623,10 +667,10 @@ void ObjectSaver::WriteBotToFile(MyOutStream& file, Bot* obj)
 
     file.WriteInt((obj)->energy);
 
-    file.write((char*)(obj)->GetActiveBrain()->allNeurons, NumNeuronLayers * NeuronsInLayer * sizeof(Neuron));
-    file.write((char*)(obj)->GetInitialBrain()->allNeurons, NumNeuronLayers * NeuronsInLayer * sizeof(Neuron));
+    file.write((const char*)obj->GetGenome().active, NumNeuronLayers * NeuronsInLayer * sizeof(Neuron));
+    file.write((const char*)obj->GetGenome().initial, NumNeuronLayers * NeuronsInLayer * sizeof(Neuron));
 
-    file.write((char*)(obj)->GetActiveBrain()->allMemory, NumNeuronLayers* NeuronsInLayer * sizeof(float));
+    file.write((const char*)obj->GetBrainMemory(), NumNeuronLayers* NeuronsInLayer * sizeof(float));
 }
 
 void ObjectSaver::WriteObjectToFile(MyOutStream& file, Object* obj)

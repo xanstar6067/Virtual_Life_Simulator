@@ -4,7 +4,10 @@
 #include "SimulationMode.h"
 
 
-class BotNeuralNet;
+#include "BotNeuralNet.h"
+
+#include <unordered_map>
+#include <vector>
 
 
 class MyOutStream final: public std::ofstream
@@ -53,8 +56,10 @@ private:
     void WriteObjectToFile(MyOutStream& file, Object* obj);
     Object* LoadObjectFromFile(MyInputStream& file);
 
-    void WriteBrainCompact(MyOutStream& file, BotNeuralNet* brain, bool includeMemory);
-    bool LoadBrainCompact(MyInputStream& file, BotNeuralNet* brain, bool includeMemory);
+    // allMemory == nullptr: this brain version has no saved memory (initial brain)
+    void WriteBrainCompact(MyOutStream& file, const Neuron (*allNeurons)[NeuronsInLayer], const float (*allMemory)[NeuronsInLayer]);
+    bool LoadBrainCompact(MyInputStream& file, Neuron (*allNeurons)[NeuronsInLayer], float (*allMemory)[NeuronsInLayer]);
+    void ShareLoadedGenome(std::unordered_map<uint64_t, std::vector<GenomeRef>>& loaded, Object* obj);
     void WriteBotCompact(MyOutStream& file, Bot* obj);
     Bot* LoadBotCompact(MyInputStream& file);
     void WriteObjectCompact(MyOutStream& file, Object* obj);

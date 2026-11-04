@@ -25,16 +25,6 @@ namespace cb3
 {
 #endif
 
-// Neurons of a brain returned by Bot::GetActiveBrain/GetInitialBrain (a pointer or a view)
-template <class Brain>
-static auto NeuronsOf(Brain&& brain)
-{
-    if constexpr (std::is_pointer_v<std::remove_reference_t<Brain>>)
-        return brain->allNeurons;
-    else
-        return brain.allNeurons;
-}
-
 struct InterfaceSmokeTest
 {
     // Exercise AddObject on a real worker tick without depending on random brains.
@@ -230,13 +220,14 @@ struct InterfaceSmokeTest
     }
 #endif
 
-#ifdef TEST_CB3
     // Relatives share one brain genome until one of them changes (copy-on-write).
-    static void CheckCb3GenomeSharing(Main& app)
+    static void CheckGenomeSharing(Main& app)
     {
         app.ClearWorld();
+#ifdef TEST_CB3
         const bool noMutations = app.field->params.noMutations;
         app.field->params.noMutations = false;
+#endif
         auto* parent = new Bot(20, 20, 500);
         const auto* genome = parent->GetGenomeRef().get();
         assert(genome->RefCount() == 1 && genome->activeIsOptimizedInitial);
@@ -271,7 +262,13 @@ struct InterfaceSmokeTest
         // Global mutation of a sharing bot copies too.
         auto* sibling = new Bot(24, 20, 500, parent, false);
         assert(sibling->GetGenomeRef().get() == genome && genome->RefCount() == 2);
+#ifdef TEST_CB3
         sibling->Mutagen();
+#else
+        // Classic Mutagen mutates the genes with a 10% chance.
+        for (int i = 0; i < 1000 && sibling->GetGenomeRef().get() == genome; ++i)
+            sibling->Mutagen();
+#endif
         assert(sibling->GetGenomeRef().get() != genome && genome->RefCount() == 1);
         assert(!memcmp(parentInitial, genome->initial, sizeof(parentInitial)));
 
@@ -283,9 +280,10 @@ struct InterfaceSmokeTest
 
         for (Bot* b : {parent, twin, mutant, grandchild, sibling, newborn})
             delete b;
+#ifdef TEST_CB3
         app.field->params.noMutations = noMutations;
-    }
 #endif
+    }
 
     static void CheckTelemetry(Main& app)
     {
@@ -501,14 +499,10 @@ struct InterfaceSmokeTest
         assert(!(brainWindow->Flags & (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar)));
         assert(!ImGui::FindWindowByName("Сводка бота"));
         const auto bot = (Bot*)app.selectedObject;
-#ifdef TEST_CB3
         assert(app.nn_renderer.selectedBrain == bot->GetActiveBrain().allNeurons);
-#else
-        assert(app.nn_renderer.selectedBrain == bot->GetActiveBrain());
-#endif
         auto point = app.nn_renderer.view.NeuronPosition(1, 0);
         Click(app, surface, point.x, point.y);
-        assert(app.nn_renderer.selectedNeuron == &NeuronsOf(bot->GetActiveBrain())[1][0]);
+        assert(app.nn_renderer.selectedNeuron == &bot->GetActiveBrain().allNeurons[1][0]);
         const auto botsBeforeCanvasClick = CountBots(app);
         app.mouseFunc = mouse_remove;
         mouseState.mouseX = (int)point.x;
@@ -523,15 +517,11 @@ struct InterfaceSmokeTest
         const float switchY = brainWindow->Pos.y + brainWindow->TitleBarHeight() + brainWindow->WindowPadding.y + 14.0f;
         Click(app, surface, switchX, switchY);
         assert(app.brainToShow == 1);
-#ifdef TEST_CB3
         assert(app.nn_renderer.selectedBrain == bot->GetInitialBrain().allNeurons);
-#else
-        assert(app.nn_renderer.selectedBrain == bot->GetInitialBrain());
-#endif
         assert(!app.nn_renderer.selectedNeuron);
         point = app.nn_renderer.view.NeuronPosition(1, 1);
         Click(app, surface, point.x, point.y);
-        assert(app.nn_renderer.selectedNeuron == &NeuronsOf(bot->GetInitialBrain())[1][1]);
+        assert(app.nn_renderer.selectedNeuron == &bot->GetInitialBrain().allNeurons[1][1]);
 
         // Inject input into ImGui only: no operating-system mouse events.
         const ImVec2 previous = brainWindow->Pos;
@@ -640,8 +630,8 @@ struct InterfaceSmokeTest
         assert(!app.showFirstPopulationHint);
 #ifdef TEST_CB3
         CheckCb3Brain(app);
-        CheckCb3GenomeSharing(app);
 #endif
+        CheckGenomeSharing(app);
         CheckTelemetry(app);
         CheckCharts(app, surface, "wide");
 

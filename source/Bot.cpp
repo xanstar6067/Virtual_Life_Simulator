@@ -166,7 +166,9 @@ void Bot::TotalMutation()
 	repeat(3)
 		ChangeMutationMarker();
 
-	activeBrain.MutateHarsh();
+	BrainGenome* own = genome.MakeUnique();
+	brain::MutateHarsh(own->active);
+	own->activeIsOptimizedInitial = false;
 
 	RandomizeColor();
 }
@@ -180,7 +182,9 @@ void Bot::ChangeColor(const int str)
 
 void Bot::SlightlyMutate()
 {
-	activeBrain.MutateSlightly();
+	BrainGenome* own = genome.MakeUnique();
+	brain::MutateSlightly(own->active);
+	own->activeIsOptimizedInitial = false;
 
 	#ifdef ChangeColorSlightly
 	ChangeColor(BotColorChangeStrength);
@@ -193,9 +197,13 @@ void Bot::Mutate()
 {
 	ChangeMutationMarker();
 
-	//Mutate brain
+	//Mutate brain (genes only, the active brain stays as it is)
+	BrainGenome* own = genome.MakeUnique();
+
 	for (int i = 0; i < (1 + RandomVal(MutateNeuronsMaximum + 1)); ++i)
-		initialBrain.Mutate();
+		brain::Mutate(own->initial);
+
+	own->activeIsOptimizedInitial = false;
 
 	/*
 	for (int s = 0; s < (1 + RandomVal(MutateNeuronsSlightlyMaximum + 1)); ++s)
@@ -429,31 +437,34 @@ BrainOutput Bot::think(BrainInput input)
 		return BrainOutput::GetEmptyBrain();
 	}
 
-	//Clear all neuron values
-	activeBrain.Clear();
+	//Neuron values are needed only during this call
+	float values[NumNeuronLayers][NeuronsInLayer] = {};
 
 	//Input data
 	{
 		//Energy
-		activeBrain.allValues[NeuronInputLayerIndex][0] = ((energy * 1.0f) / (MaxPossibleEnergyForABot * 1.0f));
+		values[NeuronInputLayerIndex][0] = ((energy * 1.0f) / (MaxPossibleEnergyForABot * 1.0f));
 
 		//Sight
-		activeBrain.allValues[NeuronInputLayerIndex][1] = input.vision;
+		values[NeuronInputLayerIndex][1] = input.vision;
 
 		//Bot age
-		activeBrain.allValues[NeuronInputLayerIndex][2] = input.age;
+		values[NeuronInputLayerIndex][2] = input.age;
 
 		//Rotation
-		activeBrain.allValues[NeuronInputLayerIndex][3] = input.rotation;
+		values[NeuronInputLayerIndex][3] = input.rotation;
 
 		//Height
-		activeBrain.allValues[NeuronInputLayerIndex][4] = (y * 1.0f) / (FieldCellsHeight * 1.0f);
+		values[NeuronInputLayerIndex][4] = (y * 1.0f) / (FieldCellsHeight * 1.0f);
 	}
 
 	//Compute
-	activeBrain.Process();
+	brain::Process(genome->active, values, brainMemory);
 
-	BrainOutput toRet = activeBrain.GetOutput();
+	if (observedBot.load(std::memory_order_relaxed) == this)
+		memcpy(observedValues, values, sizeof(values));
+
+	BrainOutput toRet = brain::GetOutput(values);
 
 	//Cannot multipy if not ready
 	if (fertilityDelay)
@@ -788,13 +799,13 @@ Format: (all integers)
 Bot::summary_return Bot::GetNeuronSummary()
 {
 	int toRet[6] = { 0,0,0,0,0,0 };
-	Neuron* n;
+	const Neuron* n;
 
 	for (uint xi = 1; xi < NumNeuronLayers; ++xi)
 	{
 		for (uint yi = 0; yi < NeuronsInLayer; ++yi)
 		{
-			n = &activeBrain.allNeurons[xi][yi];
+			n = &genome->active[xi][yi];
 
 			switch (n->type)
 			{
@@ -852,7 +863,7 @@ void Bot::SetColor(Uint8 r, Uint8 g, Uint8 b)
 }
 
 
-Bot::Bot(int X, int Y, uint Energy, Bot* prototype, bool mutate) :Object(X, Y), initialBrain(&prototype->initialBrain)
+Bot::Bot(int X, int Y, uint Energy, Bot* prototype, bool mutate) :Object(X, Y), genome(prototype->genome)
 {
 	type = bot;
 
@@ -886,9 +897,12 @@ Bot::Bot(int X, int Y, uint Energy, Bot* prototype, bool mutate) :Object(X, Y), 
 	}
 	#endif
 
-	//Create active brain
-	activeBrain.Clone(&initialBrain);
-	activeBrain.Optimize();
+	//The viewed bot keeps its genome to itself, see SetObservedBot
+	if (prototype == observedBot.load(std::memory_order_relaxed))
+		genome.MakeUnique();
+
+	//Create active brain (a shared unchanged genome is already optimized)
+	UpdateActiveBrain();
 
 	addaptation_lastX = X;
 }
@@ -907,9 +921,9 @@ Bot::Bot(int X, int Y, uint Energy) :Object(X, Y)
 	energyFromPredation = 0;
 
 	//Randomize bot brain
-	initialBrain.Randomize();
-	activeBrain.Clone(&initialBrain);
-	activeBrain.Optimize();
+	genome = GenomeRef::Create();
+	brain::Randomize(genome.MakeUnique()->initial);
+	UpdateActiveBrain();
 
 	//Set brain to dummy brain
 	//brain.SetDummy();
@@ -928,14 +942,71 @@ Bot::Bot(int X, int Y, uint Energy) :Object(X, Y)
 
 
 
-BotNeuralNet* Bot::GetActiveBrain()
+void Bot::UpdateActiveBrain()
 {
-	return &activeBrain;
+	memset(brainMemory, 0, sizeof(brainMemory));
+
+	if (!genome->activeIsOptimizedInitial)
+		genome.MakeUnique()->RebuildActive();
 }
 
-BotNeuralNet* Bot::GetInitialBrain()
+
+static const float noNeuronValues[NumNeuronLayers][NeuronsInLayer] = {};
+static float noNeuronMemory[NumNeuronLayers][NeuronsInLayer] = {};
+
+std::atomic<const Bot*> Bot::observedBot{ nullptr };
+float Bot::observedValues[NumNeuronLayers][NeuronsInLayer] = {};
+
+void Bot::SetObservedBot(const Bot* bot)
 {
-	return &initialBrain;
+	if (observedBot.exchange(bot, std::memory_order_relaxed) != bot)
+		memset(observedValues, 0, sizeof(observedValues));
+}
+
+Bot::BrainView Bot::GetActiveBrain()
+{
+	BrainGenome* own = genome.MakeUnique();
+	//The caller may edit neurons directly
+	own->activeIsOptimizedInitial = false;
+
+	return { own->active, (observedBot.load(std::memory_order_relaxed) == this) ? observedValues : noNeuronValues, brainMemory };
+}
+
+Bot::BrainView Bot::GetInitialBrain()
+{
+	BrainGenome* own = genome.MakeUnique();
+	own->activeIsOptimizedInitial = false;
+
+	//Memory of the initial brain is never used, it is always clear
+	memset(noNeuronMemory, 0, sizeof(noNeuronMemory));
+	return { own->initial, noNeuronValues, noNeuronMemory };
+}
+
+const BrainGenome& Bot::GetGenome() const
+{
+	return *genome;
+}
+
+const float (*Bot::GetBrainMemory() const)[NeuronsInLayer]
+{
+	return brainMemory;
+}
+
+void Bot::RecheckBrain()
+{
+	//Only a genome owned by this bot could have been edited
+	if (genome->RefCount() == 1)
+		genome.MakeUnique()->RecheckActive();
+}
+
+void Bot::ShareGenome(const GenomeRef& equalGenome)
+{
+	genome = equalGenome;
+}
+
+const GenomeRef& Bot::GetGenomeRef() const
+{
+	return genome;
 }
 
 Bot::PersistentState Bot::GetPersistentState() const

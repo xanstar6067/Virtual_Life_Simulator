@@ -9,11 +9,11 @@ void NeuralNetRenderer::ResetSelection()
 	selectedNeuronValue = selectedNeuronMemory = 0.0f;
 }
 
-void NeuralNetRenderer::Render(BotNeuralNet* brain, const ImVec2& size)
+void NeuralNetRenderer::Render(const Bot::BrainView* brain, const ImVec2& size)
 {
-	if (selectedBrain != brain)
+	if (selectedBrain != brain->allNeurons)
 		ResetSelection();
-	selectedBrain = brain;
+	selectedBrain = brain->allNeurons;
 	static const char* inputs[] = {"энергия", "зрение", "возраст", "направление", "высота"};
 	static const char* outputs[] = {"поворот", "движение", "фотосинтез", "размножение", "атака"};
 	std::vector<int> counts;
