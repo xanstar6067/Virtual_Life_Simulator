@@ -58,14 +58,14 @@ struct InterfaceSmokeTest
 #endif
     }
 
-    static void Frame(Main& app, SDL_Surface* surface, float x = -100, float y = -100, bool down = false)
+    static void Frame(Main& app, SDL_Surface* surface, float x = -100, float y = -100, bool down = false, int button = 0)
     {
         windowWidth = surface->w;
         windowHeight = surface->h;
         io->DisplaySize = ImVec2((float)windowWidth, (float)windowHeight);
         io->DeltaTime = 1.0f / 60.0f;
         io->MousePos = ImVec2(x, y);
-        io->MouseDown[0] = down;
+        for (int i = 0; i < 3; ++i) io->MouseDown[i] = down && i == button;
         ImGui_ImplSDLRenderer_NewFrame();
         ImGui::NewFrame();
         SDL_SetRenderDrawColor(renderer, 19, 26, 29, 255);
@@ -92,11 +92,11 @@ struct InterfaceSmokeTest
         assert(footer && !footer->ScrollbarX && !footer->ScrollbarY);
     }
 
-    static void Click(Main& app, SDL_Surface* surface, float x, float y)
+    static void Click(Main& app, SDL_Surface* surface, float x, float y, int button = 0)
     {
         Frame(app, surface, x, y);
-        Frame(app, surface, x, y, true);
-        Frame(app, surface, x, y, false);
+        Frame(app, surface, x, y, true, button);
+        Frame(app, surface, x, y, false, button);
     }
 
     static unsigned CountBots(Main& app)
@@ -648,6 +648,224 @@ struct InterfaceSmokeTest
         assert(!history.Empty());
     }
 
+    static ImGuiWindow* BrainPopup()
+    {
+        const auto& popups = ImGui::GetCurrentContext()->OpenPopupStack;
+        assert(!popups.empty() && popups.back().Window && popups.back().Window->Active);
+        return popups.back().Window;
+    }
+
+    static void ClickBrainMenu(Main& app, SDL_Surface* surface, int row, int separators = 0)
+    {
+        const auto popup = BrainPopup();
+        const float line = ImGui::GetTextLineHeight(), spacing = ImGui::GetStyle().ItemSpacing.y;
+        const float y = popup->Pos.y + popup->WindowPadding.y + line + 2*spacing + row*(line+spacing) + separators*spacing + line*.5f;
+        Click(app, surface, popup->Pos.x + popup->Size.x*.5f, y);
+        Frame(app, surface);
+    }
+
+    static void BrainEscape(Main& app, SDL_Surface* surface)
+    {
+        io->AddKeyEvent(ImGuiKey_Escape, true);
+        Frame(app, surface);
+        io->AddKeyEvent(ImGuiKey_Escape, false);
+        Frame(app, surface);
+    }
+
+    static void ClickWeightFooter(Main& app, SDL_Surface* surface, bool apply)
+    {
+        Frame(app, surface);
+        const auto popup = BrainPopup();
+        Click(app, surface, popup->WorkRect.Min.x + 60 + (apply ? 0 : 120+ImGui::GetStyle().ItemSpacing.x),
+            popup->DC.CursorMaxPos.y-14);
+        Frame(app, surface);
+    }
+
+    static void CheckBrainGraphEditing(Main& app, SDL_Surface* surface)
+    {
+        auto bot = (Bot*)app.selectedObject;
+        auto current = bot->GetActiveBrain();
+        for (int layer = 0; layer < (int)NumNeuronLayers; ++layer)
+#ifdef TEST_CB3
+            for (int index = 0; index < (int)neuronsInLayer[layer]; ++index)
+#else
+            for (int index = 0; index < NeuronsInLayer; ++index)
+#endif
+                current.allNeurons[layer][index].ClearConnections();
+        current.allNeurons[1][0].type = basic;
+        bot->RecheckBrain();
+        BrainGenome original(bot->GetGenome());
+        const auto relative = bot->GetGenomeRef();
+        auto& r = app.nn_renderer;
+        r.history.Clear();
+        r.history.SetOwner(bot);
+        Frame(app, surface); // A shared genome must be copied before any editor operation.
+        auto nodeClick = [&](int layer, int index, int button = 0) {
+            const auto p = r.view.NeuronPosition(layer, index);
+            Click(app, surface, p.x, p.y, button);
+            Frame(app, surface);
+        };
+        auto start = [&] {
+            nodeClick(1, 0, 1);
+            assert(r.view.selectedLayer == 1 && r.view.selectedIndex == 0);
+            ClickBrainMenu(app, surface, 0);
+            assert(r.view.IsConnecting());
+        };
+        auto lineMenu = [&] {
+            Frame(app, surface);
+            const auto point = vlsui::NeuralGraphView::CurvePoint(r.view.NeuronPosition(1, 0), r.view.NeuronPosition(3, 1), .42f);
+            Click(app, surface, point.x, point.y, 1);
+            Frame(app, surface);
+            assert(r.editor.sourceLayer == 1 && r.editor.sourceIndex == 0 && r.editor.targetLayer == 3 && r.editor.targetIndex == 1);
+        };
+
+        nodeClick(1, 0, 1);
+        assert(IMG_SavePNG(surface, "brain-neuron-menu.png") == 0);
+        ClickBrainMenu(app, surface, 0);
+        assert(r.view.IsConnecting() && r.view.CanLinkTo(3, 1) && !r.view.CanLinkTo(1, 0) && !r.view.CanLinkTo(0, 0));
+        nodeClick(0, 0); // Invalid destinations never change selection or the genome.
+        assert(r.view.IsConnecting() && r.view.selectedLayer == 1 && original.SameNeurons(bot->GetGenome()));
+        BrainEscape(app, surface);
+        assert(!r.view.IsConnecting() && r.history.Empty());
+        start();
+        nodeClick(2, 0, 1); // Right-click cancels without opening another menu.
+        assert(!r.view.IsConnecting() && r.history.Empty());
+
+        r.view.zoomPercent = 125;
+        r.view.pan = ImVec2(5, -3);
+        Frame(app, surface);
+        start();
+        const auto target = r.view.NeuronPosition(3, 1);
+        Frame(app, surface, target.x, target.y);
+        assert(IMG_SavePNG(surface, "brain-add-connection.png") == 0);
+        nodeClick(3, 1);
+        assert(r.editor.weightOpen && !r.view.IsConnecting() && original.SameNeurons(bot->GetGenome()));
+        const auto popupId = BrainPopup()->ID;
+        ImGui::SetWindowSize(vlsui::BrainWindowTitle, ImVec2(650, 540));
+        Frame(app, surface);
+        Frame(app, surface);
+        assert(r.editor.weightOpen && BrainPopup()->ID == popupId);
+        assert(IMG_SavePNG(surface, "compact-brain-connection-weight.png") == 0);
+        ImGui::SetWindowSize(vlsui::BrainWindowTitle, ImVec2(800, 540));
+        Frame(app, surface);
+        ClickWeightFooter(app, surface, false);
+        assert(r.history.Empty() && original.SameNeurons(bot->GetGenome()));
+
+        start();
+        nodeClick(3, 1);
+        assert(IMG_SavePNG(surface, "brain-connection-weight.png") == 0);
+        const auto popup = BrainPopup();
+        // Click the actual -1 preset, then explicitly commit the new edge.
+        const float presetY = popup->DC.CursorMaxPos.y - 28 - 2*ImGui::GetStyle().ItemSpacing.y - ImGui::GetTextLineHeight() - 13;
+        Click(app, surface, popup->WorkRect.Min.x+64+ImGui::GetStyle().ItemSpacing.x+32, presetY);
+        assert(r.editor.draftWeight == -1);
+        ClickWeightFooter(app, surface, true);
+        const auto& source = bot->GetGenome().active[1][0];
+        assert(source.numConnections == 1 && source.allConnections[0].dest_layer == 3 && source.allConnections[0].dest_neuron == 1);
+#ifdef TEST_CB3
+        constexpr float weightScale = WeightMultiplier;
+#else
+        constexpr float weightScale = 1;
+#endif
+        assert(std::abs(source.allConnections[0].weight*weightScale + 1) < .001f);
+        assert(r.history.Size(0, 1, 0) == 1);
+        assert(relative->SameNeurons(original));
+
+        lineMenu();
+        assert(IMG_SavePNG(surface, "brain-connection-menu.png") == 0);
+        ClickBrainMenu(app, surface, 1); // Invert sign.
+        assert(std::abs(source.allConnections[0].weight*weightScale - 1) < .001f);
+        lineMenu();
+        ClickBrainMenu(app, surface, 3, 1); // Undo only the source neuron.
+        assert(std::abs(source.allConnections[0].weight*weightScale + 1) < .001f);
+        lineMenu();
+        ClickBrainMenu(app, surface, 4, 1);
+        assert(std::abs(source.allConnections[0].weight*weightScale - 1) < .001f);
+        lineMenu();
+        ClickBrainMenu(app, surface, 0);
+        assert(r.editor.weightOpen);
+        r.editor.draftWeight = .73f; // Verify CB3's native weight quantization on commit.
+        ClickWeightFooter(app, surface, true);
+#ifdef TEST_CB3
+        assert(source.allConnections[0].weight == 37);
+#else
+        assert(std::abs(source.allConnections[0].weight - .73f) < .001f);
+#endif
+        start();
+        assert(!r.view.CanLinkTo(3, 1));
+        nodeClick(3, 1); // Duplicate edge is not a selectable target.
+        assert(r.view.IsConnecting() && source.numConnections == 1);
+        BrainEscape(app, surface);
+        lineMenu();
+        ClickBrainMenu(app, surface, 2);
+        assert(source.numConnections == 0);
+        nodeClick(1, 0, 1);
+        ClickBrainMenu(app, surface, 4, 2); // Node menu undo restores the exact edge.
+        assert(source.numConnections == 1 && source.allConnections[0].dest_layer == 3);
+
+        // Capacity and output-neuron restrictions are enforced in the real menu.
+        r.view.Fit();
+        Frame(app, surface);
+        current = bot->GetActiveBrain();
+        current.allNeurons[1][0].ClearConnections();
+        for (int index = 0; index < (int)MaxConnectionsPerNeuronType[basic]; ++index)
+            current.allNeurons[1][0].AddConnection(NumNeuronLayers-1, index, 1);
+        nodeClick(1, 0, 1);
+        ClickBrainMenu(app, surface, 0);
+        assert(!r.view.IsConnecting());
+        BrainEscape(app, surface);
+        nodeClick(NumNeuronLayers-1, 0, 1);
+        ClickBrainMenu(app, surface, 0);
+        assert(!r.view.IsConnecting());
+        BrainEscape(app, surface);
+        current.allNeurons[1][0].ClearConnections();
+
+        // Input neurons can create outgoing connections too.
+        nodeClick(0, 0, 1);
+        ClickBrainMenu(app, surface, 0);
+        assert(r.view.IsConnecting() && r.view.linkSourceLayer == 0);
+        nodeClick(2, 1);
+        ClickWeightFooter(app, surface, true);
+        assert(bot->GetGenome().active[0][0].numConnections == 1);
+        assert(r.history.Size(0, 0, 0) == 1);
+
+        // A brain switch or closing the window must cancel an unfinished operation.
+        start();
+        const auto window = ImGui::FindWindowByName(vlsui::BrainWindowTitle);
+        const float toolbarX = window->Pos.x+window->WindowPadding.x;
+        const float toolbarY = window->Pos.y+window->TitleBarHeight()+window->WindowPadding.y+14;
+        Click(app, surface, toolbarX+146, toolbarY);
+        assert(app.brainToShow == 1 && !r.view.IsConnecting());
+        auto initial = bot->GetInitialBrain();
+        initial.allNeurons[1][0].type = basic;
+        initial.allNeurons[1][0].ClearConnections();
+        BrainGenome beforeInitialEdit(bot->GetGenome());
+        Frame(app, surface);
+        start();
+        nodeClick(3, 1);
+        ClickWeightFooter(app, surface, true);
+        assert(r.history.Size(1, 1, 0) == 1);
+        assert(bot->GetGenome().initial[1][0].numConnections == 1 && source.numConnections == 0);
+        nodeClick(1, 0, 1);
+        ClickBrainMenu(app, surface, 4, 2);
+        assert(beforeInitialEdit.SameNeurons(bot->GetGenome()));
+        Click(app, surface, toolbarX+46, toolbarY);
+        start();
+        nodeClick(3, 1);
+        assert(r.editor.weightOpen);
+        app.showBrain = false;
+        Frame(app, surface);
+        assert(!r.editor.weightOpen && !r.view.IsConnecting());
+        assert(ImGui::GetCurrentContext()->OpenPopupStack.empty());
+        app.showBrain = true;
+        Frame(app, surface);
+        assert(ImGui::GetCurrentContext()->OpenPopupStack.empty());
+        nodeClick(1, 0);
+        r.view.Fit();
+        Frame(app, surface);
+        assert(relative->SameNeurons(original));
+    }
+
     static void CheckBrainWindow(Main& app, SDL_Surface* surface)
     {
         app.showBrain = true;
@@ -673,6 +891,7 @@ struct InterfaceSmokeTest
         app.mouseFunc = mouse_select;
 
         CheckBrainEdits(app, surface);
+        CheckBrainGraphEditing(app, surface);
 
         // The small version switch lives in this window and clears stale selection.
         const float switchX = brainWindow->Pos.x + brainWindow->WindowPadding.x + 146.0f;

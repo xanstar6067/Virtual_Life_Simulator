@@ -3,6 +3,7 @@
 void NeuralNetRenderer::ResetSelection()
 {
 	view.ClearSelection();
+	editor.Reset();
 	selectedNeuron = nullptr;
 	selectedBrain = nullptr;
 	selectedNeuronCaption = selectedNeuronTypeName = "";
@@ -16,7 +17,8 @@ void NeuralNetRenderer::Render(const Bot::BrainView* brain, const ImVec2& size)
 	selectedBrain = brain->allNeurons;
 	static const char* inputs[] = {"энергия", "зрение", "возраст", "направление", "высота"};
 	static const char* outputs[] = {"поворот", "движение", "фотосинтез", "размножение", "атака"};
-	std::vector<int> counts;
+	auto& counts = layerCounts;
+	counts.clear();
 	std::vector<vlsui::GraphNeuron> neurons;
 	std::vector<vlsui::GraphConnection> connections;
 	for (int layer = 0; layer < (int)NumNeuronLayers; ++layer)
@@ -36,6 +38,10 @@ void NeuralNetRenderer::Render(const Bot::BrainView* brain, const ImVec2& size)
 			}
 		}
 	}
+	auto& rules = editorRules;
+	rules = {1.0f, ConnectionWeightMin * 1.0f, ConnectionWeightMax * 1.0f, {}};
+	for (int type = 0; type < 6; ++type) rules.maxConnections[type] = (int)MaxConnectionsPerNeuronType[type];
+	editor.Prepare(view, *brain, counts, rules);
 	view.Draw(neurons, connections, counts, size);
 	selectedNeuron = nullptr;
 	selectedNeuronCaption = selectedNeuronTypeName = "";

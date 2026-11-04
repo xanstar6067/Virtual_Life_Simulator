@@ -118,6 +118,7 @@
     <ClInclude Include="source\NeuralGraphView.h" />
     <ClInclude Include="source\BrainWindow.h" />
     <ClInclude Include="source\BrainEditHistory.h" />
+    <ClInclude Include="source\BrainGraphEditor.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="source\Cb3Runtime.h" />
     <ClInclude Include="source\SimulationMode.h" />

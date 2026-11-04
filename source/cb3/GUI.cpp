@@ -998,6 +998,7 @@ void Main::DrawBotBrainWindow()
     if (!showBrain)
     {
         nn_renderer.history.Clear();
+        nn_renderer.ResetSelection();
         return;
     }
     if (!selectedBot)

@@ -3,14 +3,22 @@
 #include "BrainEditHistory.h"
 #include "NeuralGraphView.h"
 #include "SDL.h"
+#include "BrainGraphEditor.h"
 
 struct NeuralNetRenderer final
 {
 	void Render(const Bot::BrainView* brain, const ImVec2& size);
 	void ResetSelection();
+	void DrawEditor(const Bot::BrainView* brain, int version)
+	{
+		editor.Draw(view, *brain, history, version, layerCounts, editorRules);
+	}
 
 	vlsui::BrainEditHistory<Neuron, NumNeuronLayers, NeuronsInLayer> history;
 	vlsui::NeuralGraphView view;
+	vlsui::BrainGraphEditor editor;
+	vlsui::BrainGraphRules editorRules{};
+	std::vector<int> layerCounts;
 	ImVec2 windowPosition, windowSize, displaySize = ImVec2(0, 0);
 	Neuron* selectedNeuron = nullptr;
 	// Neurons of the shown brain version (identifies bot and version)

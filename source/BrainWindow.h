@@ -36,6 +36,7 @@ void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, R
 	if (!open)
 	{
 		renderer.history.Clear();
+		renderer.ResetSelection();
 		ImGui::End();
 		return;
 	}
@@ -124,7 +125,7 @@ void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, R
 		else
 		{
 			ImGui::TextUnformatted("Выберите нейрон");
-			ImGui::TextWrapped("Нажмите на узел схемы: здесь появятся его параметры и связи.");
+			ImGui::TextWrapped("ЛКМ выбирает нейрон. ПКМ открывает меню нейрона или связи.");
 		}
 		if (allowBrainMutation && ImGui::Button("Мутировать мозг", ImVec2(-1, 30)))
 			renderer.history.RecordBrain(version, *(version == 0 ? current : initial),
@@ -167,6 +168,8 @@ void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, R
 		details();
 		ImGui::EndChild();
 	}
+	// Keep popup IDs outside the responsive table: menus survive a layout resize.
+	renderer.DrawEditor(version == 0 ? current : initial, version);
 	ImGui::End();
 }
 } // namespace vlsui

@@ -6,6 +6,7 @@ namespace cb3
 void NeuralNetRenderer::ResetSelection()
 {
 	view.ClearSelection();
+	editor.Reset();
 	selectedNeuron = nullptr;
 	selectedBrain = nullptr;
 	selectedNeuronCaption = selectedNeuronTypeName = "";
@@ -18,7 +19,8 @@ void NeuralNetRenderer::Render(const Bot::BrainView* brain, const ImVec2& size)
 		ResetSelection();
 	selectedBrain = brain->allNeurons;
 
-	std::vector<int> counts;
+	auto& counts = layerCounts;
+	counts.clear();
 	std::vector<vlsui::GraphNeuron> neurons;
 	std::vector<vlsui::GraphConnection> connections;
 	for (int layer = 0; layer < (int)NumNeuronLayers; ++layer)
@@ -41,6 +43,10 @@ void NeuralNetRenderer::Render(const Bot::BrainView* brain, const ImVec2& size)
 			}
 		}
 	}
+	auto& rules = editorRules;
+	rules = {WeightMultiplier, ConnectionWeightMin * WeightMultiplier, ConnectionWeightMax * WeightMultiplier, {}};
+	for (int type = 0; type < 6; ++type) rules.maxConnections[type] = (int)MaxConnectionsPerNeuronType[type];
+	editor.Prepare(view, *brain, counts, rules);
 	view.Draw(neurons, connections, counts, size);
 	selectedNeuron = nullptr;
 	selectedNeuronCaption = selectedNeuronTypeName = "";

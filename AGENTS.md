@@ -95,6 +95,7 @@ source/Main.cpp: wWinMain
 | `BotDiet.h` | `ClassifyFeeding`, `FeedingTypeName`: единая интерпретация питания для карточки и телеметрии |
 | `NeuralGraphView.h` | Общий ImGui-canvas мозга: узлы/рёбра, выделение, масштаб, pan, clipping и фильтр связей |
 | `BrainWindow.h` | Шаблон `DrawBrainWindow`: общее окно текущего/начального мозга, граф, свойства нейронов и редактирование |
+| `BrainGraphEditor.h` | Общие контекстные меню нейронов/связей, создание связи выбором цели, настройка/инверсия веса, удаление и запись в историю источника; адаптеры движков передают лимиты и шкалу веса |
 | `BrainEditHistory.h` | Отдельная локальная история каждого нейрона и версии мозга: отмена/повтор типа, смещения и исходящих связей; мутация мозга записывается по изменившимся нейронам. Истории выделяются по мере правок и освобождаются при закрытии окна/смене бота; память и значения не откатываются |
 | `SimulationTelemetry.h` | `TelemetryCounters`, `ScanTelemetry`, снимки/метрики, `TelemetryHistory`, укрупнение истории, контекст и события графика; общая модель данных без привязки к типу бота |
 | `EcosystemChart.h/.cpp` | Общие подробные графики и preview в подвале: сбор наблюдений через `Observe`, режимы/периоды, шкалы, tooltip, события и кэш рядов |
@@ -134,7 +135,7 @@ source/Main.cpp: wWinMain
 | Еда, энергия, движение, размножение | `Bot.cpp` нужного режима → `Field.cpp`, `Settings.h` и runtime `FieldDynamicParams` |
 | Начальная популяция/стартовые параметры | `Main::SpawnInitialPopulation`, `Field::SpawnControlGroup`, конструкторы `Main`/`Field`, `Settings.h` |
 | Нейросеть и мутации | `BotNeuralNet.*`, `Neuron.*`, `Bot.*` нужного режима → его `Settings.h`, сериализатор |
-| Окно мозга | `BrainWindow.h`, `NeuralGraphView.h` → оба `NeuralNetRenderer.*`, `DrawBotBrainWindow` |
+| Окно мозга | `BrainWindow.h`, `NeuralGraphView.h`, `BrainGraphEditor.h` → оба `NeuralNetRenderer.*`, `DrawBotBrainWindow` |
 | Категории питания и их подписи | `BotDiet.h` → `Bot::GiveEnergy`/getters, карточки в обоих `GUI.cpp`, `ScanTelemetry` |
 | Графики, метрики, история | `EcosystemChart.*`, `SimulationTelemetry.h` → оба `Main::RecordChartSample`, `Field::ReadTelemetry` |
 | Сохранить/загрузить/переименовать | `Main.cpp` нужного режима: `LoadFilenames`, `BuildSavePath`, `LoadWorldFromFile`, `QuickSaveWorld` → `ObjectSaver.*`, константы `Settings.h` |
