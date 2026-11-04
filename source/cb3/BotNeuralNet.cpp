@@ -176,7 +176,7 @@ void BotNeuralNet::Process(BrainInput input)
 		n = &allNeurons[NeuronOutputLayerIndex][i];
 		tmpVal = allValues[NeuronOutputLayerIndex][i] + (n->bias * BiasMultiplier);
 
-		tmpVal = PlusMinusActivation(tmpVal);
+		allValues[NeuronOutputLayerIndex][i] = PlusMinusActivation(tmpVal);
 	}
 
 	//All the rest
@@ -185,7 +185,7 @@ void BotNeuralNet::Process(BrainInput input)
 		n = &allNeurons[NeuronOutputLayerIndex][oi];
 		tmpVal = allValues[NeuronOutputLayerIndex][oi] + (n->bias * BiasMultiplier);
 
-		tmpVal = ActivationSimple(tmpVal);
+		allValues[NeuronOutputLayerIndex][oi] = ActivationSimple(tmpVal);
 	}
 }
 

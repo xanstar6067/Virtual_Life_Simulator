@@ -529,9 +529,10 @@ int Bot::tick()
 	else
 	{
 		//Rotate after
-		uint desired_rotation = RotationsReverse[tmpOut.desired_rotation_x][tmpOut.desired_rotation_y];
+		// Signed output coordinates map to table indices 0..2; the center means no turn.
+		int desired_rotation = RotationsReverse[tmpOut.desired_rotation_x + 1][tmpOut.desired_rotation_y + 1];
 
-		if (desired_rotation != direction)
+		if (desired_rotation >= 0 && desired_rotation != direction)
 		{
 			//If dies of low energy
 			if (TakeEnergy(RotateCost))

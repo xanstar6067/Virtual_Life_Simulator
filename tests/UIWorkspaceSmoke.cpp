@@ -164,6 +164,62 @@ struct InterfaceSmokeTest
         bot->SetPersistentState(originalState);
     }
 
+#ifdef TEST_CB3
+    static void CheckCb3Brain(Main& app)
+    {
+        BotNeuralNet brain;
+        // A unit-weight input feeds every output, including sums outside -1..1.
+        for (uint i = 0; i < NumOutputNeurons; ++i)
+            brain.allNeurons[0][0].AddConnection(NeuronOutputLayerIndex, i, 50);
+        for (int bias : {-50, 0, 50})
+        {
+            for (uint i = 0; i < NumOutputNeurons; ++i)
+                brain.allNeurons[NeuronOutputLayerIndex][i].bias = bias;
+            for (float sum : {-5.0f, -0.51f, -0.5f, -0.49f, 0.0f, 0.49f, 0.5f, 0.51f, 5.0f})
+            {
+                BrainInput input{};
+                input.energy = sum;
+                brain.Process(input);
+                const auto output = brain.GetOutput();
+                const float value = sum + bias * BiasMultiplier;
+                for (uint i = 0; i < NumOutputNeurons; ++i)
+                {
+                    const int expected = i < 2
+                        ? (value >= 0.5f ? 1 : value <= -0.5f ? -1 : 0)
+                        : (value >= 0.5f ? 1 : 0);
+                    assert(output.fields[i] == expected);
+                    assert(brain.allValues[NeuronOutputLayerIndex][i] == expected);
+                }
+            }
+        }
+
+        // Exercise the actual lookup and turn for all eight headings and no turn.
+        uint tick = 2000;
+        for (int x = -1; x <= 1; ++x)
+            for (int y = -1; y <= 1; ++y)
+            {
+                app.ClearWorld();
+                auto* organism = new Bot(20, 20, 500);
+                auto* active = organism->GetActiveBrain();
+                for (auto& layer : active->allNeurons)
+                    for (auto& neuron : layer)
+                        neuron.SetZero();
+                active->allNeurons[NeuronOutputLayerIndex][0].bias = x * 100;
+                active->allNeurons[NeuronOutputLayerIndex][1].bias = y * 100;
+                const int target = RotationsReverse[x + 1][y + 1];
+                auto state = organism->GetPersistentState();
+                state.direction = target < 0 ? 3 : (target + 1) % 8;
+                state.stunned = 0;
+                organism->SetPersistentState(state);
+                assert(app.field->AddObject(organism));
+                app.field->tick(tick++);
+                assert(app.field->GetObjectLocalCoords(20, 20) == organism);
+                assert(organism->GetDirection() == (target < 0 ? 3 : target));
+                assert(organism->energy == 500 - EveryTickEnergyPenalty - (target < 0 ? 0 : RotateCost));
+            }
+    }
+#endif
+
     static void CheckTelemetry(Main& app)
     {
         app.ClearWorld();
@@ -507,6 +563,9 @@ struct InterfaceSmokeTest
         app.QuickLoadWorld();
         assert(CountBots(app) == originalCount);
         assert(!app.showFirstPopulationHint);
+#ifdef TEST_CB3
+        CheckCb3Brain(app);
+#endif
         CheckTelemetry(app);
         CheckCharts(app, surface, "wide");
 
