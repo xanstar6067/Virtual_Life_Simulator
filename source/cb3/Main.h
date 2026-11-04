@@ -103,6 +103,7 @@ protected:
 
 	//Chart
 	Chart chart;
+	void RecordChartSample(bool force = false, const char* event = nullptr);
 
 	//Neural net renderer
 	NeuralNetRenderer nn_renderer;

@@ -465,10 +465,7 @@ inline void DrawWorkspaceFooter(const WorkspaceLayout& layout, const char* simul
 			DrawDisplayModes(renderMode, false);
 		}
 		ImGui::TableSetColumnIndex(layout.compact ? 1 : 2);
-		ImGui::TextDisabled("Популяция");
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Развернуть график")) showChart = true;
-		preview(ImVec2(-1.0f, 42.0f));
+		preview(ImVec2(-1.0f, 66.0f));
 		ImGui::EndTable();
 	}
 	ImGui::PopStyleVar();

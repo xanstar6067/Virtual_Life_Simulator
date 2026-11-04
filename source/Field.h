@@ -2,6 +2,7 @@
 //#pragma message("   Field_h")
 
 #include <atomic>
+#include "SimulationTelemetry.h"
 
 
 class Object;
@@ -85,6 +86,8 @@ struct alignas(64) ThreadCounters
 //Simulation field class
 class Field final
 {
+    bool telemetryInTick = false;
+    vlsui::TelemetryCounters telemetry;
     //All cells as 2d array
     Object* allCells[FieldCellsWidth][FieldCellsHeight];
 
@@ -143,6 +146,9 @@ class Field final
     
 
 public:
+
+    vlsui::TelemetryTotals GetTelemetryTotals() const { return telemetry.Read(); }
+    vlsui::TelemetrySnapshot ReadTelemetry(double tick);
 
     struct PersistentState
     {

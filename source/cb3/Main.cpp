@@ -166,6 +166,7 @@ void Main::Pause()
 void Main::SpawnInitialPopulation()
 {
 	field->SpawnControlGroup();
+	RecordChartSample(true, "Заселение мира");
 	showFirstPopulationHint = false;
 	LogPrint("Добавлена стартовая группа ботов\r\n");
 }
@@ -207,6 +208,7 @@ void Main::SpawnWorldRocks()
 void Main::MutateWholeWorld()
 {
 	field->mutateWorld();
+	RecordChartSample(true, "Мутация всего мира");
 	LogPrint("[Солнечная вспышка!]");
 }
 
@@ -231,6 +233,8 @@ bool Main::LoadWorldFromFile(const std::filesystem::path& filePath)
 	id = ret.id;
 	field->seed = seed;
 	showFirstPopulationHint = false;
+	chart.ClearChart();
+	RecordChartSample(true, "Мир загружен · начало наблюдений");
 	return true;
 }
 
@@ -262,6 +266,14 @@ void Main::QuickLoadWorld()
 	}
 
 	LoadWorldFromFile(quickSavePath);
+}
+
+void Main::RecordChartSample(bool force, const char* event)
+{
+	if (!field) return;
+	const vlsui::ChartContext context{field->params.PSreward, field->params.botMaxEnergy,
+		field->params.useSeasons ? (int)field->GetSeason() : -1, field->params.oceanLevel, field->params.mudLevel};
+	chart.Observe(ticknum, field->GetTelemetryTotals(), context, [this] { return field->ReadTelemetry(ticknum); }, force, event);
 }
 
 bool Main::MakeStep()
@@ -299,15 +311,7 @@ bool Main::MakeStep()
 		++ticknum;
 		++tpsTickCounter;
 
-		//Add data to chart
-		if (chart.Tick())
-		{
-			chart.AddToChart(field->GetNumBots() * 1.0f,
-				field->GetNumApples() * 1.0f,
-				field->GetNumOrganics() * 1.0f,
-				field->GetNumPredators() * 1.0f,
-				field->GetAverageLifetime() * 1.0f);
-		}
+		RecordChartSample();
 	}
 
 	//Calculate simulation speed

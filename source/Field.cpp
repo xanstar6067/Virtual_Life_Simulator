@@ -429,6 +429,9 @@ bool Field::AddObject(Object* obj)
 
     allCells[obj->x][obj->y] = obj;
 
+    if (obj->type == bot)
+        (telemetryInTick ? telemetry.births : telemetry.added).fetch_add(1, std::memory_order_relaxed);
+
     return true;
 }
 
@@ -438,6 +441,8 @@ void Field::RemoveObject(int X, int Y)
 
     if (tmpO)
     {
+        if (tmpO->type == bot)
+            (telemetryInTick ? telemetry.deaths : telemetry.removed).fetch_add(1, std::memory_order_relaxed);
         if (trackedObject == tmpO)
             trackedObjectRemoved = true;
 
@@ -711,6 +716,7 @@ inline void Field::tick_multiple_threads()
 //Tick function
 void Field::tick(uint thisFrame)
 {
+    telemetryInTick = true;
     Object::currentFrame = thisFrame;
 
     if(params.spawnApples)
@@ -728,6 +734,15 @@ void Field::tick(uint thisFrame)
     #else
         tick_multiple_threads();
     #endif
+    telemetryInTick = false;
+}
+
+vlsui::TelemetrySnapshot Field::ReadTelemetry(double tick)
+{
+    auto sample = vlsui::ScanTelemetry<Bot>(*this, FieldCellsWidth, FieldCellsHeight, MaxPossibleEnergyForABot,
+        tick, [](Object* obj) { return obj->type; }, bot, apple, organic_waste);
+    sample.totals = telemetry.Read();
+    return sample;
 }
 
 Field::PersistentState Field::GetPersistentState() const

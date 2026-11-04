@@ -467,6 +467,9 @@ bool Field::AddObject(Object* obj)
 
     *cell = obj;
 
+    if (obj->type() == bot)
+        (telemetryInTick ? telemetry.births : telemetry.added).fetch_add(1, std::memory_order_relaxed);
+
     return true;
 }
 
@@ -478,6 +481,8 @@ void Field::ObjectAddOrReplace(Object* obj)
         RemoveObject(obj->x, obj->y);
 
     *cell = obj;
+    if (obj->type() == bot)
+        (telemetryInTick ? telemetry.births : telemetry.added).fetch_add(1, std::memory_order_relaxed);
 }
 
 void Field::mutateWorld()
@@ -505,6 +510,8 @@ void Field::RemoveObject(int X, int Y)
 
     if (tmpO)
     {
+        if (tmpO->type() == bot)
+            (telemetryInTick ? telemetry.deaths : telemetry.removed).fetch_add(1, std::memory_order_relaxed);
         if (trackedObject == tmpO)
             trackedObjectRemoved = true;
 
@@ -837,6 +844,7 @@ inline void Field::tick_multiple_threads()
 
 void Field::tick(uint thisFrame)
 {
+    telemetryInTick = true;
     //Change season
     if (params.useSeasons)
         SeasonTick();
@@ -864,6 +872,15 @@ void Field::tick(uint thisFrame)
     {
         tick_multiple_threads();
     }
+    telemetryInTick = false;
+}
+
+vlsui::TelemetrySnapshot Field::ReadTelemetry(double tick)
+{
+    auto sample = vlsui::ScanTelemetry<Bot>(*this, FieldCellsWidth, FieldCellsHeight, params.botMaxEnergy,
+        tick, [](Object* obj) { return obj->type(); }, bot, apple, organic_waste);
+    sample.totals = telemetry.Read();
+    return sample;
 }
 
 

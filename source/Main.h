@@ -4,6 +4,7 @@
 #include "Field.h"
 #include "NeuralNetRenderer.h"
 #include "Cb3Runtime.h"
+#include "EcosystemChart.h"
 
 
 enum MouseFunction
@@ -99,20 +100,10 @@ private:
 	int fieldPanMouseX = 0;
 	int fieldPanMouseY = 0;
 
-	//Chart (TODO)
-	float chartData_bots[ChartNumValues];
-	float chartData_apples[ChartNumValues];
-	float chartData_organics[ChartNumValues];
-	int chart_numValues = 0;
-	int chart_currentPosition = 0;
-
-	int timeBeforeNextDataToChart = AddToChartEvery;
-
-	bool chartShow_apples = false;
-	bool chartShow_organics = false;
-
-	void ClearChart();
-	void AddToChart(float, float, float);
+	// Shared chart and session telemetry; independent of world serialization.
+	vlsui::EcosystemChart chart;
+	void ClearChart() { chart.ClearChart(); }
+	void RecordChartSample(bool force = false, const char* event = nullptr);
 
 	//Neural net renderer
 	NeuralNetRenderer nn_renderer;

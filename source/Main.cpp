@@ -265,6 +265,7 @@ void Main::Pause()
 void Main::SpawnInitialPopulation()
 {
 	field->SpawnControlGroup();
+	RecordChartSample(true, "Заселение мира");
 	showFirstPopulationHint = false;
 	LogPrint("Добавлена стартовая группа ботов\r\n");
 }
@@ -342,14 +343,7 @@ bool Main::MakeStep()
 		}
 	#endif
 
-		//Add data to chart
-		if (--timeBeforeNextDataToChart == 0)
-		{
-			AddToChart(field->GetNumBots() * 1.0f,
-				field->GetNumApples() * 1.0f, field->GetNumOrganics() * 1.0f);
-
-			timeBeforeNextDataToChart = AddToChartEvery;
-		}
+		RecordChartSample();
 	}
 
 	//Calculate simulation speed
@@ -408,31 +402,16 @@ void Main::SelectionShadowScreen()
 	}
 }
 
-void Main::ClearChart()
+void Main::RecordChartSample(bool force, const char* event)
 {
-	memset(chartData_bots, 0, sizeof(chartData_bots));
-	memset(chartData_organics, 0, sizeof(chartData_organics));
-	memset(chartData_apples, 0, sizeof(chartData_apples));
-
-	chart_numValues = 0;
-	chart_currentPosition = 0;
-}
-
-void Main::AddToChart(float newVal_bots, float newVal_apples, float newVal_organics)
-{
-	if (chart_currentPosition >= ChartNumValues)
-	{
-		ClearChart();
-	}
-
-	chartData_bots[chart_currentPosition] = newVal_bots;
-	chartData_apples[chart_currentPosition] = newVal_apples;
-	chartData_organics[chart_currentPosition] = newVal_organics;
-
-	if (chart_numValues < ChartNumValues)
-		++chart_numValues;
-
-	++chart_currentPosition;
+	if (!field) return;
+	int chartSeason = -1;
+#ifdef UseSeasons
+	chartSeason = (int)season;
+#endif
+	const vlsui::ChartContext context{field->photosynthesisReward, MaxPossibleEnergyForABot, chartSeason,
+		field->params.oceanLevel, field->params.mudLevel};
+	chart.Observe(ticknum, field->GetTelemetryTotals(), context, [this] { return field->ReadTelemetry(ticknum); }, force, event);
 }
 
 void Main::Deselect()
@@ -776,6 +755,8 @@ bool Main::LoadWorldFromFile(const std::filesystem::path& filePath)
 	id = ret.id;
 	field->seed = seed;
 	showFirstPopulationHint = false;
+	chart.ClearChart();
+	RecordChartSample(true, "Мир загружен · начало наблюдений");
 	return true;
 }
 
@@ -909,7 +890,6 @@ void Main::ResetClassicWorld()
 	realTPS = 0;
 	realFPS = 0;
 	fpsCounter = 0;
-	timeBeforeNextDataToChart = AddToChartEvery;
 
 #ifdef RandomSeed
 	seed = GetTickCount();

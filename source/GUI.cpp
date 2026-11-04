@@ -359,6 +359,7 @@ void Main::DrawAdditionalsWindow()
 
 void Main::DrawSidePanelWindow()
 {
+	RecordChartSample();
 	const auto layout = vlsui::CalculateLayout(windowWidth, windowHeight);
 	int displayMode = (int)renderType;
 	const auto actions =
@@ -611,9 +612,7 @@ void Main::DrawSidePanelWindow()
 	ImGui::End();
 
 	vlsui::DrawWorkspaceFooter(layout, "Classic", simulate, displayedBots, displayedObjects, ticknum, realTPS, realFPS,
-		displayMode, showChart, [this](const ImVec2& size) {
-			vlsui::DrawPopulationPreview(chartData_bots, chart_numValues, size);
-		});
+		displayMode, showChart, [this](const ImVec2& size) { chart.PlotPreview(size, showChart); });
 	renderType = (RenderTypes)displayMode;
 
 	if (showFirstPopulationHint && ticknum == 0 && mouseFunc == mouse_select && renderType != noRender)
@@ -1006,58 +1005,9 @@ void Main::DrawAdaptationWindow()
 
 void Main::DrawChartWindow()
 {
-	if (showChart)
-	{
-		ImGui::SetNextWindowBgAlpha(1.0f);
-		vlsui::PrepareToolWindow(ImVec2(940.0f, 680.0f), ImVec2(620.0f, 440.0f));
-
-		ImGui::Begin("График популяции", &showChart, ImGuiWindowFlags_NoCollapse);
-		{
-			if (ImGui::Button("Очистить", ImVec2(100.0f, 32.0f)))
-				ClearChart();
-			ImGui::SameLine();
-			ImGui::Checkbox("Яблоки", &chartShow_apples);
-			ImGui::SameLine();
-			ImGui::Checkbox("Органика", &chartShow_organics);
-
-			if (ImPlot::BeginPlot("Объекты", ImVec2(-1.0f, -1.0f)))
-			{
-				const int chartValuesToPlot = chart_numValues;
-
-				//Axes
-				ImPlot::SetupAxisLimits(ImAxis_X1, 0.0, 250.0, ImPlotCond_Always);
-				ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, 26000.0);
-
-				ImPlot::SetupAxis(ImAxis_X1, "Время");
-				ImPlot::SetupAxis(ImAxis_Y1, "Количество");
-
-				//Bots number
-				ImPlot::SetNextLineStyle({ 1, 0, 0, 1 }, ChartLineThickness);
-
-				ImPlot::PlotLine("Боты", chartData_bots, chartValuesToPlot, 1.0f, 0.0f, ImPlotLineFlags_None);
-
-				//Apples number
-				if(chartShow_apples)
-				{
-					ImPlot::SetNextLineStyle({ 0, 1, 0, 1 }, ChartLineThickness);
-
-					ImPlot::PlotLine("Яблоки", chartData_apples, chartValuesToPlot, 1.0f, 0.0f, ImPlotLineFlags_None);
-				}
-
-				//Organics number
-				if(chartShow_organics)
-				{
-					ImPlot::SetNextLineStyle({ 0, 0, 1, 1 }, ChartLineThickness);
-
-					ImPlot::PlotLine("Органика", chartData_organics, chartValuesToPlot, 1.0f, 0.0f, ImPlotLineFlags_None);
-				}
-
-				ImPlot::EndPlot();
-			}
-		}
-		ImGui::End();
-	}
+	chart.DrawWindow(showChart);
 }
+
 
 void Main::DrawInfoWindow()
 {
@@ -1549,4 +1499,6 @@ void Main::ClearWorld()
 	showFirstPopulationHint = true;
 
 	ticknum = 0;
+	chart.ClearChart();
+	RecordChartSample(true, "Мир очищен");
 }

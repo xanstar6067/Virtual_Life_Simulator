@@ -329,6 +329,7 @@ void Main::DrawAdditionalsWindow()
 
 void Main::DrawSidePanelWindow()
 {
+	RecordChartSample();
 	const auto layout = vlsui::CalculateLayout(windowWidth, windowHeight);
 	int displayMode = (int)renderType;
 	const auto actions =
@@ -595,7 +596,7 @@ void Main::DrawSidePanelWindow()
 	ImGui::End();
 
 	vlsui::DrawWorkspaceFooter(layout, "CyberBiology3", simulate, displayedBots, displayedObjects, ticknum, realTPS, realFPS,
-		displayMode, showChart, [this](const ImVec2& size) { chart.PlotPreview(size); });
+		displayMode, showChart, [this](const ImVec2& size) { chart.PlotPreview(size, showChart); });
 	renderType = (RenderTypes)displayMode;
 
 	if (showFirstPopulationHint && ticknum == 0 && mouseFunc == mouse_select && renderType != noRender)
@@ -867,7 +868,6 @@ void Main::DrawDangerousWindow()
 				{
 					ClearWorld();
 					field->params.Reset();
-					chart.ClearChart();
 				}
 				TableSetColumnIndex(1);
 				if (Button("Убить всех ботов", ImVec2(-1.0f, 36.0f)))
@@ -983,18 +983,9 @@ void Main::DrawAdaptationWindow()
 
 void Main::DrawChartWindow()
 {
-	if (showChart)
-	{
-		SetNextWindowBgAlpha(1.0f);
-		vlsui::PrepareToolWindow(ImVec2(980.0f, 700.0f), ImVec2(650.0f, 460.0f));
-
-		Begin("График популяции", &showChart, ImGuiWindowFlags_NoCollapse);
-		{
-			chart.Plot();
-		}
-		End();
-	}
+	chart.DrawWindow(showChart);
 }
+
 
 void Main::DrawBotBrainWindow()
 {
@@ -1351,6 +1342,8 @@ void Main::ClearWorld()
 	showFirstPopulationHint = true;
 
 	ticknum = 0;
+	chart.ClearChart();
+	RecordChartSample(true, "Мир очищен");
 }
 
 

@@ -24,6 +24,7 @@
     <ClCompile Include="source\BotNeuralNet.cpp" />
     <ClCompile Include="source\Field.cpp" />
     <ClCompile Include="source\GUI.cpp" />
+    <ClCompile Include="source\EcosystemChart.cpp" />
     <ClCompile Include="source\Main.cpp" />
     <ClCompile Include="source\MyTypes.cpp" />
     <ClCompile Include="source\NeuralNetRenderer.cpp" />
@@ -110,6 +111,8 @@
     <ClInclude Include="source\Settings.h" />
     <ClInclude Include="source\Systems.h" />
     <ClInclude Include="source\UITheme.h" />
+    <ClInclude Include="source\EcosystemChart.h" />
+    <ClInclude Include="source\SimulationTelemetry.h" />
     <ClInclude Include="source\BotDiet.h" />
     <ClInclude Include="source\UILayout.h" />
     <ClInclude Include="source\NeuralGraphView.h" />

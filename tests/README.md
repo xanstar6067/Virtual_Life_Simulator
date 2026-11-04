@@ -11,3 +11,5 @@ Brain viewer regressions cover neuron selection, switching current/initial brain
 Pass `-ApplicationTargetName VirtualLifeSimulator1-UI` to build a separate executable when the normal application is open.
 
 The slim, single-row header is checked for overflow. All four display-mode buttons are clicked in wide and compact footers, including returning from hidden-field mode. Feeding descriptions are checked against real bot state for unknown, photosynthetic, predatory, organic, mixed, and two-thirds boundary cases in both engines.
+
+Chart checks cover all four ecosystem modes and periods at wide and compact sizes, exact snapshots of feeding/energy/age, an empty population, worker-tick births and deaths versus manual editing, per-100-tick rates, replacing a paused snapshot, and 25,000 observations without losing the earliest time or extrema. Chart previews are stored alongside the workspace PNGs. All worlds and synthetic history fixtures remain inside the isolated test directories.

@@ -7,7 +7,9 @@
 #endif
 #include "../source/UITheme.h"
 #include "../source/BrainWindow.h"
+#include "../source/EcosystemChart.h"
 #include "imgui_internal.h"
+#include "implot_internal.h"
 #include <SDL_image.h>
 
 #include <cassert>
@@ -25,6 +27,26 @@ namespace cb3
 
 struct InterfaceSmokeTest
 {
+    // Exercise AddObject on a real worker tick without depending on random brains.
+    struct BirthProbe : Object
+    {
+        BirthProbe(int x, int y) : Object(x, y)
+        {
+#ifndef TEST_CB3
+            type = abstract;
+#endif
+        }
+        int tick() override
+        {
+            auto* child = new Bot(x + 1, y, 500);
+            auto state = child->GetPersistentState();
+            state.stunned = 1000;
+            child->SetPersistentState(state);
+            assert(pField->AddObject(child));
+            return 1;
+        }
+    };
+
     static void CreateTextures()
     {
 #ifdef TEST_CB3
@@ -142,6 +164,209 @@ struct InterfaceSmokeTest
         bot->SetPersistentState(originalState);
     }
 
+    static void CheckTelemetry(Main& app)
+    {
+        app.ClearWorld();
+        assert(app.field->AddObject(new BirthProbe(0, 10)));
+        const auto before = app.field->GetTelemetryTotals();
+        app.field->tick(1000);
+        const auto born = app.field->GetTelemetryTotals();
+        assert(born.births == before.births + 1);
+        assert(born.added == before.added);
+        auto* child = app.field->GetObjectLocalCoords(1, 10);
+        assert(child);
+        app.field->RemoveObject(1, 10);
+        const auto removed = app.field->GetTelemetryTotals();
+        assert(removed.deaths == born.deaths && removed.removed == born.removed + 1);
+
+        auto* dying = new Bot(10, 10, 500);
+        auto dyingState = dying->GetPersistentState();
+        dyingState.stunned = 0;
+        dying->SetPersistentState(dyingState);
+        dying->energy = 0;
+        assert(app.field->AddObject(dying));
+        app.field->tick(1001);
+        assert(!app.field->GetObjectLocalCoords(10, 10));
+        assert(app.field->GetTelemetryTotals().deaths == removed.deaths + 1);
+
+        app.ClearWorld();
+        for (int i = 0; i < 5; ++i)
+        {
+            auto* organism = new Bot(20 + i, 20, (i + 1) * 50);
+            auto state = organism->GetPersistentState();
+            state.energyFromPS = i == 0 || i == 3 ? 50 : 0;
+            state.energyFromPredation = i == 1 || i == 3 ? 50 : 0;
+            state.energyFromOrganics = i == 2 || i == 3 ? 50 : 0;
+            organism->SetPersistentState(state);
+            organism->SetLifetime(i * 10);
+            assert(app.field->AddObject(organism));
+        }
+        const auto snapshot = app.field->ReadTelemetry(25);
+        assert(snapshot.values[vlsui::Bots] == 5);
+        for (int metric = vlsui::Photosynthetic; metric <= vlsui::UnknownFeeders; ++metric)
+            assert(std::abs(snapshot.values[metric] - 20.0) < .001);
+        assert(snapshot.values[vlsui::MeanEnergy] == 150);
+        assert(snapshot.values[vlsui::AverageAge] == 20);
+        assert(snapshot.values[vlsui::LowEnergy] == 20);
+        app.ClearWorld();
+        const auto empty = app.field->ReadTelemetry(0);
+        assert(!std::isfinite(empty.values[vlsui::MeanEnergy]));
+        assert(!std::isfinite(empty.values[vlsui::LowEnergy]));
+        assert(!std::isfinite(empty.values[vlsui::Photosynthetic]));
+        app.QuickLoadWorld();
+    }
+
+    static void CheckHistory()
+    {
+        vlsui::TelemetryHistory history;
+        double expectedSum = 0, min = 1e30, max = -1e30;
+        for (int i = 0; i < 25000; ++i)
+        {
+            vlsui::TelemetrySnapshot point;
+            point.tick = i * 25;
+            point.values[vlsui::Bots] = i == 7 ? 1000000 : 1000 + i % 300;
+            expectedSum += point.values[vlsui::Bots];
+            min = (std::min)(min, point.values[vlsui::Bots]); max = (std::max)(max, point.values[vlsui::Bots]);
+            history.Add(point);
+        }
+        assert(history.samples.size() <= vlsui::TelemetryHistory::Capacity);
+        assert(history.samples.front().firstTick == 0 && history.samples.back().lastTick == 24999 * 25);
+        assert(history.samples.back().weight == 1);
+        double actualSum = 0, actualMin = 1e30, actualMax = -1e30;
+        uint64_t observations = 0;
+        for (const auto& sample : history.samples)
+        {
+            actualSum += sample.value[vlsui::Bots] * sample.weight;
+            actualMin = (std::min)(actualMin, sample.minimum[vlsui::Bots]); actualMax = (std::max)(actualMax, sample.maximum[vlsui::Bots]);
+            observations += sample.weight;
+        }
+        assert(observations == 25000 && std::abs(actualSum - expectedSum) < .001);
+        assert(actualMin == min && actualMax == max);
+
+        vlsui::EcosystemChart chart;
+        vlsui::TelemetrySnapshot point;
+        point.tick = 100; point.totals = {10, 20, 50, 30};
+        chart.Observe(point.tick, point.totals, {}, [&] { return point; }, true);
+        point.tick = 125; point.totals = {15, 23, 57, 39};
+        chart.Observe(point.tick, point.totals, {}, [&] { return point; }, true);
+        const auto& latest = chart.history.samples.back();
+        assert(latest.value[vlsui::Births] == 20 && latest.value[vlsui::Deaths] == 12);
+        assert(!chart.events.empty());
+        const size_t size = chart.history.samples.size();
+        point.values[vlsui::Bots] = 500;
+        chart.Observe(point.tick, point.totals, {}, [&] { return point; }, true);
+        assert(chart.history.samples.size() == size && chart.history.samples.back().value[vlsui::Bots] == 500);
+    }
+
+    static void ChartFixture(Main& app)
+    {
+        app.chart.ClearChart();
+        app.ticknum = 20000;
+        app.RecordChartSample(true);
+        app.chart.history.Clear();
+        for (int i = 0; i <= 200; ++i)
+        {
+            vlsui::TelemetrySnapshot point;
+            point.tick = i * 100;
+            const double drop = std::exp(-std::pow((i - 125) / 18.0, 2));
+            point.values[vlsui::Bots] = 80000 + i * 150 - 30000 * drop;
+            point.values[vlsui::Apples] = 5000 + 1500 * std::sin(i / 10.0);
+            point.values[vlsui::Organics] = 2000 + 15000 * drop;
+            point.values[vlsui::Photosynthetic] = 65 - i * .12;
+            point.values[vlsui::Predators] = 10 + i * .08;
+            point.values[vlsui::OrganicFeeders] = 8;
+            point.values[vlsui::MixedFeeders] = 15 + i * .04;
+            point.values[vlsui::UnknownFeeders] = 2;
+            point.values[vlsui::MeanEnergy] = 350 - 220 * drop;
+            point.values[vlsui::LowEnergy] = 2 + 45 * drop;
+            point.values[vlsui::AverageAge] = 60 + 10 * std::sin(i / 15.0);
+            point.values[vlsui::Births] = 200 + 60 * std::sin(i / 12.0);
+            point.values[vlsui::Deaths] = 180 + 160 * drop;
+            point.values[vlsui::AnyPredators] = point.values[vlsui::Bots] * .3;
+            app.chart.history.Add(point);
+        }
+        app.chart.AddEvent(10000, "ФС", "Фотосинтез: 8 → 3");
+    }
+
+    static void CheckCharts(Main& app, SDL_Surface* surface, const char* prefix)
+    {
+        const auto originalTick = app.ticknum;
+        ChartFixture(app);
+        app.showChart = true;
+        Frame(app, surface); Frame(app, surface);
+        // Click the real mode and period selectors in the chart window.
+        auto select = [&](int column, int choice) {
+            auto* window = ImGui::FindWindowByName(vlsui::ChartWindowTitle);
+            const auto* table = ImGui::TableFindByID(window->GetID("##ChartControls"));
+            const float x = (table->Columns[column].WorkMinX + table->Columns[column].WorkMaxX) * .5f;
+            const float y = table->OuterRect.Min.y + table->CellPaddingY + ImGui::GetTextLineHeight() + ImGui::GetStyle().ItemSpacing.y + 11;
+            Click(app, surface, x, y);
+            Frame(app, surface, x, y); // Let ImGui finish measuring the popup before reading its position.
+            const auto* popup = ImGui::FindWindowByName("##Combo_00");
+            assert(popup && popup->Active);
+            const float row = ImGui::GetTextLineHeightWithSpacing();
+            Click(app, surface, popup->Pos.x + 80, popup->Pos.y + popup->WindowPadding.y + row * choice + ImGui::GetTextLineHeight() * .5f);
+        };
+        select(0, 2);
+        assert(app.chart.mode == 2);
+        select(1, 1);
+        assert(app.chart.period == 1);
+        app.chart.period = 0;
+        for (int mode = 0; mode < 4; ++mode)
+        {
+            app.chart.mode = mode;
+            app.chart.autoFollow = true;
+            Frame(app, surface); Frame(app, surface);
+            auto* window = ImGui::FindWindowByName(vlsui::ChartWindowTitle);
+            assert(window && window->Active && !(window->Flags & ImGuiWindowFlags_NoMove));
+            if (window->ScrollbarY) std::fprintf(stderr, "Chart overflow %s mode %d content %.1f available %.1f\n", prefix, mode, window->ContentSize.y, window->InnerRect.GetHeight());
+            char imageName[100]; snprintf(imageName, sizeof(imageName), "%s-chart-%d.png", prefix, mode);
+            assert(IMG_SavePNG(surface, imageName) == 0);
+            assert(!window->ScrollbarX && !window->ScrollbarY);
+            const char* plotId = mode == 2 ? "##EnergyHistory" : "##EcosystemHistory";
+            auto* plot = ImPlot::GetCurrentContext()->Plots.GetByKey(window->GetID(plotId));
+            assert(plot);
+            const ImVec2 hover = plot->PlotRect.GetCenter();
+            Frame(app, surface, hover.x, hover.y);
+            bool tooltip = false;
+            for (const auto* candidate : GImGui->Windows)
+                tooltip |= candidate->Active && (candidate->Flags & ImGuiWindowFlags_Tooltip);
+            assert(tooltip);
+            assert(plot->Axes[ImAxis_X1].Range.Max == 20000);
+            app.chart.period = 1;
+            Frame(app, surface);
+            assert(app.chart.VisibleTicks().first == 15000);
+            app.chart.period = 0;
+        }
+        app.chart.mode = 0;
+        app.chart.showAge = true;
+        Frame(app, surface); Frame(app, surface);
+        assert(!ImGui::FindWindowByName(vlsui::ChartWindowTitle)->ScrollbarY);
+        app.chart.showAge = false;
+        // Undefined energy and composition after extinction must never reach
+        // the SDL renderer as NaN geometry, and must not become zero readings.
+        auto emptyPoint = app.field->ReadTelemetry(app.ticknum);
+        emptyPoint.tick = 20025;
+        emptyPoint.values[vlsui::Bots] = 0;
+        for (int metric = vlsui::Photosynthetic; metric <= vlsui::LowEnergy; ++metric)
+            emptyPoint.values[metric] = std::numeric_limits<double>::quiet_NaN();
+        app.chart.history.Add(emptyPoint);
+        for (int mode : {1, 2})
+        {
+            app.chart.mode = mode;
+            Frame(app, surface);
+            for (int list = 0; list < ImGui::GetDrawData()->CmdListsCount; ++list)
+                for (const auto& vertex : ImGui::GetDrawData()->CmdLists[list]->VtxBuffer)
+                    assert(std::isfinite(vertex.pos.x) && std::isfinite(vertex.pos.y));
+        }
+        app.showChart = false;
+        app.chart.mode = 0;
+        app.ticknum = originalTick;
+        app.chart.ClearChart();
+        app.RecordChartSample(true);
+        Frame(app, surface);
+    }
+
     static void CheckBrainWindow(Main& app, SDL_Surface* surface)
     {
         app.showBrain = true;
@@ -229,6 +454,7 @@ struct InterfaceSmokeTest
 
     static void Run(Main& app, SDL_Surface* surface)
     {
+        CheckHistory();
         srand(12345);
         assert(!app.simulate);
         Frame(app, surface);
@@ -239,6 +465,8 @@ struct InterfaceSmokeTest
         // Exercise the actual header button, rather than calling the seed handler.
         Click(app, surface, 95, 42);
         assert(CountBots(app) > 0);
+        assert(app.chart.history.samples.back().value[vlsui::Bots] == CountBots(app));
+        assert(app.field->GetTelemetryTotals().births == 0);
         assert(!app.showFirstPopulationHint);
         assert(!app.simulate);
         assert(!ImGui::FindWindowByName("##FirstPopulation")->Active);
@@ -279,6 +507,8 @@ struct InterfaceSmokeTest
         app.QuickLoadWorld();
         assert(CountBots(app) == originalCount);
         assert(!app.showFirstPopulationHint);
+        CheckTelemetry(app);
+        CheckCharts(app, surface, "wide");
 
         app.showSaveLoad = true;
         app.showAdaptation = true;
@@ -319,6 +549,7 @@ struct InterfaceSmokeTest
             }
             if (size.x == 640)
             {
+                CheckCharts(app, resized, "compact");
                 Frame(app, resized);
                 assert(IMG_SavePNG(resized, "compact-workspace.png") == 0);
                 app.showBrain = true;
@@ -340,7 +571,7 @@ struct InterfaceSmokeTest
         renderer = SDL_CreateSoftwareRenderer(surface);
         assert(renderer);
         ImGui_ImplSDLRenderer_Init(renderer);
-        std::puts("PASS: seeding, pause/run, step, selection, zoom, right-hand tools, save/load, tool windows, resize, brain selection/version/move/close, footer display modes, feeding types, slim header");
+        std::puts("PASS: workspace, brain viewer, all four chart modes/periods/tooltips, chart selectors, age panel, exact telemetry, lifecycle/manual edits, bounded history with extrema");
     }
 };
 
