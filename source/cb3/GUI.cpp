@@ -995,13 +995,18 @@ void Main::DrawBotBrainWindow()
         field->ValidateObjectExistance(selectedObject);
     Bot::SetObservedBot(selectedBot ? (Bot*)selectedObject : nullptr);
 
-    if (!showBrain) return;
+    if (!showBrain)
+    {
+        nn_renderer.history.Clear();
+        return;
+    }
     if (!selectedBot)
     {
         Deselect();
         return;
     }
     auto bot = (Bot*)selectedObject;
+    nn_renderer.history.SetOwner(selectedObject);
     // Views give the bot its own genome copy: edits do not touch relatives.
     auto current = bot->GetActiveBrain();
     auto initial = bot->GetInitialBrain();

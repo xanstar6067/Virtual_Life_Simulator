@@ -422,6 +422,7 @@ void Main::Deselect()
 	selectedObject = NULL;
 	showBrain = false;
 	nn_renderer.ResetSelection();
+	nn_renderer.history.Clear();
 }
 
 

@@ -155,6 +155,9 @@
     <ClInclude Include="source\NeuralGraphView.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="source\BrainEditHistory.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
     <ClInclude Include="source\BrainWindow.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>

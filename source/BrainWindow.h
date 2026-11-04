@@ -35,6 +35,7 @@ void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, R
 	renderer.displaySize = display;
 	if (!open)
 	{
+		renderer.history.Clear();
 		ImGui::End();
 		return;
 	}
@@ -55,6 +56,20 @@ void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, R
 	ImGui::SetNextItemWidth((std::min)(170.0f, ImGui::GetContentRegionAvail().x));
 	ImGui::SliderFloat("##BrainZoom", &renderer.view.zoomPercent, 50, 250, "%.0f %%", ImGuiSliderFlags_AlwaysClamp);
 	ItemTooltip("Масштаб схемы относительно размера окна");
+	ImGui::BeginDisabled(!renderer.history.CanUndo());
+	if (ImGui::Button("Назад", ImVec2(92, 28)))
+		renderer.history.Undo(*current, *initial, version);
+	ImGui::EndDisabled();
+	ItemTooltip("Отменить последнее изменение мозга");
+	ImGui::SameLine();
+	ImGui::BeginDisabled(!renderer.history.CanRedo());
+	if (ImGui::Button("Вперёд", ImVec2(92, 28)))
+		renderer.history.Redo(*current, *initial, version);
+	ImGui::EndDisabled();
+	ItemTooltip("Повторить отменённое изменение мозга");
+	ImGui::SameLine();
+	ImGui::Text("%zu / %zu", renderer.history.Position(), renderer.history.Size());
+	ItemTooltip("Позиция в истории. История очищается при закрытии окна или выборе другого бота.");
 	ImGui::Checkbox("Только связи выбранного нейрона", &renderer.view.selectedConnectionsOnly);
 
 	auto details = [&]() {
@@ -92,10 +107,10 @@ void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, R
 			const bool editable = (int)neuron->type != 1 && (int)neuron->type != 2;
 			ImGui::BeginDisabled(!editable);
 			if (ImGui::Button("Случайный", ImVec2(HalfWidth(), 30)))
-				neuron->SetRandom();
+				renderer.history.Record(version, *(version == 0 ? current : initial), [&] { neuron->SetRandom(); });
 			ImGui::SameLine();
 			if (ImGui::Button("Обнулить", ImVec2(-1, 30)))
-				neuron->SetZero();
+				renderer.history.Record(version, *(version == 0 ? current : initial), [&] { neuron->SetZero(); });
 			ImGui::EndDisabled();
 		}
 		else
@@ -104,7 +119,8 @@ void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, R
 			ImGui::TextWrapped("Нажмите на узел схемы: здесь появятся его параметры и связи.");
 		}
 		if (allowBrainMutation && ImGui::Button("Мутировать мозг", ImVec2(-1, 30)))
-			(version == 0 ? current : initial)->Mutate();
+			renderer.history.Record(version, *(version == 0 ? current : initial),
+				[&] { (version == 0 ? current : initial)->Mutate(); });
 		if (ImGui::CollapsingHeader("Сводка бота"))
 		{
 			ImGui::Text("Простые: %d", summary.simple);

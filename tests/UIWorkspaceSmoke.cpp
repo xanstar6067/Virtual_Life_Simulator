@@ -488,6 +488,114 @@ struct InterfaceSmokeTest
         Frame(app, surface);
     }
 
+    static void ClickBrainEdit(Main& app, SDL_Surface* surface, bool randomize, bool mutate = false)
+    {
+        Frame(app, surface); // Refresh table geometry after a connection count changes.
+        const auto parent = ImGui::FindWindowByName(vlsui::BrainWindowTitle);
+        ImGuiWindow* details = nullptr;
+        for (auto child : parent->DC.ChildWindows)
+            if (strstr(child->Name, "##NeuronDetails")) details = child;
+        assert(details);
+        const auto table = ImGui::TableFindByID(details->GetID("##NeuronConnections"));
+        assert(table);
+        const float x = details->WorkRect.Min.x + details->WorkRect.GetWidth() * (mutate ? .5f : randomize ? .25f : .75f);
+        const float y = table->OuterRect.Max.y + ImGui::GetStyle().ItemSpacing.y + 15.0f
+            + (mutate ? 30.0f + ImGui::GetStyle().ItemSpacing.y : 0.0f);
+        Click(app, surface, x, y);
+    }
+
+    static void CheckBrainEdits(Main& app, SDL_Surface* surface)
+    {
+        const auto bot = (Bot*)app.selectedObject;
+        BrainGenome original(bot->GetGenome());
+        auto& history = app.nn_renderer.history;
+        assert(!history.CanUndo() && !history.CanRedo());
+        const auto window = ImGui::FindWindowByName(vlsui::BrainWindowTitle);
+        const float x = window->Pos.x + window->WindowPadding.x;
+        const float y = window->Pos.y + window->TitleBarHeight() + window->WindowPadding.y
+            + 28.0f + ImGui::GetStyle().ItemSpacing.y + 14.0f;
+        auto undo = [&] { Click(app, surface, x + 46, y); };
+        auto redo = [&] { Click(app, surface, x + 92 + ImGui::GetStyle().ItemSpacing.x + 46, y); };
+
+        // The real randomize button records one edit and restores that exact roll.
+        ClickBrainEdit(app, surface, true);
+        assert(history.Position() == 1 && history.Size() == 1);
+        BrainGenome randomized(bot->GetGenome());
+        auto active = bot->GetActiveBrain();
+        active.allMemory[1][0] = 1;
+        undo();
+        assert(original.SameNeurons(bot->GetGenome()));
+        assert(bot->GetBrainMemory()[1][0] == 1);
+        assert(!history.CanUndo() && history.CanRedo());
+        redo();
+        assert(randomized.SameNeurons(bot->GetGenome()));
+        assert(!history.CanRedo());
+
+        // Clearing can be undone; repeating a no-op does not add a history entry.
+        ClickBrainEdit(app, surface, false);
+        const auto count = history.Size();
+        assert(count == 2);
+        BrainGenome cleared(bot->GetGenome());
+        ClickBrainEdit(app, surface, false);
+        assert(history.Size() == count);
+        undo();
+        assert(randomized.SameNeurons(bot->GetGenome()));
+        redo();
+        assert(cleared.SameNeurons(bot->GetGenome()));
+
+        // A new edit after undo discards redo; switching versions keeps the timeline.
+        undo();
+        ClickBrainEdit(app, surface, true);
+        assert(history.Size() == 2 && !history.CanRedo());
+        BrainGenome branched(bot->GetGenome());
+        const float switchY = window->Pos.y + window->TitleBarHeight() + window->WindowPadding.y + 14;
+        Click(app, surface, x + 146, switchY);
+        auto point = app.nn_renderer.view.NeuronPosition(1, 1);
+        Click(app, surface, point.x, point.y);
+        ClickBrainEdit(app, surface, true);
+        assert(history.Size() == 3);
+        BrainGenome editedInitial(bot->GetGenome());
+        undo();
+        assert(app.brainToShow == 1 && branched.SameNeurons(bot->GetGenome()));
+        undo();
+        assert(app.brainToShow == 0 && randomized.SameNeurons(bot->GetGenome()));
+        redo();
+        redo();
+        assert(app.brainToShow == 1 && editedInitial.SameNeurons(bot->GetGenome()));
+        point = app.nn_renderer.view.NeuronPosition(1, 1);
+        Click(app, surface, point.x, point.y);
+
+#ifdef TEST_CB3
+        // Whole-brain mutation uses the same timeline as individual neuron edits.
+        for (int attempt = 0; attempt < 20 && history.Size() == 3; ++attempt)
+            ClickBrainEdit(app, surface, false, true);
+        assert(history.Size() == 4);
+        BrainGenome mutated(bot->GetGenome());
+        undo();
+        assert(editedInitial.SameNeurons(bot->GetGenome()));
+        redo();
+        assert(mutated.SameNeurons(bot->GetGenome()));
+#endif
+
+        // Owner changes and deselection must not expose a previous bot's history.
+        history.SetOwner(&original);
+        assert(!history.CanUndo() && !history.CanRedo());
+        Frame(app, surface);
+        ClickBrainEdit(app, surface, true);
+        assert(history.CanUndo());
+        app.Deselect();
+        assert(history.Size() == 0);
+        app.selectedObject = bot;
+        app.field->TrackObject(bot);
+        app.showBrain = true;
+        app.brainToShow = 0;
+        Frame(app, surface);
+        point = app.nn_renderer.view.NeuronPosition(1, 0);
+        Click(app, surface, point.x, point.y);
+        ClickBrainEdit(app, surface, true);
+        assert(history.CanUndo());
+    }
+
     static void CheckBrainWindow(Main& app, SDL_Surface* surface)
     {
         app.showBrain = true;
@@ -511,6 +619,8 @@ struct InterfaceSmokeTest
         app.MouseClick();
         assert(CountBots(app) == botsBeforeCanvasClick);
         app.mouseFunc = mouse_select;
+
+        CheckBrainEdits(app, surface);
 
         // The small version switch lives in this window and clears stale selection.
         const float switchX = brainWindow->Pos.x + brainWindow->WindowPadding.x + 146.0f;
@@ -543,6 +653,12 @@ struct InterfaceSmokeTest
         assert(!app.showBrain);
         Frame(app, surface);
         assert(!brainWindow->Active);
+        assert(app.nn_renderer.history.Size() == 0);
+        app.showBrain = true;
+        Frame(app, surface);
+        assert(!app.nn_renderer.history.CanUndo() && !app.nn_renderer.history.CanRedo());
+        app.showBrain = false;
+        Frame(app, surface);
         app.brainToShow = 0;
     }
 

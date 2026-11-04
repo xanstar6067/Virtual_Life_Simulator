@@ -1,6 +1,7 @@
 #pragma once
 #include "../NeuralGraphView.h"
 #include "Bot.h"
+#include "../BrainEditHistory.h"
 #include "SDL.h"
 
 namespace cb3
@@ -11,6 +12,7 @@ struct NeuralNetRenderer final
 	void Render(const Bot::BrainView* brain, const ImVec2& size);
 	void ResetSelection();
 
+	vlsui::BrainEditHistory<Neuron, NumNeuronLayers, NumNeuronsInLayerMax> history;
 	vlsui::NeuralGraphView view;
 	ImVec2 windowPosition, windowSize, displaySize = ImVec2(0, 0);
 	Neuron* selectedNeuron = nullptr;
