@@ -6,7 +6,7 @@ Coverage includes initial seeding through the header button, pause/run, a single
 
 PNG previews and isolated save fixtures are written under `x64/Debug/ui-smoke-classic/` and `x64/Debug/ui-smoke-cb3/`. The tests do not overwrite the project's saved worlds or `imgui.ini`.
 
-Brain viewer regressions cover neuron selection, switching current/initial brains without stale pointers, dragging the window with its diagram, closing using its title-bar cross, and keeping the viewer inside a resized desktop. Input is injected into ImGui in memory, not into Windows. Undo/redo checks click the real randomize and clear buttons, compare exact neuron snapshots across both brain versions, preserve live neuron memory, discard redo after branching, ignore no-op edits, and reset history on owner changes, deselection, closing and reopening.
+Brain viewer regressions cover neuron selection, switching current/initial brains without stale pointers, dragging the window with its diagram, closing using its title-bar cross, and keeping the viewer inside a resized desktop. Input is injected into ImGui in memory, not into Windows. Undo/redo checks click the real randomize and clear buttons, keep three edits of one neuron independent from two edits of another, isolate current/initial histories, preserve other neurons and live memory, discard only the selected neuron's redo branch, ignore no-op edits, record CB3 whole-brain mutation per changed neuron, and release all histories on owner changes, deselection, closing and reopening.
 
 CB3 brain regressions check output activation thresholds, output biases, and large positive/negative sums through `Process` and `GetOutput`. Real bot ticks cover all eight desired headings and the zero vector, including rotation energy cost.
 

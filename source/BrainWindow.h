@@ -56,20 +56,26 @@ void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, R
 	ImGui::SetNextItemWidth((std::min)(170.0f, ImGui::GetContentRegionAvail().x));
 	ImGui::SliderFloat("##BrainZoom", &renderer.view.zoomPercent, 50, 250, "%.0f %%", ImGuiSliderFlags_AlwaysClamp);
 	ItemTooltip("Масштаб схемы относительно размера окна");
-	ImGui::BeginDisabled(!renderer.history.CanUndo());
+	// A version switch invalidates the old selection until Render rebinds it.
+	const bool selected = renderer.selectedNeuron &&
+		renderer.selectedBrain == (version == 0 ? current : initial)->allNeurons;
+	const int historyLayer = selected ? renderer.view.selectedLayer : -1;
+	const int historyIndex = selected ? renderer.view.selectedIndex : -1;
+	ImGui::BeginDisabled(!renderer.history.CanUndo(version, historyLayer, historyIndex));
 	if (ImGui::Button("Назад", ImVec2(92, 28)))
-		renderer.history.Undo(*current, *initial, version);
+		renderer.history.Undo(version, historyLayer, historyIndex, *renderer.selectedNeuron);
 	ImGui::EndDisabled();
-	ItemTooltip("Отменить последнее изменение мозга");
+	ItemTooltip("Отменить изменение только выбранного нейрона");
 	ImGui::SameLine();
-	ImGui::BeginDisabled(!renderer.history.CanRedo());
+	ImGui::BeginDisabled(!renderer.history.CanRedo(version, historyLayer, historyIndex));
 	if (ImGui::Button("Вперёд", ImVec2(92, 28)))
-		renderer.history.Redo(*current, *initial, version);
+		renderer.history.Redo(version, historyLayer, historyIndex, *renderer.selectedNeuron);
 	ImGui::EndDisabled();
-	ItemTooltip("Повторить отменённое изменение мозга");
+	ItemTooltip("Повторить отменённое изменение только выбранного нейрона");
 	ImGui::SameLine();
-	ImGui::Text("%zu / %zu", renderer.history.Position(), renderer.history.Size());
-	ItemTooltip("Позиция в истории. История очищается при закрытии окна или выборе другого бота.");
+	ImGui::Text("История нейрона: %zu / %zu", renderer.history.Position(version, historyLayer, historyIndex),
+		renderer.history.Size(version, historyLayer, historyIndex));
+	ItemTooltip("У каждого нейрона своя история для текущего и начального мозга. Хранится до закрытия окна или смены бота.");
 	ImGui::Checkbox("Только связи выбранного нейрона", &renderer.view.selectedConnectionsOnly);
 
 	auto details = [&]() {
@@ -107,10 +113,12 @@ void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, R
 			const bool editable = (int)neuron->type != 1 && (int)neuron->type != 2;
 			ImGui::BeginDisabled(!editable);
 			if (ImGui::Button("Случайный", ImVec2(HalfWidth(), 30)))
-				renderer.history.Record(version, *(version == 0 ? current : initial), [&] { neuron->SetRandom(); });
+				renderer.history.Record(version, renderer.view.selectedLayer, renderer.view.selectedIndex,
+					*neuron, [&] { neuron->SetRandom(); });
 			ImGui::SameLine();
 			if (ImGui::Button("Обнулить", ImVec2(-1, 30)))
-				renderer.history.Record(version, *(version == 0 ? current : initial), [&] { neuron->SetZero(); });
+				renderer.history.Record(version, renderer.view.selectedLayer, renderer.view.selectedIndex,
+					*neuron, [&] { neuron->SetZero(); });
 			ImGui::EndDisabled();
 		}
 		else
@@ -119,7 +127,7 @@ void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, R
 			ImGui::TextWrapped("Нажмите на узел схемы: здесь появятся его параметры и связи.");
 		}
 		if (allowBrainMutation && ImGui::Button("Мутировать мозг", ImVec2(-1, 30)))
-			renderer.history.Record(version, *(version == 0 ? current : initial),
+			renderer.history.RecordBrain(version, *(version == 0 ? current : initial),
 				[&] { (version == 0 ? current : initial)->Mutate(); });
 		if (ImGui::CollapsingHeader("Сводка бота"))
 		{

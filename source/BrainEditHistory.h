@@ -2,116 +2,129 @@
 
 #include <array>
 #include <cstddef>
-#include <utility>
+#include <map>
 #include <vector>
 
 namespace vlsui
 {
-// Window-local edits only: neuron values and the bot's live memory are not rewound.
+// Each neuron and brain version has its own window-local timeline.
+// Values and live memory are not rewound. Empty histories allocate no storage.
 template <class Neuron, std::size_t Layers, std::size_t Width>
 class BrainEditHistory
 {
-	using Snapshot = std::array<std::array<Neuron, Width>, Layers>;
-	struct Edit
-	{
-		int version;
-		Snapshot before, after;
-	};
-	std::vector<Edit> edits;
-	std::size_t position = 0;
-	const void* owner = nullptr;
+    struct Edit { Neuron before, after; };
+    struct Timeline
+    {
+        std::vector<Edit> edits;
+        std::size_t position = 0;
+    };
+    std::map<std::size_t, Timeline> histories;
+    const void* owner = nullptr;
 
-	template <class Brain>
-	static Snapshot Capture(const Brain& brain)
-	{
-		Snapshot result;
-		for (std::size_t layer = 0; layer < Layers; ++layer)
-			for (std::size_t index = 0; index < Width; ++index)
-				result[layer][index] = brain.allNeurons[layer][index];
-		return result;
-	}
+    static bool Valid(int version, int layer, int index)
+    {
+        return version >= 0 && version < 2 && layer >= 0 && layer < (int)Layers && index >= 0 && index < (int)Width;
+    }
 
-	static bool Same(const Snapshot& a, const Snapshot& b)
-	{
-		for (std::size_t layer = 0; layer < Layers; ++layer)
-			for (std::size_t index = 0; index < Width; ++index)
-			{
-				const auto& x = a[layer][index];
-				const auto& y = b[layer][index];
-				if (x.type != y.type || x.layer != y.layer || x.bias != y.bias || x.numConnections != y.numConnections)
-					return false;
-				for (unsigned c = 0; c < x.numConnections; ++c)
-				{
-					const auto& u = x.allConnections[c];
-					const auto& v = y.allConnections[c];
-					if (u.dest_layer != v.dest_layer || u.dest_neuron != v.dest_neuron || u.weight != v.weight)
-						return false;
-				}
-			}
-		return true;
-	}
+    static std::size_t Key(int version, int layer, int index)
+    {
+        return (version * Layers + layer) * Width + index;
+    }
 
-	template <class Brain>
-	static void Restore(const Snapshot& snapshot, Brain& brain)
-	{
-		for (std::size_t layer = 0; layer < Layers; ++layer)
-			for (std::size_t index = 0; index < Width; ++index)
-				brain.allNeurons[layer][index] = snapshot[layer][index];
-	}
+    const Timeline* Find(int version, int layer, int index) const
+    {
+        if (!Valid(version, layer, index)) return nullptr;
+        const auto it = histories.find(Key(version, layer, index));
+        return it == histories.end() ? nullptr : &it->second;
+    }
+
+    static bool Same(const Neuron& x, const Neuron& y)
+    {
+        if (x.type != y.type || x.layer != y.layer || x.bias != y.bias || x.numConnections != y.numConnections)
+            return false;
+        for (unsigned c = 0; c < x.numConnections; ++c)
+        {
+            const auto& u = x.allConnections[c];
+            const auto& v = y.allConnections[c];
+            if (u.dest_layer != v.dest_layer || u.dest_neuron != v.dest_neuron || u.weight != v.weight)
+                return false;
+        }
+        return true;
+    }
+
+    void RecordState(int version, int layer, int index, const Neuron& before, const Neuron& after)
+    {
+        if (!Valid(version, layer, index) || Same(before, after)) return;
+        auto& timeline = histories[Key(version, layer, index)];
+        timeline.edits.erase(timeline.edits.begin() + timeline.position, timeline.edits.end());
+        timeline.edits.push_back({before, after});
+        timeline.position = timeline.edits.size();
+    }
 
 public:
-	void Clear()
-	{
-		std::vector<Edit>().swap(edits);
-		position = 0;
-		owner = nullptr;
-	}
+    void Clear()
+    {
+        histories.clear();
+        owner = nullptr;
+    }
 
-	void SetOwner(const void* bot)
-	{
-		if (owner != bot)
-		{
-			Clear();
-			owner = bot;
-		}
-	}
+    void SetOwner(const void* bot)
+    {
+        if (owner != bot)
+        {
+            Clear();
+            owner = bot;
+        }
+    }
 
-	bool CanUndo() const { return position > 0; }
-	bool CanRedo() const { return position < edits.size(); }
-	std::size_t Position() const { return position; }
-	std::size_t Size() const { return edits.size(); }
+    bool Empty() const { return histories.empty(); }
+    bool CanUndo(int version, int layer, int index) const { return Position(version, layer, index) > 0; }
+    bool CanRedo(int version, int layer, int index) const { return Position(version, layer, index) < Size(version, layer, index); }
+    std::size_t Position(int version, int layer, int index) const
+    {
+        const auto* timeline = Find(version, layer, index);
+        return timeline ? timeline->position : 0;
+    }
+    std::size_t Size(int version, int layer, int index) const
+    {
+        const auto* timeline = Find(version, layer, index);
+        return timeline ? timeline->edits.size() : 0;
+    }
 
-	template <class Brain, class Operation>
-	void Record(int version, Brain& brain, const Operation& operation)
-	{
-		auto before = Capture(brain);
-		operation();
-		auto after = Capture(brain);
-		if (Same(before, after))
-			return;
-		edits.erase(edits.begin() + position, edits.end());
-		edits.push_back({version, std::move(before), std::move(after)});
-		position = edits.size();
-	}
+    template <class Operation>
+    void Record(int version, int layer, int index, Neuron& neuron, const Operation& operation)
+    {
+        const Neuron before = neuron;
+        operation();
+        RecordState(version, layer, index, before, neuron);
+    }
 
-	template <class Brain>
-	void Undo(Brain& current, Brain& initial, int& version)
-	{
-		if (!CanUndo())
-			return;
-		const auto& edit = edits[--position];
-		version = edit.version;
-		Restore(edit.before, version == 0 ? current : initial);
-	}
+    template <class Brain, class Operation>
+    void RecordBrain(int version, Brain& brain, const Operation& operation)
+    {
+        // Whole-brain mutation adds one step to each neuron that actually changes.
+        std::array<std::array<Neuron, Width>, Layers> before;
+        for (std::size_t layer = 0; layer < Layers; ++layer)
+            for (std::size_t index = 0; index < Width; ++index)
+                before[layer][index] = brain.allNeurons[layer][index];
+        operation();
+        for (std::size_t layer = 0; layer < Layers; ++layer)
+            for (std::size_t index = 0; index < Width; ++index)
+                RecordState(version, (int)layer, (int)index, before[layer][index], brain.allNeurons[layer][index]);
+    }
 
-	template <class Brain>
-	void Redo(Brain& current, Brain& initial, int& version)
-	{
-		if (!CanRedo())
-			return;
-		const auto& edit = edits[position++];
-		version = edit.version;
-		Restore(edit.after, version == 0 ? current : initial);
-	}
+    void Undo(int version, int layer, int index, Neuron& neuron)
+    {
+        if (!CanUndo(version, layer, index)) return;
+        auto& timeline = histories.at(Key(version, layer, index));
+        neuron = timeline.edits[--timeline.position].before;
+    }
+
+    void Redo(int version, int layer, int index, Neuron& neuron)
+    {
+        if (!CanRedo(version, layer, index)) return;
+        auto& timeline = histories.at(Key(version, layer, index));
+        neuron = timeline.edits[timeline.position++].after;
+    }
 };
 } // namespace vlsui

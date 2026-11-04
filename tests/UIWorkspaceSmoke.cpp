@@ -507,93 +507,145 @@ struct InterfaceSmokeTest
     static void CheckBrainEdits(Main& app, SDL_Surface* surface)
     {
         const auto bot = (Bot*)app.selectedObject;
-        BrainGenome original(bot->GetGenome());
         auto& history = app.nn_renderer.history;
-        assert(!history.CanUndo() && !history.CanRedo());
+        assert(history.Empty());
         const auto window = ImGui::FindWindowByName(vlsui::BrainWindowTitle);
         const float x = window->Pos.x + window->WindowPadding.x;
         const float y = window->Pos.y + window->TitleBarHeight() + window->WindowPadding.y
             + 28.0f + ImGui::GetStyle().ItemSpacing.y + 14.0f;
         auto undo = [&] { Click(app, surface, x + 46, y); };
         auto redo = [&] { Click(app, surface, x + 92 + ImGui::GetStyle().ItemSpacing.x + 46, y); };
+        auto select = [&](int index) {
+            const auto point = app.nn_renderer.view.NeuronPosition(1, index);
+            Click(app, surface, point.x, point.y);
+            assert(app.nn_renderer.selectedNeuron);
+        };
+        auto roll = [&] {
+            const int index = app.nn_renderer.view.selectedIndex;
+            const auto count = history.Position(app.brainToShow, 1, index);
+            for (int attempt = 0; attempt < 20 && history.Position(app.brainToShow, 1, index) == count; ++attempt)
+                ClickBrainEdit(app, surface, true);
+            assert(history.Position(app.brainToShow, 1, index) == count + 1);
+        };
 
-        // The real randomize button records one edit and restores that exact roll.
-        ClickBrainEdit(app, surface, true);
-        assert(history.Position() == 1 && history.Size() == 1);
-        BrainGenome randomized(bot->GetGenome());
+        // Three edits of A, followed by two edits of B, remain independent.
+        roll();
+        const Neuron a1 = bot->GetGenome().active[1][0];
+        roll();
+        const Neuron a2 = bot->GetGenome().active[1][0];
+        roll();
+        const Neuron a3 = bot->GetGenome().active[1][0];
+        assert(history.Size(0, 1, 0) == 3);
+        select(3);
+        assert(!history.CanUndo(0, 1, 3));
+        roll();
+        const Neuron b1 = bot->GetGenome().active[1][3];
+        roll();
+        BrainGenome bothEdited(bot->GetGenome());
+        assert(history.Size(0, 1, 3) == 2);
+        select(0);
         auto active = bot->GetActiveBrain();
         active.allMemory[1][0] = 1;
         undo();
-        assert(original.SameNeurons(bot->GetGenome()));
+        undo();
+        BrainGenome expected(bothEdited);
+        expected.active[1][0] = a1;
+        assert(expected.SameNeurons(bot->GetGenome()));
         assert(bot->GetBrainMemory()[1][0] == 1);
-        assert(!history.CanUndo() && history.CanRedo());
         redo();
-        assert(randomized.SameNeurons(bot->GetGenome()));
-        assert(!history.CanRedo());
+        redo();
+        assert(bothEdited.SameNeurons(bot->GetGenome()));
 
-        // Clearing can be undone; repeating a no-op does not add a history entry.
+        // Branching B's history must preserve A's redo branch.
+        undo();
+        select(3);
+        undo();
+        expected.active[1][0] = a2;
+        expected.active[1][3] = b1;
+        assert(expected.SameNeurons(bot->GetGenome()));
+        roll();
+        assert(!history.CanRedo(0, 1, 3) && history.CanRedo(0, 1, 0));
+        BrainGenome branched(bot->GetGenome());
+        select(0);
+        redo();
+        branched.active[1][0] = a3;
+        assert(branched.SameNeurons(bot->GetGenome()));
+
+        // Clear and repeated no-op clear affect only A's timeline.
+        const auto beforeClear = history.Size(0, 1, 0);
         ClickBrainEdit(app, surface, false);
-        const auto count = history.Size();
-        assert(count == 2);
+        const auto afterClear = history.Size(0, 1, 0);
         BrainGenome cleared(bot->GetGenome());
         ClickBrainEdit(app, surface, false);
-        assert(history.Size() == count);
-        undo();
-        assert(randomized.SameNeurons(bot->GetGenome()));
-        redo();
-        assert(cleared.SameNeurons(bot->GetGenome()));
+        assert(history.Size(0, 1, 0) == afterClear);
+        if (afterClear > beforeClear)
+        {
+            undo();
+            assert(branched.SameNeurons(bot->GetGenome()));
+            redo();
+            assert(cleared.SameNeurons(bot->GetGenome()));
+        }
 
-        // A new edit after undo discards redo; switching versions keeps the timeline.
-        undo();
-        ClickBrainEdit(app, surface, true);
-        assert(history.Size() == 2 && !history.CanRedo());
-        BrainGenome branched(bot->GetGenome());
+        // The same neuron in the initial brain has a separate timeline.
         const float switchY = window->Pos.y + window->TitleBarHeight() + window->WindowPadding.y + 14;
         Click(app, surface, x + 146, switchY);
-        auto point = app.nn_renderer.view.NeuronPosition(1, 1);
-        Click(app, surface, point.x, point.y);
-        ClickBrainEdit(app, surface, true);
-        assert(history.Size() == 3);
-        BrainGenome editedInitial(bot->GetGenome());
+        assert(!app.nn_renderer.selectedNeuron);
+        // Disabled controls cannot apply the previous version's selection.
         undo();
-        assert(app.brainToShow == 1 && branched.SameNeurons(bot->GetGenome()));
+        assert(cleared.SameNeurons(bot->GetGenome()));
+        select(0);
+        assert(!history.CanUndo(1, 1, 0));
+        roll();
+        BrainGenome initialEdited(bot->GetGenome());
         undo();
-        assert(app.brainToShow == 0 && randomized.SameNeurons(bot->GetGenome()));
+        assert(app.brainToShow == 1 && cleared.SameNeurons(bot->GetGenome()));
         redo();
-        redo();
-        assert(app.brainToShow == 1 && editedInitial.SameNeurons(bot->GetGenome()));
-        point = app.nn_renderer.view.NeuronPosition(1, 1);
-        Click(app, surface, point.x, point.y);
+        assert(initialEdited.SameNeurons(bot->GetGenome()));
+        Click(app, surface, x + 46, switchY);
+        select(0);
+        assert(history.Size(0, 1, 0) == afterClear);
+        assert(history.Size(0, 1, 3) == 2 && history.Size(1, 1, 0) == 1);
 
 #ifdef TEST_CB3
-        // Whole-brain mutation uses the same timeline as individual neuron edits.
-        for (int attempt = 0; attempt < 20 && history.Size() == 3; ++attempt)
+        // Mutation records each changed neuron, without erasing older histories.
+        BrainGenome beforeMutation(bot->GetGenome());
+        for (int attempt = 0; attempt < 20 && beforeMutation.SameNeurons(bot->GetGenome()); ++attempt)
             ClickBrainEdit(app, surface, false, true);
-        assert(history.Size() == 4);
         BrainGenome mutated(bot->GetGenome());
-        undo();
-        assert(editedInitial.SameNeurons(bot->GetGenome()));
-        redo();
-        assert(mutated.SameNeurons(bot->GetGenome()));
+        int changed = 0;
+        for (int layer = 0; layer < (int)NumNeuronLayers; ++layer)
+            for (int index = 0; index < (int)neuronsInLayer[layer]; ++index)
+            {
+                BrainGenome expectedUndo(mutated);
+                expectedUndo.active[layer][index] = beforeMutation.active[layer][index];
+                if (expectedUndo.SameNeurons(mutated)) continue;
+                assert(history.CanUndo(0, layer, index));
+                auto brainView = bot->GetActiveBrain();
+                history.Undo(0, layer, index, brainView.allNeurons[layer][index]);
+                assert(expectedUndo.SameNeurons(bot->GetGenome()));
+                history.Redo(0, layer, index, brainView.allNeurons[layer][index]);
+                assert(mutated.SameNeurons(bot->GetGenome()));
+                ++changed;
+            }
+        assert(changed > 0);
+        assert(history.Size(0, 1, 0) >= afterClear && history.Size(1, 1, 0) == 1);
 #endif
 
-        // Owner changes and deselection must not expose a previous bot's history.
-        history.SetOwner(&original);
-        assert(!history.CanUndo() && !history.CanRedo());
+        // Owner changes, deselection, and closing release all per-neuron histories.
+        history.SetOwner(&expected);
+        assert(history.Empty());
         Frame(app, surface);
-        ClickBrainEdit(app, surface, true);
-        assert(history.CanUndo());
+        roll();
         app.Deselect();
-        assert(history.Size() == 0);
+        assert(history.Empty());
         app.selectedObject = bot;
         app.field->TrackObject(bot);
         app.showBrain = true;
         app.brainToShow = 0;
         Frame(app, surface);
-        point = app.nn_renderer.view.NeuronPosition(1, 0);
-        Click(app, surface, point.x, point.y);
-        ClickBrainEdit(app, surface, true);
-        assert(history.CanUndo());
+        select(0);
+        roll();
+        assert(!history.Empty());
     }
 
     static void CheckBrainWindow(Main& app, SDL_Surface* surface)
@@ -653,10 +705,10 @@ struct InterfaceSmokeTest
         assert(!app.showBrain);
         Frame(app, surface);
         assert(!brainWindow->Active);
-        assert(app.nn_renderer.history.Size() == 0);
+        assert(app.nn_renderer.history.Empty());
         app.showBrain = true;
         Frame(app, surface);
-        assert(!app.nn_renderer.history.CanUndo() && !app.nn_renderer.history.CanRedo());
+        assert(app.nn_renderer.history.Empty());
         app.showBrain = false;
         Frame(app, surface);
         app.brainToShow = 0;
