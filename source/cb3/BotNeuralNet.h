@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Neuron.h"
+#include <memory>
 
 
 namespace cb3
@@ -69,6 +70,27 @@ namespace brain
 	// connection slots past numConnections, which may hold stale bytes).
 	bool SameNeurons(const NeuronRow* a, const NeuronRow* b);
 	uint64_t HashNeurons(const NeuronRow* allNeurons, uint64_t hash);
+
+	// Derived, non-serialized execution data. Nodes with no outgoing edges are
+	// omitted; the order of all remaining nodes and edges is unchanged.
+	class ExecutionPlan final
+	{
+		std::unique_ptr<byte[]> code;
+		uint16_t capacity = 0;
+		uint16_t usedBytes = 0;
+		byte outputBias[NumOutputNeurons]{};
+		byte inputCount = 0, hiddenCount = 0;
+		bool ready = false;
+	public:
+		ExecutionPlan() = default;
+		ExecutionPlan(const ExecutionPlan& other);
+		ExecutionPlan& operator=(const ExecutionPlan&) = delete;
+		void Build(const NeuronRow* neurons);
+		void Invalidate() { ready = false; }
+		bool IsReady() const { return ready; }
+		size_t StorageBytes() const { return capacity; }
+		void Process(NeuronValueRow* values, NeuronMemoryRow* memory, const BrainInput& input) const;
+	};
 }
 
 
@@ -122,6 +144,10 @@ public:
 	void RebuildActive();
 	// Recompute activeIsOptimizedInitial after neurons were edited directly.
 	void RecheckActive();
+	// Editable BrainViews invalidate the derived plan until RecheckActive.
+	void InvalidateActivePlan() { executionPlan.Invalidate(); }
+	void Process(NeuronValueRow* values, NeuronMemoryRow* memory, const BrainInput& input) const;
+	size_t ExecutionStorageBytes() const { return executionPlan.StorageBytes(); }
 	// Same neurons (both versions) - used to merge genomes on load.
 	bool SameNeurons(const BrainGenome& other) const;
 
@@ -130,6 +156,7 @@ public:
 private:
 	friend class GenomeRef;
 	mutable std::atomic<uint32_t> refs{ 0 };
+	brain::ExecutionPlan executionPlan;
 };
 
 

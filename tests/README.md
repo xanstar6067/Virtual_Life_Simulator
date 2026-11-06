@@ -14,8 +14,32 @@ CB3 brain regressions check output activation thresholds, output biases, and lar
 
 Shared brain genomes (both engines): a child without mutation shares its parent's genome, while mutation, global mutation and editing through the brain window give the bot its own copy and leave relatives unchanged; a child of an edited bot is rebuilt from the initial brain, and neuron memory stays per bot.
 
+CB3 bots use a derived compact execution plan shared with their genome. The original `brain::Process` is retained for standalone networks and as the reference/fallback while a direct editable view is outstanding. Run `./tests/Run-CB3BrainEquivalence.ps1` for optimized x64 and add `-DebugBuild` for Debug. The test compares 164,113 sequential steps bit for bit: every neuron value (including unused slots), neuron memory, all outputs, and the random stream after each step. Cases include random/mutated/optimized networks, empty and full connection lists, all signed-byte biases and weights, zero-weight random connections, memory/radial thresholds, copy-on-write, invalidated views and rebuilding after edits/mutations. Artifacts stay in `x64/brain-equivalence/`. The CB3 UI smoke suite additionally exercises `Bot::think` with compiled and invalidated plans, observed neuron values, and the existing editor, sharing and save/load scenarios.
+
+`./tests/Compare-CB3BrainPlan.ps1` runs paired before/after measurements in alternating order, using the archived pre-change executable under `x64/perf-audit/before-plan/`, the current optimized harness, and the three `growth-*.world` research checkpoints. Both executable paths are parameters. It checks population/genome counts and birth/death totals for each pair, writes raw logs to `x64/perf-audit/plan-comparison/`, and records numeric results in `CB3_BRAIN_PLAN_RESULTS.csv`. A new checkout needs both builds and those checkpoints before running this comparison. `plan_mib` reports allocated instruction bytes across distinct genomes, excluding the plan's inline metadata and allocator overhead; process memory includes all of them.
+
 Pass `-ApplicationTargetName VirtualLifeSimulator1-UI` to build a separate executable when the normal application is open.
 
 The slim, single-row header is checked for overflow. All four display-mode buttons are clicked in wide and compact footers, including returning from hidden-field mode. Feeding descriptions are checked against real bot state for unknown, photosynthetic, predatory, organic, mixed, and two-thirds boundary cases in both engines.
 
 Chart checks cover all four ecosystem modes and periods at wide and compact sizes, exact snapshots of feeding/energy/age, an empty population, worker-tick births and deaths versus manual editing, per-100-tick rates, replacing a paused snapshot, and 25,000 observations without losing the earliest time or extrema. Chart previews are stored alongside the workspace PNGs. All worlds and synthetic history fixtures remain inside the isolated test directories.
+
+CB3 performance research is separate from the UI regression suite. Build the console harness using `./tests/Build-CB3Performance.ps1` (v143, x64, `/O2 /GL /MD`, no application window). It compiles the actual engine sources; generated copies of `Field.cpp`, `Bot.cpp` and `BotNeuralNet.cpp` live under ignored `x64/perf-audit/baseline/`. Production sources are never patched. Instrumentation anchors are checked before compilation. `-Profile` builds a second executable under `x64/perf-audit/profile/` with timing of one in 128 bot tick calls. Use the baseline for throughput and the sampled build only for approximate attribution; nested stage timings are inclusive.
+
+Examples, from the repository root:
+
+```powershell
+.\tests\Build-CB3Performance.ps1
+$perf = '.\x64\perf-audit\baseline\cb3-perf.exe'
+& $perf --mode growth --waves 5 --threads 4 --ticks 1500 --out x64/perf-audit/checkpoints
+& $perf --mode fixed --bots 500000 --pool 1024 --threads 4 --ms 1000
+& $perf --mode fixed --bots 500000 --pool 1024 --threads 1 --ms 1000
+& $perf --mode fixed --bots 500000 --pool 1024 --threads 4 --duplicate-genomes --ms 1000
+& $perf --mode fixed --bots 100000 --pool 1024 --threads 4 --clustered --ms 1000
+& $perf --mode real --world x64/perf-audit/checkpoints/growth-500000.world --threads 4 --warmup 0 --ticks 25
+.\tests\Run-CB3Performance.ps1 -World x64/perf-audit/checkpoints/growth-500000.world -Repeats 3
+```
+
+`growth` calls the real `SpawnControlGroup` five times and runs normal field ticks. It writes checkpoints only to the explicit `--out` directory at 50k, 200k and 500k bots. A loaded world is read only. `real` preserves simulation rules, while `fixed` disables actions after evaluating the brain, disables apple spawning and seasons, and raises the age limit to keep population and topology constant. `skipbrain` is the same controlled experiment with brain evaluation omitted. `stunned` skips both perception and thinking through the engine's normal stun path (for newly generated populations). `--duplicate-genomes` creates separate allocations with identical genome content, isolating sharing from brain complexity; reported `genomes` counts distinct allocations, not distinct byte contents. `--clustered` fills consecutive columns instead of scattering bots across the field. Synthetic genomes come from a deterministic pool of randomized and optimized real brains.
+
+Output includes process private committed memory and working set, population and genome counts, tick time, process CPU time divided by wall time (`cpu_cores`), worker phase durations and visits, and separate occupancy-scan/telemetry costs. Worker durations include preemption and exclude condition-variable waiting; they are not CPU cycle counts. Snapshot inspection and saving, population setup, warmup, scan and telemetry probes are outside the tick measurements. The tick loop calls `Field::tick` directly: rendering, app scheduling, auto-adaptation and periodic chart observation are excluded. Run competing benchmark processes sequentially, use repeated runs, and compare the same saved snapshot for real-world experiments; different thread counts can produce different descendants even from the same initial state.

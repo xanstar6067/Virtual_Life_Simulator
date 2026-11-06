@@ -388,7 +388,7 @@ BrainOutput Bot::think(BrainInput input)
 	float values[NumNeuronLayers][NumNeuronsInLayerMax];
 
 	//Compute
-	brain::Process(genome->active, values, brainMemory, input);
+	genome->Process(values, brainMemory, input);
 
 	if (observedBot.load(std::memory_order_relaxed) == this)
 		memcpy(observedValues, values, sizeof(values));
@@ -924,6 +924,7 @@ Bot::BrainView Bot::GetActiveBrain()
 	BrainGenome* own = genome.MakeUnique();
 	//The caller may edit neurons directly
 	own->activeIsOptimizedInitial = false;
+	own->InvalidateActivePlan();
 
 	return { own->active, (observedBot.load(std::memory_order_relaxed) == this) ? observedValues : noNeuronValues, brainMemory };
 }

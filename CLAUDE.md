@@ -54,6 +54,7 @@ source/Main.cpp: wWinMain
 | `VirtualLifeSimulator1.sln` | Решение Visual Studio |
 | `VirtualLifeSimulator1.vcxproj` | Сборка, зависимости, C++20, `/utf-8`, ресурсы и копирование DLL |
 | `VirtualLifeSimulator1.vcxproj.filters` | Группировка файлов в Solution Explorer; поддерживай вместе с проектом при добавлении файлов |
+| `CB3_PERFORMANCE.md`, `CB3_PERFORMANCE_RESULTS.csv`, `CB3_BRAIN_PLAN_RESULTS.csv` | Отчёт, исходные замеры и сравнение компактного исполнения мозга CB3; воспроизводимый консольный стенд находится в `tests/` |
 | `VirtualLifeSimulator.rc`, `resource.h`, `VirtualLifeSimulator.ico` | Windows-ресурсы приложения и иконка |
 | `imgui.ini` | Состояние расположения окон ImGui; не меняй случайно при проверке UI |
 | Корневые `SDL2.dll`, `SDL2_image.dll`, `lib*.dll`, `zlib1.dll` | Runtime-библиотеки; post-build может использовать их как запасной источник |
@@ -110,7 +111,7 @@ source/Main.cpp: wWinMain
 | `Object.h/.cpp` | Базовый объект CB3; не взаимозаменяем с Classic `Object` |
 | `Bot.h/.cpp` | Поведение и наследование CB3-ботов, работа со своими входами/выходами сети, питание, размножение и мутации. Мозг бота — общий `GenomeRef genome` + своя `brainMemory`; `GetActiveBrain`/`GetInitialBrain` возвращают редактируемый `BrainView` (с копированием общего генома), `GetGenome` — только чтение, `SetObservedBot` — бот, чьи значения нейронов сохраняются для окна мозга |
 | `Apple.h/.cpp`, `Organics.h/.cpp`, `Rock.h/.cpp` | Реализации объектов CB3 |
-| `BotNeuralNet.h/.cpp` | Собственная нейросеть CB3 с размерами слоёв из `neuronsInLayer`, другими входами/выходами и представлением памяти. Алгоритмы в `namespace brain` (`Process`, `Mutate`, `Optimize`…); `BrainGenome` (initial + active, общий для родственников) и `GenomeRef` (атомарный счётчик ссылок, `MakeUnique` — copy-on-write); `BotNeuralNet` — автономная сеть для тестов |
+| `BotNeuralNet.h/.cpp` | Собственная нейросеть CB3 с размерами слоёв из `neuronsInLayer`, другими входами/выходами и представлением памяти. Алгоритмы в `namespace brain` (`Process`, `Mutate`, `Optimize`…); `BrainGenome` (initial + active, общий для родственников) и `GenomeRef` (атомарный счётчик ссылок, `MakeUnique` — copy-on-write). `brain::ExecutionPlan` — общий компактный план для `BrainGenome::Process`, перестраивается в `RebuildActive`/`RecheckActive`, не сериализуется; устаревший план использует исходный расчёт. `BotNeuralNet` — автономная сеть и эталонный расчёт для тестов |
 | `Neuron.h/.cpp` | CB3-нейроны, связи, веса и мутации |
 | `NeuralNetRenderer.h/.cpp` | Адаптер CB3-мозга к общему `NeuralGraphView` |
 | `ObjectSaver.h/.cpp` | Сериализация CB3; проверка формата/режима и восстановление состояния объектов и мира |
@@ -189,6 +190,12 @@ $msbuild = Join-Path $vsRoot 'MSBuild\Current\Bin\MSBuild.exe'
 Доступны Debug/Release × Win32/x64; основной существующий тестовый путь — Debug x64. Типичный executable — `x64/Debug/VirtualLifeSimulator1.exe`. Запускай с рабочим каталогом корня проекта для ожидаемых путей сохранений. Post-build копирует DLL рядом с exe; соответствие x86/x64 обязательно. Подробнее о структуре зависимостей — `external/README.md`.
 
 `tests/UIWorkspaceSmoke.cpp` — общий тестовый стенд; компилируется дважды (для CB3 с `TEST_CB3`), получает доступ к внутреннему состоянию через `InterfaceSmokeTest` и линкуется с объектными файлами приложения. `tests/Run-UIWorkspaceSmoke.ps1` собирает проект, компилирует оба теста и проверяет их exit codes.
+
+`tests/CB3Performance.cpp`, `CB3PerformanceHooks.h`, `Build-CB3Performance.ps1` и `Run-CB3Performance.ps1` — отдельный консольный стенд исследования CB3 в Release x64, не единицы компиляции приложения. Он собирает настоящие исходники движка и инструментированные копии в `x64/perf-audit/`, измеряет рост после заселения, память, время тика и работу потоков без окна. `-Profile` включает выборочные таймеры; режимы и ограничения описаны в `tests/README.md`. Пользовательские сохранения открываются только для чтения, контрольные миры пишутся в явно заданный `--out`.
+
+`tests/CB3BrainEquivalence.cpp` и `Run-CB3BrainEquivalence.ps1` — отдельная проверка компактного исполнения мозга CB3 относительно `brain::Process`: последовательности входов, побитовое совпадение всех значений/памяти/выходов, состояние `rand()`, мутации и copy-on-write. По умолчанию Release x64; `-DebugBuild` включает Debug. Артефакты — `x64/brain-equivalence/`.
+
+`tests/Compare-CB3BrainPlan.ps1` — парные замеры старого и нового executable на контрольных мирах с проверкой счётчиков популяции/геномов/рождений/смертей. Требует ранее собранного старого стенда и исследовательских checkpoint-файлов; логи — `x64/perf-audit/plan-comparison/`, CSV — `CB3_BRAIN_PLAN_RESULTS.csv`.
 
 Проверки выполняют реальный UI через SDL software renderer в памяти без desktop-окна, системного ввода и GPU. Покрывают заселение, паузу/шаг, выбор/zoom, кисть, сохранения, окна, resize 640×480…1920×1080, переполнение панелей, режимы просмотра, классификацию питания, окно мозга и телеметрию/графики. PNG и изолированные сохранения находятся в `x64/Debug/ui-smoke-classic/` и `x64/Debug/ui-smoke-cb3/`; корневые сохранения и `imgui.ini` тесты не перезаписывают.
 

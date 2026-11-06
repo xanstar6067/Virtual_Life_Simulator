@@ -1,4 +1,5 @@
 #include "BotNeuralNet.h"
+#include <array>
 
 
 
@@ -166,6 +167,137 @@ void brain::Process(const NeuronRow* allNeurons, NeuronValueRow* allValues, Neur
 }
 
 
+
+// Shared lookup tables keep the packed plan at two bytes per connection while
+// preparing the signed-byte scaling once, with the same float rounding as Process.
+static constexpr auto ScaledBias = [] {
+	std::array<float, 256> table{};
+	for (int i = 0; i < 256; ++i) table[i] = (i < 128 ? i : i - 256) * BiasMultiplier;
+	return table;
+}();
+static constexpr auto ScaledWeight = [] {
+	std::array<float, 256> table{};
+	for (int i = 0; i < 256; ++i) table[i] = (i < 128 ? i : i - 256) * WeightMultiplier;
+	return table;
+}();
+
+brain::ExecutionPlan::ExecutionPlan(const ExecutionPlan& other) :
+	capacity(other.ready ? other.usedBytes : 0), usedBytes(capacity), inputCount(other.inputCount),
+	hiddenCount(other.hiddenCount), ready(other.ready)
+{
+	memcpy(outputBias, other.outputBias, sizeof(outputBias));
+	if (capacity)
+	{
+		code.reset(new byte[capacity]);
+		memcpy(code.get(), other.code.get(), capacity);
+	}
+}
+
+void brain::ExecutionPlan::Build(const NeuronRow* neurons)
+{
+	static_assert(NumNeuronLayers * NumNeuronsInLayerMax <= 256);
+	ready = false;
+	inputCount = hiddenCount = 0;
+	size_t bytes = 0;
+	for (uint layer = 0; layer < NeuronOutputLayerIndex; ++layer)
+		for (uint index = 0; index < (layer == 0 ? NumInputNeurons : NumHiddenNeurons); ++index)
+			if (neurons[layer][index].numConnections)
+				bytes += (layer == 0 ? 3 : 4) + 2 * neurons[layer][index].numConnections;
+	if (bytes > capacity)
+	{
+		code.reset(new byte[bytes]);
+		capacity = static_cast<uint16_t>(bytes);
+	}
+	usedBytes = static_cast<uint16_t>(bytes);
+	byte* next = code.get();
+	// Input records: slot/count/bias. Hidden records: slot/type/count/bias.
+	// Each record is followed by count target/weight pairs. Slots use the full
+	// rectangular value/memory layout, including unused positions for the viewer.
+	for (uint layer = 0; layer < NeuronOutputLayerIndex; ++layer)
+		for (uint index = 0; index < (layer == 0 ? NumInputNeurons : NumHiddenNeurons); ++index)
+		{
+			const Neuron& n = neurons[layer][index];
+			if (!n.numConnections) continue;
+			if (layer == 0) ++inputCount; else ++hiddenCount;
+			*next++ = static_cast<byte>(layer * NumNeuronsInLayerMax + index);
+			// Input neurons always pass through, regardless of their stored type.
+			if (layer != 0) *next++ = static_cast<byte>(n.type);
+			*next++ = n.numConnections;
+			*next++ = static_cast<byte>(n.bias);
+			for (uint edge = 0; edge < n.numConnections; ++edge)
+			{
+				const auto& c = n.allConnections[edge];
+				*next++ = static_cast<byte>(c.dest_layer * NumNeuronsInLayerMax + c.dest_neuron);
+				*next++ = static_cast<byte>(c.weight);
+			}
+		}
+	for (uint i = 0; i < NumOutputNeurons; ++i)
+		outputBias[i] = static_cast<byte>(neurons[NeuronOutputLayerIndex][i].bias);
+	ready = true;
+}
+
+static float& PlanValue(NeuronValueRow* values, byte index)
+{
+	return values[index / NumNeuronsInLayerMax][index % NumNeuronsInLayerMax];
+}
+
+static const byte* PlanFeed(NeuronValueRow* values, const byte* next, uint count, float value)
+{
+	// Plans contain only nonempty nodes, so the first edge always exists.
+	do
+	{
+		const byte dest = *next++;
+		const float weight = ScaledWeight[*next++];
+		PlanValue(values, dest) += value * weight;
+	} while (--count);
+	return next;
+}
+
+void brain::ExecutionPlan::Process(NeuronValueRow* values, NeuronMemoryRow* memory, const BrainInput& input) const
+{
+	memset(values, 0, sizeof(float) * NumNeuronLayers * NumNeuronsInLayerMax);
+	memcpy(values[NeuronInputLayerIndex], input.fields, sizeof(input.fields));
+	const byte* next = code.get();
+	for (uint i = 0; i < inputCount; ++i)
+	{
+		const byte index = *next++;
+		const byte count = *next++;
+		const float value = PlanValue(values, index) + ScaledBias[*next++];
+		next = PlanFeed(values, next, count, value);
+	}
+	for (uint i = 0; i < hiddenCount; ++i)
+	{
+		const byte index = *next++;
+		const byte type = *next++;
+		const byte count = *next++;
+		float value = PlanValue(values, index) + ScaledBias[*next++];
+		switch (type)
+		{
+		case basic: value = ActivationSimple(value); break;
+		case random: value = (RandomVal(1000) <= static_cast<int>(value * 1000.0f)) ? 1.0f : 0.0f; break;
+		case radialbasis: value = RadialBasisActivation(value); break;
+		case NeuronType::memory:
+		{
+			auto& state = memory[index / NumNeuronsInLayerMax][index % NumNeuronsInLayerMax];
+			if (value < -1.0f) state = 0;
+			else if (value > 1.0f) state = 1;
+			value = state * 1.0f;
+			break;
+		}
+		}
+		next = PlanFeed(values, next, count, value);
+	}
+	for (uint i = 0; i < 2; ++i)
+	{
+		const float value = values[NeuronOutputLayerIndex][i] + ScaledBias[outputBias[i]];
+		values[NeuronOutputLayerIndex][i] = PlusMinusActivation(value);
+	}
+	for (uint i = 2; i < NumOutputNeurons; ++i)
+	{
+		const float value = values[NeuronOutputLayerIndex][i] + ScaledBias[outputBias[i]];
+		values[NeuronOutputLayerIndex][i] = ActivationSimple(value);
+	}
+}
 
 void brain::Mutate(NeuronRow* allNeurons)
 {
@@ -469,7 +601,7 @@ BrainGenome::BrainGenome()
 }
 
 BrainGenome::BrainGenome(const BrainGenome& other) :
-	activeIsOptimizedInitial(other.activeIsOptimizedInitial)
+	activeIsOptimizedInitial(other.activeIsOptimizedInitial), executionPlan(other.executionPlan)
 {
 	memcpy(initial, other.initial, sizeof(initial));
 	memcpy(active, other.active, sizeof(active));
@@ -480,6 +612,7 @@ void BrainGenome::RebuildActive()
 	memcpy(active, initial, sizeof(active));
 	brain::Optimize(active);
 	activeIsOptimizedInitial = true;
+	executionPlan.Build(active);
 }
 
 void BrainGenome::RecheckActive()
@@ -488,6 +621,13 @@ void BrainGenome::RecheckActive()
 	memcpy(optimized, initial, sizeof(optimized));
 	brain::Optimize(optimized);
 	activeIsOptimizedInitial = brain::SameNeurons(optimized, active);
+	executionPlan.Build(active);
+}
+
+void BrainGenome::Process(NeuronValueRow* values, NeuronMemoryRow* memory, const BrainInput& input) const
+{
+	if (executionPlan.IsReady()) executionPlan.Process(values, memory, input);
+	else brain::Process(active, values, memory, input);
 }
 
 bool BrainGenome::SameNeurons(const BrainGenome& other) const

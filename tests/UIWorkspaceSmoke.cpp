@@ -217,6 +217,48 @@ struct InterfaceSmokeTest
                 assert(organism->GetDirection() == (target < 0 ? 3 : target));
                 assert(organism->energy == 500 - EveryTickEnergyPenalty - (target < 0 ? 0 : RotateCost));
             }
+
+        // The real Bot path uses the shared plan, exposes the same observed
+        // values, and falls back while a direct editable view is outstanding.
+        app.ClearWorld();
+        auto* planned = new Bot(20, 20, 500);
+        assert(app.field->AddObject(planned));
+        Bot::SetObservedBot(planned);
+        auto view = planned->GetActiveBrain();
+        for (uint layer = 0; layer < NumNeuronLayers; ++layer)
+            for (auto& neuron : view.allNeurons[layer]) neuron.SetZero();
+        view.allNeurons[0][0].AddConnection(1, 0, 50);
+        view.allNeurons[1][0].type = NeuronType::memory;
+        view.allNeurons[1][0].AddConnection(NeuronOutputLayerIndex, 0, 50);
+        view.allNeurons[0][1].AddConnection(1, 1, 50);
+        view.allNeurons[1][1].type = NeuronType::random;
+        view.allNeurons[1][1].AddConnection(NeuronOutputLayerIndex, 1, 50);
+        planned->RecheckBrain();
+        assert(planned->GetGenome().ExecutionStorageBytes() > 0);
+        auto compareThink = [&](float energy) {
+            NeuronValueRow values[NumNeuronLayers];
+            NeuronMemoryRow memory[NumNeuronLayers];
+            memcpy(memory, planned->GetBrainMemory(), sizeof(memory));
+            BrainInput input{}; input.energy = energy; input.age = .5f;
+            srand(1729);
+            brain::Process(planned->GetGenome().active, values, memory, input);
+            auto expected = brain::GetOutput(values);
+            int expectedRandom = rand();
+            srand(1729);
+            auto actual = planned->think(input);
+            assert(rand() == expectedRandom);
+            assert(!memcmp(&expected, &actual, sizeof(expected)));
+            assert(!memcmp(values, view.allValues, sizeof(values)));
+            assert(!memcmp(memory, planned->GetBrainMemory(), sizeof(memory)));
+        };
+        for (float value : {1.01f, 0.0f, -1.01f, 1.0f}) compareThink(value);
+        view = planned->GetActiveBrain();
+        view.allNeurons[NeuronOutputLayerIndex][0].bias = -100;
+        compareThink(0.0f); // Before RecheckBrain: stale plan must not be used.
+        planned->RecheckBrain();
+        compareThink(0.0f);
+        Bot::SetObservedBot(nullptr);
+        app.ClearWorld();
     }
 #endif
 
