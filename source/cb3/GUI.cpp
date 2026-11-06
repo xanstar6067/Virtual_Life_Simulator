@@ -999,6 +999,7 @@ void Main::DrawBotBrainWindow()
     {
         nn_renderer.history.Clear();
         nn_renderer.ResetSelection();
+        if (selectedBot) ((Bot*)selectedObject)->CompactBrain();
         return;
     }
     if (!selectedBot)
@@ -1014,6 +1015,12 @@ void Main::DrawBotBrainWindow()
     vlsui::DrawBrainWindow(showBrain, brainToShow, &current, &initial,
         nn_renderer, bot->GetNeuronSummary(), BiasMultiplier, WeightMultiplier, true);
     bot->RecheckBrain();
+    if (!showBrain)
+    {
+        nn_renderer.history.Clear();
+        nn_renderer.ResetSelection();
+        bot->CompactBrain();
+    }
 }
 
 void Main::DrawAAWindow()
@@ -1164,6 +1171,12 @@ void Main::MouseClick()
 				{
 					if (obj->type() == bot)
 					{
+						if (selectedObject != obj)
+						{
+							const bool reopenBrain = showBrain;
+							Deselect();
+							showBrain = reopenBrain;
+						}
 						selectedObject = obj;
 						revealSelection = true;
 						field->TrackObject(selectedObject);

@@ -1,6 +1,6 @@
 param([int]$Repeats = 3,
       [string]$BeforeExecutable = 'x64/perf-audit/before-plan/cb3-perf.exe',
-      [string]$AfterExecutable = 'x64/perf-audit/baseline/cb3-perf.exe')
+      [string]$AfterExecutable = 'x64/perf-audit/before-noop/cb3-perf.exe')
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $outputDir = Join-Path $repoRoot 'x64\perf-audit\plan-comparison'

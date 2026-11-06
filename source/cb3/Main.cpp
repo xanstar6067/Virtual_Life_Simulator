@@ -378,13 +378,17 @@ void Main::SelectionShadowScreen()
 
 void Main::Deselect()
 {
+	// Reset all UI pointers before releasing a surviving bot's editing arrays.
+	Object* previous = selectedObject;
+	nn_renderer.ResetSelection();
+	nn_renderer.history.Clear();
+	if (field && previous && field->ValidateObjectExistance(previous) && previous->type() == bot)
+		((Bot*)previous)->CompactBrain();
 	if (field)
 		field->TrackObject(NULL);
 
 	selectedObject = NULL;
 	showBrain = false;
-	nn_renderer.ResetSelection();
-	nn_renderer.history.Clear();
 }
 
 

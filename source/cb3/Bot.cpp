@@ -757,12 +757,14 @@ Bot::summary_return Bot::GetNeuronSummary()
 {
 	int toRet[6] = { 0,0,0,0,0,0 };
 	const Neuron* n;
+	NeuronRow active[NumNeuronLayers];
+	genome->ReadActive(active);
 
 	for (uint xi = 1; xi < NumNeuronLayers; ++xi)
 	{
 		for (uint yi = 0; yi < NumNeuronsInLayerMax; ++yi)
 		{
-			n = &genome->active[xi][yi];
+			n = &active[xi][yi];
 
 			switch (n->type)
 			{
@@ -860,7 +862,10 @@ Bot::Bot(int X, int Y, uint Energy) :Object(X, Y)
 
 	//Randomize bot brain
 	genome = GenomeRef::Create();
-	brain::Randomize(genome.MakeUnique()->initial);
+	NeuronRow initial[NumNeuronLayers];
+	genome->ReadInitial(initial);
+	brain::Randomize(initial);
+	genome.MakeUnique()->ReplaceInitial(initial);
 	UpdateActiveBrain();
 
 	//Set brain to dummy brain
@@ -915,21 +920,16 @@ void Bot::SetObservedBot(const Bot* bot)
 Bot::BrainView Bot::GetActiveBrain()
 {
 	BrainGenome* own = genome.MakeUnique();
-	//The caller may edit neurons directly
-	own->activeIsOptimizedInitial = false;
-	own->InvalidateActivePlan();
-
-	return { own->active, (observedBot.load(std::memory_order_relaxed) == this) ? observedValues : noNeuronValues, brainMemory };
+	return { own->EditActive(), (observedBot.load(std::memory_order_relaxed) == this) ? observedValues : noNeuronValues, brainMemory };
 }
 
 Bot::BrainView Bot::GetInitialBrain()
 {
 	BrainGenome* own = genome.MakeUnique();
-	own->activeIsOptimizedInitial = false;
 
 	//Memory of the initial brain is never used, it is always clear
 	memset(noNeuronMemory, 0, sizeof(noNeuronMemory));
-	return { own->initial, noNeuronValues, noNeuronMemory };
+	return { own->EditInitial(), noNeuronValues, noNeuronMemory };
 }
 
 const BrainGenome& Bot::GetGenome() const
@@ -947,6 +947,12 @@ void Bot::RecheckBrain()
 	//Only a genome owned by this bot could have been edited
 	if (genome->RefCount() == 1)
 		genome.MakeUnique()->RecheckActive();
+}
+
+void Bot::CompactBrain()
+{
+	if (genome->RefCount() == 1)
+		genome.MakeUnique()->Compact();
 }
 
 void Bot::ShareGenome(const GenomeRef& equalGenome)

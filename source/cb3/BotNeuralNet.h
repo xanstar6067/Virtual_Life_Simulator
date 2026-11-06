@@ -71,6 +71,21 @@ namespace brain
 	bool SameNeurons(const NeuronRow* a, const NeuronRow* b);
 	uint64_t HashNeurons(const NeuronRow* allNeurons, uint64_t hash);
 
+	// Full neuron fields and only occupied connection slots. Expanded arrays
+	// belong to editing sessions, not to every genome in a growing population.
+	class PackedNeurons final
+	{
+		std::unique_ptr<byte[]> data;
+		uint16_t size = 0;
+	public:
+		PackedNeurons() = default;
+		PackedNeurons(const PackedNeurons& other);
+		void Build(const NeuronRow* neurons);
+		void Read(NeuronRow* neurons) const;
+		bool Same(const PackedNeurons& other) const;
+		size_t StorageBytes() const { return size; }
+	};
+
 	// Derived, non-serialized execution data. Nodes with no outgoing edges are
 	// omitted; the order of all remaining nodes and edges is unchanged.
 	class ExecutionPlan final
@@ -129,9 +144,6 @@ public:
 class BrainGenome final
 {
 public:
-	Neuron initial[NumNeuronLayers][NumNeuronsInLayerMax];
-	Neuron active[NumNeuronLayers][NumNeuronsInLayerMax];
-
 	// true when active is exactly Optimize(initial). Only then a child without
 	// mutation may share this genome instead of building its own.
 	bool activeIsOptimizedInitial = false;
@@ -139,6 +151,16 @@ public:
 	BrainGenome();
 	BrainGenome(const BrainGenome& other);
 	BrainGenome& operator=(const BrainGenome&) = delete;
+	// Read-only snapshots never allocate or retain expanded storage.
+	void ReadInitial(NeuronRow* neurons) const;
+	void ReadActive(NeuronRow* neurons) const;
+	// Mutable pointers stay valid until Compact() or destruction. Callers must
+	// own this genome exclusively and finish edits with RecheckActive().
+	NeuronRow* EditInitial();
+	NeuronRow* EditActive();
+	void ReplaceInitial(const NeuronRow* neurons);
+	// Release editing arrays once all outstanding views have been discarded.
+	void Compact();
 
 	// active = Optimize(initial)
 	void RebuildActive();
@@ -148,6 +170,8 @@ public:
 	void InvalidateActivePlan() { executionPlan.Invalidate(); }
 	void Process(NeuronValueRow* values, NeuronMemoryRow* memory, const BrainInput& input) const;
 	size_t ExecutionStorageBytes() const { return executionPlan.StorageBytes(); }
+	size_t NeuronStorageBytes() const { return initial.StorageBytes() + active.StorageBytes(); }
+	size_t EditableStorageBytes() const { return editable ? sizeof(EditableNeurons) : 0; }
 	// Same neurons (both versions) - used to merge genomes on load.
 	bool SameNeurons(const BrainGenome& other) const;
 
@@ -155,8 +179,17 @@ public:
 
 private:
 	friend class GenomeRef;
+	// A changed descendant need not copy an initial buffer it will replace.
+	BrainGenome(const BrainGenome& other, const NeuronRow* mutatedInitial);
 	mutable std::atomic<uint32_t> refs{ 0 };
+	brain::PackedNeurons initial, active;
 	brain::ExecutionPlan executionPlan;
+	struct EditableNeurons
+	{
+		NeuronRow initial[NumNeuronLayers], active[NumNeuronLayers];
+	};
+	std::unique_ptr<EditableNeurons> editable;
+	void EnsureEditable();
 };
 
 

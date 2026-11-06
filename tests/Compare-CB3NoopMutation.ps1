@@ -1,9 +1,12 @@
 param([int]$Repeats = 3,
       [string]$BeforeExecutable = 'x64/perf-audit/before-noop/cb3-perf.exe',
-      [string]$AfterExecutable = 'x64/perf-audit/baseline/cb3-perf.exe')
+      [string]$AfterExecutable = 'x64/perf-audit/before-storage/cb3-perf.exe',
+      [string]$OutputDirectory = 'x64/perf-audit/noop-comparison',
+      [string]$ResultsCsv = 'CB3_NOOP_MUTATION_RESULTS.csv',
+      [switch]$RequireSameGenomes)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
-$outputDir = Join-Path $repoRoot 'x64\perf-audit\noop-comparison'
+$outputDir = Join-Path $repoRoot $OutputDirectory
 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 $executables = @{
     before = (Resolve-Path -LiteralPath $BeforeExecutable).Path
@@ -75,13 +78,16 @@ try {
                         } else { $value }
                     }
                     [PSCustomObject]$portable
-                } | Export-Csv -LiteralPath (Join-Path $repoRoot 'CB3_NOOP_MUTATION_RESULTS.csv') -NoTypeInformation -Encoding utf8
+                } | Export-Csv -LiteralPath (Join-Path $repoRoot $ResultsCsv) -NoTypeInformation -Encoding utf8
                 Write-Output "Completed $name"
             }
             if ($case.Name -eq 'growth') {
                 for ($i = 0; $i -lt $pair.before.Count; ++$i) {
                     foreach ($key in @('frame','bots','apples','organics','rocks','births','deaths')) {
                         if ($pair.before[$i][$key] -ne $pair.after[$i][$key]) { throw "Growth state differs: frame $i, $key" }
+                    }
+                    if ($RequireSameGenomes -and $pair.before[$i]['genomes'] -ne $pair.after[$i]['genomes']) {
+                        throw "Growth genome counts differ: frame $i"
                     }
                 }
                 foreach ($threshold in @(50000,200000,500000)) {
@@ -94,6 +100,9 @@ try {
             } else {
                 foreach ($key in @('START_bots','START_genomes','RESULT_births','RESULT_deaths','END_bots','END_apples','END_organics','END_rocks')) {
                     if ($pair.before[$key] -ne $pair.after[$key]) { throw "Replay state differs: $($case.Name), $key" }
+                }
+                if ($RequireSameGenomes -and $pair.before['END_genomes'] -ne $pair.after['END_genomes']) {
+                    throw "Replay genome counts differ: $($case.Name)"
                 }
             }
         }

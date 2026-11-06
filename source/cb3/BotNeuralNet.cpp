@@ -1,5 +1,6 @@
 #include "BotNeuralNet.h"
 #include <array>
+#include <type_traits>
 
 
 
@@ -592,47 +593,202 @@ uint64_t brain::HashNeurons(const NeuronRow* allNeurons, uint64_t hash)
 }
 
 
+brain::PackedNeurons::PackedNeurons(const PackedNeurons& other) : size(other.size)
+{
+	if (size)
+	{
+		data.reset(new byte[size]);
+		memcpy(data.get(), other.data.get(), size);
+	}
+}
+
+void brain::PackedNeurons::Build(const NeuronRow* neurons)
+{
+	// One type/layer byte, bias and count per rectangular slot, followed by
+	// occupied two-byte connections. Include unused row slots for legacy brains.
+	byte packed[NumNeuronLayers * NumNeuronsInLayerMax * (3 + 2 * NumNeuronsInLayerMax)];
+	byte* next = packed;
+	for (uint x = 0; x < NumNeuronLayers; ++x)
+		for (uint y = 0; y < NumNeuronsInLayerMax; ++y)
+		{
+			const Neuron& n = neurons[x][y];
+			*next++ = static_cast<byte>(n.type | (n.layer << 4));
+			*next++ = static_cast<byte>(n.bias);
+			*next++ = n.numConnections;
+			for (uint c = 0; c < n.numConnections; ++c)
+			{
+				*next++ = static_cast<byte>(n.allConnections[c].dest_layer | (n.allConnections[c].dest_neuron << 4));
+				*next++ = static_cast<byte>(n.allConnections[c].weight);
+			}
+		}
+	const auto bytes = static_cast<uint16_t>(next - packed);
+	if (bytes != size)
+	{
+		data.reset(new byte[bytes]);
+		size = bytes;
+	}
+	memcpy(data.get(), packed, size);
+}
+
+void brain::PackedNeurons::Read(NeuronRow* neurons) const
+{
+	// Discarded connection tails are deterministic zeros and never influence
+	// mutation, processing or compact serialization.
+	static_assert(std::is_trivially_copyable_v<Neuron>);
+	memset(neurons, 0, sizeof(NeuronRow) * NumNeuronLayers);
+	if (!data)
+	{
+		brain::InitNeurons(neurons);
+		return;
+	}
+	const byte* next = data.get();
+	for (uint x = 0; x < NumNeuronLayers; ++x)
+		for (uint y = 0; y < NumNeuronsInLayerMax; ++y)
+		{
+			Neuron& n = neurons[x][y];
+			n.type = static_cast<NeuronType>(*next & 15);
+			n.layer = *next++ >> 4;
+			n.bias = static_cast<int8_t>(*next++);
+			n.numConnections = *next++;
+			for (uint c = 0; c < n.numConnections; ++c)
+			{
+				n.allConnections[c].dest_layer = *next & 15;
+				n.allConnections[c].dest_neuron = *next++ >> 4;
+				n.allConnections[c].weight = static_cast<int8_t>(*next++);
+			}
+		}
+}
+
+bool brain::PackedNeurons::Same(const PackedNeurons& other) const
+{
+	if (size == other.size && (!size || !memcmp(data.get(), other.data.get(), size))) return true;
+	NeuronRow a[NumNeuronLayers], b[NumNeuronLayers];
+	Read(a); other.Read(b);
+	return brain::SameNeurons(a, b);
+}
+
 //Shared genome
 
 BrainGenome::BrainGenome()
 {
-	brain::InitNeurons(initial);
-	brain::InitNeurons(active);
 }
 
 BrainGenome::BrainGenome(const BrainGenome& other) :
-	activeIsOptimizedInitial(other.activeIsOptimizedInitial), executionPlan(other.executionPlan)
+	activeIsOptimizedInitial(other.activeIsOptimizedInitial), initial(other.initial),
+	active(other.active), executionPlan(other.executionPlan)
 {
-	memcpy(initial, other.initial, sizeof(initial));
-	memcpy(active, other.active, sizeof(active));
+	// Outstanding raw views may contain edits not yet passed to RecheckActive.
+	// Copy their current fields without retaining expanded storage in descendants.
+	if (other.editable)
+	{
+		initial.Build(other.editable->initial);
+		active.Build(other.editable->active);
+	}
+}
+
+void BrainGenome::ReadInitial(NeuronRow* neurons) const
+{
+	if (editable) memcpy(neurons, editable->initial, sizeof(editable->initial));
+	else initial.Read(neurons);
+}
+
+BrainGenome::BrainGenome(const BrainGenome& other, const NeuronRow* mutatedInitial) :
+	active(other.active), executionPlan(other.executionPlan)
+{
+	initial.Build(mutatedInitial);
+	if (other.editable) active.Build(other.editable->active);
+}
+
+void BrainGenome::ReadActive(NeuronRow* neurons) const
+{
+	if (editable) memcpy(neurons, editable->active, sizeof(editable->active));
+	else active.Read(neurons);
+}
+
+void BrainGenome::EnsureEditable()
+{
+	if (editable) return;
+	auto expanded = std::make_unique<EditableNeurons>();
+	initial.Read(expanded->initial);
+	active.Read(expanded->active);
+	editable = std::move(expanded);
+}
+
+NeuronRow* BrainGenome::EditInitial()
+{
+	EnsureEditable();
+	activeIsOptimizedInitial = false;
+	return editable->initial;
+}
+
+NeuronRow* BrainGenome::EditActive()
+{
+	EnsureEditable();
+	activeIsOptimizedInitial = false;
+	executionPlan.Invalidate();
+	return editable->active;
+}
+
+void BrainGenome::ReplaceInitial(const NeuronRow* neurons)
+{
+	initial.Build(neurons);
+	if (editable) memcpy(editable->initial, neurons, sizeof(editable->initial));
+	activeIsOptimizedInitial = false;
 }
 
 void BrainGenome::RebuildActive()
 {
-	memcpy(active, initial, sizeof(active));
-	brain::Optimize(active);
+	NeuronRow neurons[NumNeuronLayers];
+	ReadInitial(neurons);
+	// Compact initial is already committed; only an outstanding editable view
+	// can have introduced changes that still need packing.
+	if (editable) initial.Build(neurons);
+	brain::Optimize(neurons);
+	active.Build(neurons);
+	if (editable) memcpy(editable->active, neurons, sizeof(neurons));
 	activeIsOptimizedInitial = true;
-	executionPlan.Build(active);
+	executionPlan.Build(neurons);
 }
 
 void BrainGenome::RecheckActive()
 {
-	Neuron optimized[NumNeuronLayers][NumNeuronsInLayerMax];
-	memcpy(optimized, initial, sizeof(optimized));
+	NeuronRow optimized[NumNeuronLayers], current[NumNeuronLayers];
+	ReadInitial(optimized); ReadActive(current);
+	initial.Build(optimized); active.Build(current);
 	brain::Optimize(optimized);
-	activeIsOptimizedInitial = brain::SameNeurons(optimized, active);
-	executionPlan.Build(active);
+	activeIsOptimizedInitial = brain::SameNeurons(optimized, current);
+	executionPlan.Build(current);
+}
+
+void BrainGenome::Compact()
+{
+	if (editable)
+	{
+		RecheckActive();
+		editable.reset();
+	}
 }
 
 void BrainGenome::Process(NeuronValueRow* values, NeuronMemoryRow* memory, const BrainInput& input) const
 {
 	if (executionPlan.IsReady()) executionPlan.Process(values, memory, input);
-	else brain::Process(active, values, memory, input);
+	else if (editable) brain::Process(editable->active, values, memory, input);
+	else
+	{
+		NeuronRow neurons[NumNeuronLayers];
+		active.Read(neurons);
+		brain::Process(neurons, values, memory, input);
+	}
 }
 
 bool BrainGenome::SameNeurons(const BrainGenome& other) const
 {
-	return brain::SameNeurons(initial, other.initial) && brain::SameNeurons(active, other.active);
+	if (!editable && !other.editable) return initial.Same(other.initial) && active.Same(other.active);
+	NeuronRow a[NumNeuronLayers], b[NumNeuronLayers];
+	ReadInitial(a); other.ReadInitial(b);
+	if (!brain::SameNeurons(a, b)) return false;
+	ReadActive(a); other.ReadActive(b);
+	return brain::SameNeurons(a, b);
 }
 
 
@@ -711,8 +867,9 @@ BrainGenome* GenomeRef::MakeUnique()
 
 void GenomeRef::MutateInitial()
 {
-	NeuronRow mutated[NumNeuronLayers];
-	memcpy(mutated, genome->initial, sizeof(mutated));
+	NeuronRow original[NumNeuronLayers], mutated[NumNeuronLayers];
+	genome->ReadInitial(original);
+	memcpy(mutated, original, sizeof(mutated));
 	// Keep the random loop condition: the legacy code draws a new limit on
 	// every iteration, including the final check.
 	for (uint i = 0; i < (1 + RandomVal(MutateNeuronsMaximum + 1)); ++i)
@@ -721,11 +878,12 @@ void GenomeRef::MutateInitial()
 	// Ignore stale connection slots just as serialization and genome merging do.
 	// Leave activeIsOptimizedInitial untouched on a no-op: false still requires
 	// rebuilding an edited active brain in Bot::UpdateActiveBrain.
-	if (!brain::SameNeurons(mutated, genome->initial))
+	if (!brain::SameNeurons(mutated, original))
 	{
-		BrainGenome* own = MakeUnique();
-		memcpy(own->initial, mutated, sizeof(mutated));
-		own->activeIsOptimizedInitial = false;
+		if (genome->RefCount() != 1)
+			*this = GenomeRef(new BrainGenome(*genome, mutated));
+		else
+			genome->ReplaceInitial(mutated);
 	}
 }
 

@@ -90,8 +90,7 @@ protected:
 
 
 	//Brain neurons, shared with relatives until one of them changes (copy-on-write).
-	//genome->initial - original genes received from the parent;
-	//genome->active - initial after Optimize(), used during simulation.
+	//ReadInitial/ReadActive expose snapshots; editable views expand only this bot.
 	GenomeRef genome;
 	//Own state of memory neurons of the active brain
 	int8_t brainMemory[NumNeuronLayers][NumNeuronsInLayerMax];
@@ -228,6 +227,8 @@ public:
 	const int8_t (*GetBrainMemory() const)[NumNeuronsInLayerMax];
 	//Call after neurons were changed through BrainView to restore genome sharing
 	void RecheckBrain();
+	// Call only after the editor/loader has discarded every BrainView.
+	void CompactBrain();
 	//Replace genome by an equal one (used to merge identical genomes on load)
 	void ShareGenome(const GenomeRef& equalGenome);
 	const GenomeRef& GetGenomeRef() const;

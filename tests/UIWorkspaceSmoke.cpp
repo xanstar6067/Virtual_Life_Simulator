@@ -27,6 +27,27 @@ namespace cb3
 
 struct InterfaceSmokeTest
 {
+    // Test-owned editable snapshots keep assertions independent of production
+    // storage and never allocate expanded arrays inside population genomes.
+    struct BrainSnapshot
+    {
+        NeuronRow initial[NumNeuronLayers];
+        NeuronRow active[NumNeuronLayers];
+        bool activeIsOptimizedInitial;
+        BrainSnapshot(const BrainGenome& g) : activeIsOptimizedInitial(g.activeIsOptimizedInitial)
+        {
+#ifdef TEST_CB3
+            g.ReadInitial(initial); g.ReadActive(active);
+#else
+            memcpy(initial, g.initial, sizeof(initial)); memcpy(active, g.active, sizeof(active));
+#endif
+        }
+        bool SameNeurons(const BrainSnapshot& other) const
+        {
+            return brain::SameNeurons(initial, other.initial) && brain::SameNeurons(active, other.active);
+        }
+        bool SameNeurons(const BrainGenome& other) const { return SameNeurons(BrainSnapshot(other)); }
+    };
     // Exercise AddObject on a real worker tick without depending on random brains.
     struct BirthProbe : Object
     {
@@ -173,7 +194,7 @@ struct InterfaceSmokeTest
             ChangeMutationMarker();
             BrainGenome* own = genome.MakeUnique();
             for (uint i = 0; i < (1 + RandomVal(MutateNeuronsMaximum + 1)); ++i)
-                brain::Mutate(own->initial);
+                brain::Mutate(own->EditInitial());
             own->activeIsOptimizedInitial = false;
 #ifdef ChangeColorSlightly
             color.RandomChange(BotColorChangeMin, BotColorChangeMax);
@@ -225,7 +246,7 @@ struct InterfaceSmokeTest
             auto state = parent.GetPersistentState();
             state.nextMarker = NumberOfMutationMarkers - 1; // Exercise marker wrap.
             parent.SetPersistentState(state);
-            const BrainGenome original(parent.GetGenome());
+            const BrainSnapshot original(parent.GetGenome());
             for (unsigned seed = 0; seed < 512; ++seed)
             {
                 srand(seed);
@@ -236,10 +257,10 @@ struct InterfaceSmokeTest
                 MutationProbe actual(21, 20, 500, &parent, true);
                 assert(rand() == expectedRandom);
                 actual.AssertMutationState(expected);
-                const bool same = brain::SameNeurons(actual.GetGenome().initial, original.initial);
+                const bool same = brain::SameNeurons(BrainSnapshot(actual.GetGenome()).initial, original.initial);
                 assert((actual.GetGenomeRef().get() == parent.GetGenomeRef().get()) ==
                     (same && original.activeIsOptimizedInitial));
-                assert(parent.GetGenome().SameNeurons(original));
+                assert(original.SameNeurons(parent.GetGenome()));
                 if (!same) ++changed;
                 else if (original.activeIsOptimizedInitial) ++sharedNoOps;
                 else ++editedNoOps;
@@ -349,7 +370,7 @@ struct InterfaceSmokeTest
             memcpy(memory, planned->GetBrainMemory(), sizeof(memory));
             BrainInput input{}; input.energy = energy; input.age = .5f;
             srand(1729);
-            brain::Process(planned->GetGenome().active, values, memory, input);
+            brain::Process(BrainSnapshot(planned->GetGenome()).active, values, memory, input);
             auto expected = brain::GetOutput(values);
             int expectedRandom = rand();
             srand(1729);
@@ -381,31 +402,37 @@ struct InterfaceSmokeTest
         auto* parent = new Bot(20, 20, 500);
         const auto* genome = parent->GetGenomeRef().get();
         assert(genome->RefCount() == 1 && genome->activeIsOptimizedInitial);
+#ifdef TEST_CB3
+        assert(genome->NeuronStorageBytes() > 0 && genome->EditableStorageBytes() == 0);
+#endif
 
         // A child without mutation only adds a reference to the parent's genome.
         auto* twin = new Bot(21, 20, 500, parent, false);
         assert(twin->GetGenomeRef().get() == genome && genome->RefCount() == 2);
-        assert(!memcmp(twin->GetGenome().active, parent->GetGenome().active, sizeof(genome->active)));
+        assert(!memcmp(BrainSnapshot(twin->GetGenome()).active, BrainSnapshot(parent->GetGenome()).active, sizeof(BrainSnapshot(*genome).active)));
 
         // A changed mutant gets its own copy, the parent is not changed.
-        std::remove_const_t<decltype(genome->initial)> parentInitial;
-        memcpy(parentInitial, genome->initial, sizeof(parentInitial));
+        NeuronRow parentInitial[NumNeuronLayers];
+        memcpy(parentInitial, BrainSnapshot(*genome).initial, sizeof(parentInitial));
         auto* mutant = new Bot(22, 20, 500, parent, true);
 #ifdef TEST_CB3
         for (int i = 0; i < 1000 && mutant->GetGenomeRef().get() == genome; ++i)
             mutant->Mutagen();
 #endif
         assert(mutant->GetGenomeRef().get() != genome && genome->RefCount() == 2);
-        assert(!memcmp(parentInitial, genome->initial, sizeof(parentInitial)));
+        assert(!memcmp(parentInitial, BrainSnapshot(*genome).initial, sizeof(parentInitial)));
         assert(mutant->GetGenome().activeIsOptimizedInitial);
 
         // Editing one relative (brain window view) copies, the other keeps the brain.
-        const Neuron parentNeuron = genome->active[1][0];
+        const Neuron parentNeuron = BrainSnapshot(*genome).active[1][0];
         const auto edited = twin->GetActiveBrain();
+#ifdef TEST_CB3
+        assert(twin->GetGenome().EditableStorageBytes() == 2 * sizeof(parentInitial));
+#endif
         assert(twin->GetGenomeRef().get() != genome && genome->RefCount() == 1);
         edited.allNeurons[1][0].SetZero();
         edited.allNeurons[1][0].bias = 77;
-        assert(!memcmp(&parentNeuron, &genome->active[1][0], sizeof(Neuron)));
+        assert(!memcmp(&parentNeuron, &BrainSnapshot(*genome).active[1][0], sizeof(Neuron)));
         twin->RecheckBrain();
         assert(!twin->GetGenome().activeIsOptimizedInitial);
         // Its child must not inherit the edited active brain, only the initial one.
@@ -425,7 +452,7 @@ struct InterfaceSmokeTest
             sibling->Mutagen();
 #endif
         assert(sibling->GetGenomeRef().get() != genome && genome->RefCount() == 1);
-        assert(!memcmp(parentInitial, genome->initial, sizeof(parentInitial)));
+        assert(!memcmp(parentInitial, BrainSnapshot(*genome).initial, sizeof(parentInitial)));
 
         // Memory stays per bot and is cleared for a newborn.
         const auto parentBrain = parent->GetActiveBrain();
@@ -685,25 +712,25 @@ struct InterfaceSmokeTest
 
         // Three edits of A, followed by two edits of B, remain independent.
         roll();
-        const Neuron a1 = bot->GetGenome().active[1][0];
+        const Neuron a1 = BrainSnapshot(bot->GetGenome()).active[1][0];
         roll();
-        const Neuron a2 = bot->GetGenome().active[1][0];
+        const Neuron a2 = BrainSnapshot(bot->GetGenome()).active[1][0];
         roll();
-        const Neuron a3 = bot->GetGenome().active[1][0];
+        const Neuron a3 = BrainSnapshot(bot->GetGenome()).active[1][0];
         assert(history.Size(0, 1, 0) == 3);
         select(3);
         assert(!history.CanUndo(0, 1, 3));
         roll();
-        const Neuron b1 = bot->GetGenome().active[1][3];
+        const Neuron b1 = BrainSnapshot(bot->GetGenome()).active[1][3];
         roll();
-        BrainGenome bothEdited(bot->GetGenome());
+        BrainSnapshot bothEdited(bot->GetGenome());
         assert(history.Size(0, 1, 3) == 2);
         select(0);
         auto active = bot->GetActiveBrain();
         active.allMemory[1][0] = 1;
         undo();
         undo();
-        BrainGenome expected(bothEdited);
+        BrainSnapshot expected(bothEdited);
         expected.active[1][0] = a1;
         assert(expected.SameNeurons(bot->GetGenome()));
         assert(bot->GetBrainMemory()[1][0] == 1);
@@ -720,7 +747,7 @@ struct InterfaceSmokeTest
         assert(expected.SameNeurons(bot->GetGenome()));
         roll();
         assert(!history.CanRedo(0, 1, 3) && history.CanRedo(0, 1, 0));
-        BrainGenome branched(bot->GetGenome());
+        BrainSnapshot branched(bot->GetGenome());
         select(0);
         redo();
         branched.active[1][0] = a3;
@@ -730,7 +757,7 @@ struct InterfaceSmokeTest
         const auto beforeClear = history.Size(0, 1, 0);
         ClickBrainEdit(app, surface, false);
         const auto afterClear = history.Size(0, 1, 0);
-        BrainGenome cleared(bot->GetGenome());
+        BrainSnapshot cleared(bot->GetGenome());
         ClickBrainEdit(app, surface, false);
         assert(history.Size(0, 1, 0) == afterClear);
         if (afterClear > beforeClear)
@@ -751,7 +778,7 @@ struct InterfaceSmokeTest
         select(0);
         assert(!history.CanUndo(1, 1, 0));
         roll();
-        BrainGenome initialEdited(bot->GetGenome());
+        BrainSnapshot initialEdited(bot->GetGenome());
         undo();
         assert(app.brainToShow == 1 && cleared.SameNeurons(bot->GetGenome()));
         redo();
@@ -763,15 +790,15 @@ struct InterfaceSmokeTest
 
 #ifdef TEST_CB3
         // Mutation records each changed neuron, without erasing older histories.
-        BrainGenome beforeMutation(bot->GetGenome());
+        BrainSnapshot beforeMutation(bot->GetGenome());
         for (int attempt = 0; attempt < 20 && beforeMutation.SameNeurons(bot->GetGenome()); ++attempt)
             ClickBrainEdit(app, surface, false, true);
-        BrainGenome mutated(bot->GetGenome());
+        BrainSnapshot mutated(bot->GetGenome());
         int changed = 0;
         for (int layer = 0; layer < (int)NumNeuronLayers; ++layer)
             for (int index = 0; index < (int)neuronsInLayer[layer]; ++index)
             {
-                BrainGenome expectedUndo(mutated);
+                BrainSnapshot expectedUndo(mutated);
                 expectedUndo.active[layer][index] = beforeMutation.active[layer][index];
                 if (expectedUndo.SameNeurons(mutated)) continue;
                 assert(history.CanUndo(0, layer, index));
@@ -849,7 +876,7 @@ struct InterfaceSmokeTest
                 current.allNeurons[layer][index].ClearConnections();
         current.allNeurons[1][0].type = basic;
         bot->RecheckBrain();
-        BrainGenome original(bot->GetGenome());
+        BrainSnapshot original(bot->GetGenome());
         const auto relative = bot->GetGenomeRef();
         auto& r = app.nn_renderer;
         r.history.Clear();
@@ -915,7 +942,7 @@ struct InterfaceSmokeTest
         Click(app, surface, popup->WorkRect.Min.x+64+ImGui::GetStyle().ItemSpacing.x+32, presetY);
         assert(r.editor.draftWeight == -1);
         ClickWeightFooter(app, surface, true);
-        const auto& source = bot->GetGenome().active[1][0];
+        const auto& source = bot->GetActiveBrain().allNeurons[1][0];
         assert(source.numConnections == 1 && source.allConnections[0].dest_layer == 3 && source.allConnections[0].dest_neuron == 1);
 #ifdef TEST_CB3
         constexpr float weightScale = WeightMultiplier;
@@ -924,7 +951,7 @@ struct InterfaceSmokeTest
 #endif
         assert(std::abs(source.allConnections[0].weight*weightScale + 1) < .001f);
         assert(r.history.Size(0, 1, 0) == 1);
-        assert(relative->SameNeurons(original));
+        assert(original.SameNeurons(*relative));
 
         lineMenu();
         assert(IMG_SavePNG(surface, "brain-connection-menu.png") == 0);
@@ -981,7 +1008,7 @@ struct InterfaceSmokeTest
         assert(r.view.IsConnecting() && r.view.linkSourceLayer == 0);
         nodeClick(2, 1);
         ClickWeightFooter(app, surface, true);
-        assert(bot->GetGenome().active[0][0].numConnections == 1);
+        assert(BrainSnapshot(bot->GetGenome()).active[0][0].numConnections == 1);
         assert(r.history.Size(0, 0, 0) == 1);
 
         // A brain switch or closing the window must cancel an unfinished operation.
@@ -994,13 +1021,13 @@ struct InterfaceSmokeTest
         auto initial = bot->GetInitialBrain();
         initial.allNeurons[1][0].type = basic;
         initial.allNeurons[1][0].ClearConnections();
-        BrainGenome beforeInitialEdit(bot->GetGenome());
+        BrainSnapshot beforeInitialEdit(bot->GetGenome());
         Frame(app, surface);
         start();
         nodeClick(3, 1);
         ClickWeightFooter(app, surface, true);
         assert(r.history.Size(1, 1, 0) == 1);
-        assert(bot->GetGenome().initial[1][0].numConnections == 1 && source.numConnections == 0);
+        assert(BrainSnapshot(bot->GetGenome()).initial[1][0].numConnections == 1 && source.numConnections == 0);
         nodeClick(1, 0, 1);
         ClickBrainMenu(app, surface, 4, 2);
         assert(beforeInitialEdit.SameNeurons(bot->GetGenome()));
@@ -1018,7 +1045,7 @@ struct InterfaceSmokeTest
         nodeClick(1, 0);
         r.view.Fit();
         Frame(app, surface);
-        assert(relative->SameNeurons(original));
+        assert(original.SameNeurons(*relative));
     }
 
     static void CheckBrainWindow(Main& app, SDL_Surface* surface)
@@ -1080,6 +1107,9 @@ struct InterfaceSmokeTest
         Frame(app, surface);
         assert(!brainWindow->Active);
         assert(app.nn_renderer.history.Empty());
+#ifdef TEST_CB3
+        assert(bot->GetGenome().EditableStorageBytes() == 0);
+#endif
         app.showBrain = true;
         Frame(app, surface);
         assert(app.nn_renderer.history.Empty());
@@ -1171,6 +1201,10 @@ struct InterfaceSmokeTest
         assert(CountBots(app) == originalCount);
         assert(!app.showFirstPopulationHint);
 #ifdef TEST_CB3
+        for (int x = 0; x < FieldCellsWidth; ++x)
+            for (int y = 0; y < FieldCellsHeight; ++y)
+                if (auto* object = app.field->GetObjectLocalCoords(x, y); object && object->type() == bot)
+                    assert(((Bot*)object)->GetGenome().EditableStorageBytes() == 0);
         CheckCb3Brain(app);
         CheckCb3MutationSharing(app);
 #endif

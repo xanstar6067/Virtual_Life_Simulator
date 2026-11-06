@@ -35,6 +35,7 @@ struct Snapshot
     size_t bots = 0, genomes = 0, apples = 0, organics = 0, rocks = 0;
     size_t connections = 0, activeNeurons = 0;
     size_t planBytes = 0;
+    size_t neuronBytes = 0, editableBytes = 0;
     double privateMiB = 0, workingMiB = 0;
 };
 static Snapshot Inspect(Field& field)
@@ -62,21 +63,26 @@ static Snapshot Inspect(Field& field)
     for (auto* g : genomes)
     {
         s.planBytes += g->ExecutionStorageBytes();
+        s.neuronBytes += g->NeuronStorageBytes();
+        s.editableBytes += g->EditableStorageBytes();
+        NeuronRow active[NumNeuronLayers];
+        g->ReadActive(active);
         for (unsigned l = 0; l < NumNeuronLayers; ++l)
             for (unsigned n = 0; n < neuronsInLayer[l]; ++n)
             {
-                s.connections += g->active[l][n].numConnections;
-                s.activeNeurons += g->active[l][n].numConnections != 0;
+                s.connections += active[l][n].numConnections;
+                s.activeNeurons += active[l][n].numConnections != 0;
             }
     }
     return s;
 }
 static void PrintSnapshot(const char* label, const Snapshot& s)
 {
-    std::printf("%s bots=%zu genomes=%zu apples=%zu organics=%zu rocks=%zu private_mib=%.3f working_mib=%.3f mean_connections=%.2f mean_active_neurons=%.2f plan_mib=%.3f\n",
+    std::printf("%s bots=%zu genomes=%zu apples=%zu organics=%zu rocks=%zu private_mib=%.3f working_mib=%.3f mean_connections=%.2f mean_active_neurons=%.2f plan_mib=%.3f neuron_mib=%.3f editable_mib=%.3f\n",
         label, s.bots, s.genomes, s.apples, s.organics, s.rocks, s.privateMiB, s.workingMiB,
         s.genomes ? double(s.connections) / s.genomes : 0,
-        s.genomes ? double(s.activeNeurons) / s.genomes : 0, s.planBytes / 1048576.0);
+        s.genomes ? double(s.activeNeurons) / s.genomes : 0, s.planBytes / 1048576.0,
+        s.neuronBytes / 1048576.0, s.editableBytes / 1048576.0);
     std::fflush(stdout);
 }
 static void Fill(Field& field, size_t count, unsigned poolSize, bool duplicate, bool clustered, bool stunned)

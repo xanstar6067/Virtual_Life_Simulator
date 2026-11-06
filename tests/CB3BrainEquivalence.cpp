@@ -22,9 +22,36 @@ struct Step
 };
 static void Compare(const NeuronRow* neurons, const std::vector<BrainInput>& inputs, unsigned seed)
 {
+    brain::PackedNeurons packed;
+    packed.Build(neurons);
+    brain::PackedNeurons packedCopy(packed);
+    NeuronRow decoded[NumNeuronLayers];
+    packedCopy.Read(decoded);
+    Require(brain::SameNeurons(neurons, decoded), "packed storage preserves all significant fields");
+    Require(packed.StorageBytes() == packedCopy.StorageBytes(), "copy owns the occupied bytes");
+    NeuronRow empty[NumNeuronLayers];
+    brain::InitNeurons(empty);
+    packed.Build(empty);
+    packedCopy.Read(decoded);
+    Require(brain::SameNeurons(neurons, decoded), "packed copies survive replacement of the source buffer");
     brain::ExecutionPlan plan;
-    plan.Build(neurons);
+    plan.Build(decoded);
     Require(plan.IsReady(), "plan is ready");
+    BrainGenome genome;
+    auto* initialView = genome.EditInitial();
+    auto* activeView = genome.EditActive();
+    memcpy(initialView, neurons, sizeof(decoded));
+    memcpy(activeView, neurons, sizeof(decoded));
+    genome.RecheckActive();
+    Require(genome.EditActive() == activeView && genome.EditInitial() == initialView,
+        "editing pointers survive repeated views and rechecks");
+    genome.RecheckActive();
+    BrainGenome copied(genome);
+    Require(copied.EditableStorageBytes() == 0, "descendants of an edited genome stay compact");
+    genome.Compact();
+    genome.ReadActive(decoded);
+    Require(brain::SameNeurons(neurons, decoded), "compaction preserves the edited active brain");
+    Require(!genome.EditableStorageBytes(), "read-only snapshots retain no editing arrays");
     NeuronMemoryRow initial[NumNeuronLayers];
     std::mt19937 rng(seed);
     for (auto& layer : initial) for (auto& m : layer) m = static_cast<int8_t>(rng());
@@ -45,7 +72,8 @@ static void Compare(const NeuronRow* neurons, const std::vector<BrainInput>& inp
     {
         NeuronValueRow values[NumNeuronLayers];
         memset(values, 0xCD, sizeof(values));
-        plan.Process(values, memory, inputs[i]);
+        if (i % 2) plan.Process(values, memory, inputs[i]);
+        else copied.Process(values, memory, inputs[i]);
         const auto output = brain::GetOutput(values);
         const int nextRandom = rand();
         ++comparisons;
@@ -59,8 +87,10 @@ static void CompareGenome(BrainGenome& g, const BrainInput& input, unsigned seed
 {
     NeuronValueRow expected[NumNeuronLayers], actual[NumNeuronLayers];
     NeuronMemoryRow expectedMemory[NumNeuronLayers]{}, actualMemory[NumNeuronLayers]{};
+    NeuronRow neurons[NumNeuronLayers];
+    g.ReadActive(neurons);
     srand(seed);
-    brain::Process(g.active, expected, expectedMemory, input);
+    brain::Process(neurons, expected, expectedMemory, input);
     const int expectedRandom = rand();
     srand(seed);
     g.Process(actual, actualMemory, input);
@@ -78,11 +108,11 @@ static void CheckMutationSharing()
         auto parent = GenomeRef::Create();
         auto* own = parent.MakeUnique();
         srand(800 + network);
-        if (network % 2) brain::Randomize(own->initial);
+        if (network % 2) brain::Randomize(own->EditInitial());
         own->RebuildActive();
         if (network % 4 >= 2)
         {
-            own->active[NeuronOutputLayerIndex][0].bias = 77;
+            own->EditActive()[NeuronOutputLayerIndex][0].bias = 77;
             own->RecheckActive();
             Require(!own->activeIsOptimizedInitial, "fixture has an edited active brain");
         }
@@ -94,17 +124,20 @@ static void CheckMutationSharing()
             auto* old = expected.MakeUnique();
             srand(seed);
             for (uint i = 0; i < (1 + RandomVal(MutateNeuronsMaximum + 1)); ++i)
-                brain::Mutate(old->initial);
+                brain::Mutate(old->EditInitial());
             old->activeIsOptimizedInitial = false;
             const int nextRandom = rand();
-            const bool same = brain::SameNeurons(old->initial, parent->initial);
+            NeuronRow expectedInitial[NumNeuronLayers], parentInitial[NumNeuronLayers], actualInitial[NumNeuronLayers];
+            old->ReadInitial(expectedInitial); parent->ReadInitial(parentInitial);
+            const bool same = brain::SameNeurons(expectedInitial, parentInitial);
 
             GenomeRef actual = parent;
             srand(seed);
             actual.MutateInitial();
             ++comparisons;
             Require(rand() == nextRandom, "mutation batch preserves every random draw");
-            Require(brain::SameNeurons(old->initial, actual->initial), "mutated initial brain matches legacy");
+            actual->ReadInitial(actualInitial);
+            Require(brain::SameNeurons(expectedInitial, actualInitial), "mutated initial brain matches legacy");
             Require((actual.get() == parent.get()) == same, "only an effective mutation detaches a shared genome");
             Require(parent->SameNeurons(original), "mutation leaves relatives unchanged");
             Require(actual->activeIsOptimizedInitial == (same && parent->activeIsOptimizedInitial),
@@ -159,6 +192,20 @@ int main()
             n.allConnections[0].weight = 0;
         }
     Compare(special.allNeurons, inputs, 1927);
+    // Rectangular legacy slots, output connections and stored layer/type fields
+    // must survive packing even when the execution loop never visits them.
+    BotNeuralNet legacySlots;
+    for (uint layer = 0; layer < NumNeuronLayers; ++layer)
+        for (uint index = 0; index < NumNeuronsInLayerMax; ++index)
+        {
+            auto& n = legacySlots.allNeurons[layer][index];
+            n.type = static_cast<NeuronType>((layer + index) % 6);
+            n.bias = static_cast<int8_t>(layer * 39 + index * 17);
+            n.layer = layer;
+            for (uint edge = 0; edge < NumNeuronsInLayerMax; ++edge)
+                n.AddConnection(NeuronOutputLayerIndex, edge, static_cast<int8_t>(edge * 13 - 60));
+        }
+    Compare(legacySlots.allNeurons, inputs, 862);
     brain::ExecutionPlan largePlan;
     largePlan.Build(special.allNeurons);
     Require(largePlan.StorageBytes() > 0, "full network allocates code");
@@ -193,7 +240,7 @@ int main()
     Compare(thresholds.allNeurons, boundaryInputs, 999);
 
     auto shared = GenomeRef::Create();
-    brain::Randomize(shared.MakeUnique()->initial);
+    brain::Randomize(shared.MakeUnique()->EditInitial());
     shared.MakeUnique()->RebuildActive();
     Require(shared->ExecutionStorageBytes() > 0, "genome owns a compiled plan");
     BrainInput input{}; input.energy = 1;
@@ -202,12 +249,16 @@ int main()
     auto* own = edited.MakeUnique();
     Require(edited.get() != shared.get(), "editing copies the shared genome");
     own->InvalidateActivePlan();
-    own->active[NeuronOutputLayerIndex][0].bias = 77;
+    own->EditActive()[NeuronOutputLayerIndex][0].bias = 77;
     CompareGenome(*own, input, 714); // Editable view before Recheck uses the reference.
+    BrainGenome uncommitted(*own);
+    Require(uncommitted.SameNeurons(*own) && !uncommitted.EditableStorageBytes(),
+        "copy includes outstanding edits without an expanded array");
+    CompareGenome(uncommitted, input, 714); // Invalid plan and no expanded storage.
     own->RecheckActive();
     CompareGenome(*own, input, 714);
     CompareGenome(*shared.MakeUnique(), input, 714);
-    brain::Mutate(own->initial);
+    brain::Mutate(own->EditInitial());
     own->RebuildActive();
     CompareGenome(*own, input, 714);
     CheckMutationSharing();
