@@ -186,6 +186,9 @@ public:
 
 	// Copy-on-write: returns a genome owned only by this reference.
 	BrainGenome* MakeUnique();
+	// Apply the bot's mutation batch; keep sharing if the initial brain is equal.
+	// A pre-existing edited active brain still needs RebuildActive afterwards.
+	void MutateInitial();
 };
 
 

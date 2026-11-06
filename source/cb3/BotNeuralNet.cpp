@@ -709,6 +709,26 @@ BrainGenome* GenomeRef::MakeUnique()
 	return genome;
 }
 
+void GenomeRef::MutateInitial()
+{
+	NeuronRow mutated[NumNeuronLayers];
+	memcpy(mutated, genome->initial, sizeof(mutated));
+	// Keep the random loop condition: the legacy code draws a new limit on
+	// every iteration, including the final check.
+	for (uint i = 0; i < (1 + RandomVal(MutateNeuronsMaximum + 1)); ++i)
+		brain::Mutate(mutated);
+
+	// Ignore stale connection slots just as serialization and genome merging do.
+	// Leave activeIsOptimizedInitial untouched on a no-op: false still requires
+	// rebuilding an edited active brain in Bot::UpdateActiveBrain.
+	if (!brain::SameNeurons(mutated, genome->initial))
+	{
+		BrainGenome* own = MakeUnique();
+		memcpy(own->initial, mutated, sizeof(mutated));
+		own->activeIsOptimizedInitial = false;
+	}
+}
+
 
 [[maybe_unused]] static void SetDummy()
 {

@@ -165,6 +165,114 @@ struct InterfaceSmokeTest
     }
 
 #ifdef TEST_CB3
+    struct MutationProbe : Bot
+    {
+        using Bot::Bot;
+        void LegacyMutagen()
+        {
+            ChangeMutationMarker();
+            BrainGenome* own = genome.MakeUnique();
+            for (uint i = 0; i < (1 + RandomVal(MutateNeuronsMaximum + 1)); ++i)
+                brain::Mutate(own->initial);
+            own->activeIsOptimizedInitial = false;
+#ifdef ChangeColorSlightly
+            color.RandomChange(BotColorChangeMin, BotColorChangeMax);
+#endif
+#ifdef UseRandomColorOccasionaly
+            if (RandomPercentX10(RandomColorChancePercentX10)) RandomizeColor();
+#endif
+            UpdateActiveBrain();
+        }
+        void SetMemoryPattern() { memset(brainMemory, 1, sizeof(brainMemory)); }
+        void AssertMutationState(const MutationProbe& other) const
+        {
+            assert(!memcmp(mutationMarkers, other.mutationMarkers, sizeof(mutationMarkers)));
+            assert(nextMarker == other.nextMarker);
+            assert(!memcmp(color.c, other.color.c, sizeof(color.c)));
+            assert(!memcmp(color.change_vector, other.color.change_vector, sizeof(color.change_vector)));
+            assert(!memcmp(brainMemory, other.brainMemory, sizeof(brainMemory)));
+            for (const auto& row : brainMemory) for (int8_t m : row) assert(m == 0);
+            assert(GetGenome().SameNeurons(other.GetGenome()));
+            assert(GetGenome().activeIsOptimizedInitial && other.GetGenome().activeIsOptimizedInitial);
+        }
+    };
+
+    static void CheckCb3MutationSharing(Main& app)
+    {
+        app.ClearWorld();
+        const bool noMutations = app.field->params.noMutations;
+        app.field->params.noMutations = false;
+        size_t sharedNoOps = 0, changed = 0, editedNoOps = 0;
+        for (unsigned fixture = 0; fixture < 3; ++fixture)
+        {
+            srand(932 + fixture);
+            MutationProbe parent(20, 20, 500);
+            if (fixture == 0)
+            {
+                auto initial = parent.GetInitialBrain();
+                for (uint l = 0; l < NumNeuronLayers; ++l)
+                    for (auto& n : initial.allNeurons[l]) n.SetZero();
+                // A newborn rebuilds the active brain from this empty initial brain.
+                MutationProbe empty(20, 20, 500, &parent, false);
+                parent.ShareGenome(empty.GetGenomeRef());
+            }
+            if (fixture == 2)
+            {
+                parent.GetActiveBrain().allNeurons[NeuronOutputLayerIndex][0].bias = 77;
+                parent.RecheckBrain();
+                assert(!parent.GetGenome().activeIsOptimizedInitial);
+            }
+            auto state = parent.GetPersistentState();
+            state.nextMarker = NumberOfMutationMarkers - 1; // Exercise marker wrap.
+            parent.SetPersistentState(state);
+            const BrainGenome original(parent.GetGenome());
+            for (unsigned seed = 0; seed < 512; ++seed)
+            {
+                srand(seed);
+                MutationProbe expected(21, 20, 500, &parent, false);
+                expected.LegacyMutagen();
+                const int expectedRandom = rand();
+                srand(seed);
+                MutationProbe actual(21, 20, 500, &parent, true);
+                assert(rand() == expectedRandom);
+                actual.AssertMutationState(expected);
+                const bool same = brain::SameNeurons(actual.GetGenome().initial, original.initial);
+                assert((actual.GetGenomeRef().get() == parent.GetGenomeRef().get()) ==
+                    (same && original.activeIsOptimizedInitial));
+                assert(parent.GetGenome().SameNeurons(original));
+                if (!same) ++changed;
+                else if (original.activeIsOptimizedInitial) ++sharedNoOps;
+                else ++editedNoOps;
+                if (same && original.activeIsOptimizedInitial)
+                {
+                    // The brain inspector keeps its observed parent's genome private.
+                    Bot::SetObservedBot(&parent);
+                    srand(seed);
+                    MutationProbe observedChild(21, 20, 500, &parent, true);
+                    assert(rand() == expectedRandom);
+                    assert(observedChild.GetGenomeRef().get() != parent.GetGenomeRef().get());
+                    observedChild.AssertMutationState(expected);
+                    Bot::SetObservedBot(nullptr);
+                }
+
+                // Mutagen must clear private memory and update color/markers even
+                // when no brain changes. Use matching bots sharing the parent genome.
+                expected.ShareGenome(parent.GetGenomeRef());
+                actual.ShareGenome(parent.GetGenomeRef());
+                expected.SetMemoryPattern(); actual.SetMemoryPattern();
+                srand(seed + 9000); expected.LegacyMutagen();
+                const int afterMutagen = rand();
+                srand(seed + 9000); actual.Mutagen();
+                assert(rand() == afterMutagen);
+                actual.AssertMutationState(expected);
+            }
+        }
+        assert(sharedNoOps && changed && editedNoOps);
+        std::printf("CB3 bot mutations: %zu shared no-ops, %zu changed, %zu edited-active no-ops\n",
+            sharedNoOps, changed, editedNoOps);
+        app.field->params.noMutations = noMutations;
+    }
+
     static void CheckCb3Brain(Main& app)
     {
         BotNeuralNet brain;
@@ -279,10 +387,14 @@ struct InterfaceSmokeTest
         assert(twin->GetGenomeRef().get() == genome && genome->RefCount() == 2);
         assert(!memcmp(twin->GetGenome().active, parent->GetGenome().active, sizeof(genome->active)));
 
-        // A mutated child gets its own copy, the parent is not changed.
+        // A changed mutant gets its own copy, the parent is not changed.
         std::remove_const_t<decltype(genome->initial)> parentInitial;
         memcpy(parentInitial, genome->initial, sizeof(parentInitial));
         auto* mutant = new Bot(22, 20, 500, parent, true);
+#ifdef TEST_CB3
+        for (int i = 0; i < 1000 && mutant->GetGenomeRef().get() == genome; ++i)
+            mutant->Mutagen();
+#endif
         assert(mutant->GetGenomeRef().get() != genome && genome->RefCount() == 2);
         assert(!memcmp(parentInitial, genome->initial, sizeof(parentInitial)));
         assert(mutant->GetGenome().activeIsOptimizedInitial);
@@ -305,7 +417,8 @@ struct InterfaceSmokeTest
         auto* sibling = new Bot(24, 20, 500, parent, false);
         assert(sibling->GetGenomeRef().get() == genome && genome->RefCount() == 2);
 #ifdef TEST_CB3
-        sibling->Mutagen();
+        for (int i = 0; i < 1000 && sibling->GetGenomeRef().get() == genome; ++i)
+            sibling->Mutagen();
 #else
         // Classic Mutagen mutates the genes with a 10% chance.
         for (int i = 0; i < 1000 && sibling->GetGenomeRef().get() == genome; ++i)
@@ -1059,6 +1172,7 @@ struct InterfaceSmokeTest
         assert(!app.showFirstPopulationHint);
 #ifdef TEST_CB3
         CheckCb3Brain(app);
+        CheckCb3MutationSharing(app);
 #endif
         CheckGenomeSharing(app);
         CheckTelemetry(app);

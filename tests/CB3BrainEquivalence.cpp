@@ -70,6 +70,64 @@ static void CompareGenome(BrainGenome& g, const BrainInput& input, unsigned seed
     Require(!memcmp(actualMemory, expectedMemory, sizeof(actualMemory)), "genome plan/fallback memory");
     Require(actualRandom == expectedRandom, "genome plan/fallback random stream");
 }
+static void CheckMutationSharing()
+{
+    size_t unchanged = 0, changed = 0;
+    for (unsigned network = 0; network < 32; ++network)
+    {
+        auto parent = GenomeRef::Create();
+        auto* own = parent.MakeUnique();
+        srand(800 + network);
+        if (network % 2) brain::Randomize(own->initial);
+        own->RebuildActive();
+        if (network % 4 >= 2)
+        {
+            own->active[NeuronOutputLayerIndex][0].bias = 77;
+            own->RecheckActive();
+            Require(!own->activeIsOptimizedInitial, "fixture has an edited active brain");
+        }
+        const BrainGenome original(*parent);
+        for (unsigned seed = 0; seed < 256; ++seed)
+        {
+            // The old implementation always detached and dirtied the active brain.
+            GenomeRef expected(new BrainGenome(*parent));
+            auto* old = expected.MakeUnique();
+            srand(seed);
+            for (uint i = 0; i < (1 + RandomVal(MutateNeuronsMaximum + 1)); ++i)
+                brain::Mutate(old->initial);
+            old->activeIsOptimizedInitial = false;
+            const int nextRandom = rand();
+            const bool same = brain::SameNeurons(old->initial, parent->initial);
+
+            GenomeRef actual = parent;
+            srand(seed);
+            actual.MutateInitial();
+            ++comparisons;
+            Require(rand() == nextRandom, "mutation batch preserves every random draw");
+            Require(brain::SameNeurons(old->initial, actual->initial), "mutated initial brain matches legacy");
+            Require((actual.get() == parent.get()) == same, "only an effective mutation detaches a shared genome");
+            Require(parent->SameNeurons(original), "mutation leaves relatives unchanged");
+            Require(actual->activeIsOptimizedInitial == (same && parent->activeIsOptimizedInitial),
+                "no-op preserves the existing active-brain flag");
+            if (same) ++unchanged; else ++changed;
+            old->RebuildActive();
+            if (!actual->activeIsOptimizedInitial) actual.MakeUnique()->RebuildActive();
+            Require(actual->SameNeurons(*expected), "rebuilt active brain matches even after an edited parent");
+
+            // A sole owner also avoids needless rebuilding, without allocating a new genome.
+            GenomeRef unique(new BrainGenome(*parent));
+            const auto* before = unique.get();
+            srand(seed);
+            unique.MutateInitial();
+            Require(rand() == nextRandom && unique.get() == before, "sole-owner mutation preserves RNG and allocation");
+            if (!unique->activeIsOptimizedInitial) unique.MakeUnique()->RebuildActive();
+            Require(unique->SameNeurons(*expected), "sole-owner mutation matches legacy");
+        }
+    }
+    Require(unchanged > 0 && changed > 0, "effective and ineffective mutations are both covered");
+    std::printf("Mutation batches: %zu unchanged, %zu changed; shared/unique and edited active brains match\n", unchanged, changed);
+}
+
 int main()
 {
     std::mt19937 rng(61793);
@@ -152,6 +210,7 @@ int main()
     brain::Mutate(own->initial);
     own->RebuildActive();
     CompareGenome(*own, input, 714);
-    std::printf("PASS: %zu sequential step comparisons; values, memory, outputs and RNG match\n", comparisons);
+    CheckMutationSharing();
+    std::printf("PASS: %zu comparisons; brain steps and mutation batches preserve state and RNG\n", comparisons);
     return 0;
 }

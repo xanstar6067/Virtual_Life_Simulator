@@ -74,14 +74,7 @@ void Bot::Mutate()
 	ChangeMutationMarker();
 
 	//Mutate brain
-	constexpr uint MaxMutate = MutateNeuronsMaximum;
-
-	BrainGenome* own = genome.MakeUnique();
-
-	for (uint i = 0; i < (1 + RandomVal(MaxMutate + 1)); ++i)
-		brain::Mutate(own->initial);
-
-	own->activeIsOptimizedInitial = false;
+	genome.MutateInitial();
 
 	//Change color
 	#ifdef ChangeColorSlightly
