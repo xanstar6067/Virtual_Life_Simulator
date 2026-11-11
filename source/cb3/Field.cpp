@@ -695,7 +695,7 @@ inline bool Field::ThreadWait(const uint index)
 }
 
 
-void Field::ProcessPart_MultipleThreads(const uint X1, const uint X2, const uint index)
+void Field::ProcessPart_MultipleThreads(const uint index)
 {
     srand(seed + index);    
 
@@ -725,10 +725,6 @@ void Field::ProcessPart_MultipleThreads(const uint X1, const uint X2, const uint
         ObjectTick(tmpObj);
     };
 
-    const uint middleX = X1 + ((X2 - X1) / 2);
-    const uint passStart[2] = {X1, middleX};
-    const uint passEnd[2] = {middleX, X2};
-
     for(;;)
     {
         for(uint pass = 0; pass < 2; ++pass)
@@ -737,12 +733,30 @@ void Field::ProcessPart_MultipleThreads(const uint X1, const uint X2, const uint
                 return;
 
             //Calculate chunk
-            for (uint X = passStart[pass]; X < passEnd[pass]; ++X)
+            const uint part = 2 * index + pass;
+            const uint start = workBoundaries[part], end = workBoundaries[part + 1];
+            if (collectColumnWork)
             {
-                for (uint Y = 0; Y < FieldCellsHeight; ++Y)
+                for (uint X = start; X < end; ++X)
                 {
-                    obj_calc(allCells[X][Y]);
+                    const uint botsBefore = objectCounters[index].bots;
+                    const uint objectsBefore = objectCounters[index].objects;
+                    for (uint Y = 0; Y < FieldCellsHeight; ++Y)
+                        obj_calc(allCells[X][Y]);
+                    // Record only just before the next balancing decision.
+                    // Neighbour columns are never scanned by this worker.
+                    columnWork[X] = FieldCellsHeight +
+                        256 * (objectCounters[index].bots - botsBefore) +
+                        4 * (objectCounters[index].objects - objectsBefore);
                 }
+            }
+            else
+            {
+                // Keep the ordinary pass free of per-column counter reads and
+                // writes. Both bounds stay local for the entire pass.
+                for (uint X = start; X < end; ++X)
+                    for (uint Y = 0; Y < FieldCellsHeight; ++Y)
+                        obj_calc(allCells[X][Y]);
             }
 
             {
@@ -761,9 +775,59 @@ void Field::StartThreads()
     {
         uint X1 = (FieldCellsWidth * (uint)i) / (uint)numThreads;
         uint X2 = (FieldCellsWidth * (uint)(i + 1)) / (uint)numThreads;
-
-        threads[i] = std::thread(&Field::ProcessPart_MultipleThreads, this, X1, X2, i);
+        workBoundaries[2 * i] = X1;
+        workBoundaries[2 * i + 1] = X1 + (X2 - X1) / 2;
+        workBoundaries[2 * i + 2] = X2;
     }
+    repeat(numThreads)
+        threads[i] = std::thread(&Field::ProcessPart_MultipleThreads, this, i);
+}
+
+void Field::RebalanceWork()
+{
+    collectColumnWork = !columnWorkReady || rebalanceCountdown == 1;
+    if (!columnWorkReady)
+        return;
+    if (rebalanceCountdown > 0)
+    {
+        --rebalanceCountdown;
+        return;
+    }
+    rebalanceCountdown = 15;
+
+    uint64_t prefix[FieldCellsWidth + 1] = {};
+    for (uint x = 0; x < FieldCellsWidth; ++x)
+        prefix[x + 1] = prefix[x] + columnWork[x];
+
+    const uint parts = 2 * numThreads;
+    auto phaseCost = [&](const uint* boundaries)
+    {
+        uint64_t worst[2] = {};
+        for (uint p = 0; p < parts; ++p)
+            worst[p % 2] = (std::max)(worst[p % 2], prefix[boundaries[p + 1]] - prefix[boundaries[p]]);
+        return worst[0] + worst[1];
+    };
+    const uint64_t oldCost = phaseCost(workBoundaries);
+    // Balanced phases need no new ordering. Require a material imbalance first.
+    if (oldCost * numThreads * 100 <= prefix[FieldCellsWidth] * 115)
+        return;
+
+    uint candidate[2 * NumThreads + 1] = {};
+    candidate[parts] = FieldCellsWidth;
+    for (uint p = 1; p < parts; ++p)
+    {
+        const uint minimum = candidate[p - 1] + 2;
+        const uint maximum = FieldCellsWidth - 2 * (parts - p);
+        const uint64_t target = prefix[FieldCellsWidth] * p / parts;
+        uint x = uint(std::lower_bound(prefix + minimum, prefix + maximum + 1, target) - prefix);
+        x = (std::min)(x, maximum);
+        if (x > minimum && target < prefix[x] && target > prefix[x - 1] &&
+            prefix[x] - target > target - prefix[x - 1])
+            --x;
+        candidate[p] = x;
+    }
+    if (phaseCost(candidate) * 100 < oldCost * 90)
+        std::copy(candidate, candidate + parts + 1, workBoundaries);
 }
 
 void Field::SignalThreads()
@@ -793,6 +857,9 @@ void Field::WaitForThreads()
 
 inline void Field::tick_multiple_threads()
 {
+    // Workers are waiting at the tick boundary. Publish one immutable layout
+    // through the existing mutex before either pass, never between the passes.
+    RebalanceWork();
     auto clearCounters = [&]()
     {
         repeat(numThreads)
@@ -839,6 +906,7 @@ inline void Field::tick_multiple_threads()
 
     if (botsTotal > 0)
         averageLifetime /= botsTotal;
+    columnWorkReady = true;
 }
 
 
@@ -1137,7 +1205,7 @@ Field::Field()
 {
     const int cpuCount = SDL_GetCPUCount();
     numThreads = std::clamp(cpuCount, 1, NumThreads);
-    numThreads = (std::min)(numThreads, FieldCellsWidth / 2);
+    numThreads = (std::min)(numThreads, FieldCellsWidth / 4);
 
     //Clear array
     memset(allCells, 0, sizeof(Point*) * FieldCellsWidth * FieldCellsHeight);    

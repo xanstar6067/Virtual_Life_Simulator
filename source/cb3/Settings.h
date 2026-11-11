@@ -125,7 +125,8 @@ namespace cb3
 //constexpr uint ScreenCellsWidth = ((WindowWidth - InterfaceBorder * 2 - GUIWindowWidth) / FieldCellSize);
 #define ScreenCellsWidth 12*16
 
-//Должно делиться на 8 без остатка если нужны 4 потока! И на 16 без остатка если 8 потоков и т.д.!
+// Adaptive spatial passes support unequal strip widths; each worker needs
+// at least four columns (two strips with a one-cell interaction halo).
 #define FieldCellsWidth ScreenCellsWidth*30
 #define FieldCellsHeight 133
 

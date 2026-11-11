@@ -118,6 +118,7 @@ struct alignas(64) ThreadCounters
 //Simulation field class
 class Field final
 {
+    friend struct FieldSchedulingTest;
     bool telemetryInTick = false;
     vlsui::TelemetryCounters telemetry;
 
@@ -168,6 +169,15 @@ private:
     int threadsReady = 0;
     bool terminateThreads = false;
 
+    // Two alternating spatial passes. Each inactive strip is at least two
+    // columns wide, so the one-cell read/write halos of active strips never meet.
+    uint workBoundaries[2 * NumThreads + 1] = {};
+    uint columnWork[FieldCellsWidth] = {};
+    bool columnWorkReady = false;
+    bool collectColumnWork = true;
+    uint rebalanceCountdown = 0;
+    void RebalanceWork();
+
     void StartThreads();
     void SignalThreads();
     void WaitForThreads();
@@ -177,7 +187,7 @@ private:
     inline void tick_multiple_threads();
 
     //Process function for multi threaded simulation
-    void ProcessPart_MultipleThreads(const uint X1, const uint X2, const uint index);  
+    void ProcessPart_MultipleThreads(const uint index);
 
     //Tick function for every object
     void ObjectTick(Object* tmpObj);

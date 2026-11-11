@@ -9,6 +9,8 @@ namespace audit
 inline int requestedThreads = 1;
 inline bool freeze = false;
 inline bool skipBrain = false;
+inline bool fixedPartitions = false;
+inline unsigned rebalances = 0;
 inline thread_local int slot = 16;
 inline thread_local bool sampling = false;
 enum Stage { BotTick, Sense, Think, Multiply, Mutate, Rebuild, StageCount };

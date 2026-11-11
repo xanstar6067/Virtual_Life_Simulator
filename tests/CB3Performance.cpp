@@ -146,6 +146,7 @@ int wmain(int argc, wchar_t** argv)
         else if (a == L"--waves") waves = _wtoi(value());
         else if (a == L"--duplicate-genomes") duplicate = true;
         else if (a == L"--clustered") clustered = true;
+        else if (a == L"--fixed-partitions") audit::fixedPartitions = true;
         else { std::fprintf(stderr, "Unknown option\n"); return 2; }
     }
     if (count > FieldCellsWidth * FieldCellsHeight || audit::requestedThreads < 1 || audit::requestedThreads > NumThreads) return 2;
@@ -208,6 +209,7 @@ int wmain(int argc, wchar_t** argv)
                 Milliseconds(elapsed) / steps, cpuElapsed / 10000.0 / Milliseconds(elapsed),
                 after.births - before.births, after.deaths - before.deaths);
             PrintSnapshot("STATE", s);
+            std::printf("SCHEDULER rebalances=%u\n", audit::rebalances);
             if (checkpoint < std::size(thresholds) && s.bots >= thresholds[checkpoint] && !out.empty())
             {
                 std::filesystem::create_directories(out);
@@ -240,6 +242,7 @@ int wmain(int argc, wchar_t** argv)
         times.size(), wallMs, wallMs / times.size(), times[times.size()/2], times[(times.size()-1)*95/100], cpuMs / wallMs,
         after.births - before.births, after.deaths - before.deaths);
     PrintWorkers(field->GetNumThreads(), unsigned(times.size()));
+    std::printf("SCHEDULER rebalances=%u\n", audit::rebalances);
     PrintSnapshot("END", Inspect(*field));
     // Pure scan and telemetry costs are measured outside the timed tick section.
     auto s0 = audit::Now();

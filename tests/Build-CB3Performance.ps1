@@ -1,7 +1,7 @@
-param([switch]$Profile)
+param([switch]$Profile, [switch]$SchedulingTests)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
-$variant = if ($Profile) { 'profile' } else { 'baseline' }
+$variant = if ($SchedulingTests) { 'scheduling-tests' } elseif ($Profile) { 'profile' } else { 'baseline' }
 $outputDir = Join-Path $repoRoot "x64\perf-audit\$variant"
 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 
@@ -19,7 +19,9 @@ function Instrument-Function([string]$Text, [string]$Signature, [string]$Stateme
 $field = (Get-Content -LiteralPath (Join-Path $repoRoot 'source\cb3\Field.cpp') -Raw).Replace("`r`n", "`n")
 $field = '#include "CB3PerformanceHooks.h"' + "`n" + $field
 $field = Replace-Once $field 'numThreads = std::clamp(cpuCount, 1, NumThreads);' 'numThreads = std::clamp(audit::requestedThreads, 1, NumThreads);'
-$field = Instrument-Function $field 'void Field::ProcessPart_MultipleThreads(const uint X1, const uint X2, const uint index)' '    audit::slot = int(index);'
+$field = Instrument-Function $field 'void Field::ProcessPart_MultipleThreads(const uint index)' '    audit::slot = int(index);'
+$field = Instrument-Function $field 'void Field::RebalanceWork()' '    if (audit::fixedPartitions) { collectColumnWork = false; return; }'
+$field = Replace-Once $field '        std::copy(candidate, candidate + parts + 1, workBoundaries);' '        { ++audit::rebalances; std::copy(candidate, candidate + parts + 1, workBoundaries); }'
 $field = Replace-Once $field '            //Calculate chunk' "            const auto auditStart = audit::Now();`n            //Calculate chunk"
 # The exact following region occurs once at the end of a worker pass.
 $anchor = "            {`n                std::lock_guard<std::mutex> lock(threadMutex);`n                threadGoMarker[index] = false;"
@@ -53,7 +55,8 @@ $arguments = @('/nologo', '/MP4', '/MD', '/EHsc', '/std:c++20', '/utf-8', '/O2',
     '/Itests', '/Iexternal\SDL2\include', '/Iexternal\SDL2_image\include', '/Iimgui', '/Iimgui\backends', '/IIMplot', '/Isource\cb3',
     ('/Fo"{0}\\"' -f $outputDir), ('/Fd"{0}\compile.pdb"' -f $outputDir))
 if ($Profile) { $arguments += '/DCB3_AUDIT_PROFILE' }
-$arguments += @('tests\CB3Performance.cpp', ('"{0}\Field.cpp"' -f $outputDir), ('"{0}\Bot.cpp"' -f $outputDir), ('"{0}\BotNeuralNet.cpp"' -f $outputDir))
+$entryPoint = if ($SchedulingTests) { 'tests\CB3FieldScheduling.cpp' } else { 'tests\CB3Performance.cpp' }
+$arguments += @($entryPoint, ('"{0}\Field.cpp"' -f $outputDir), ('"{0}\Bot.cpp"' -f $outputDir), ('"{0}\BotNeuralNet.cpp"' -f $outputDir))
 $arguments += @('Object', 'ObjectSaver', 'Neuron', 'Utils', 'Apple', 'Rock', 'Organics') | ForEach-Object { "source\cb3\$_.cpp" }
 $arguments += @('/link', '/SUBSYSTEM:CONSOLE', '/LTCG', '/OPT:REF', '/OPT:ICF', '/DEBUG', ('/OUT:"{0}\cb3-perf.exe"' -f $outputDir),
     '/LIBPATH:external\SDL2\lib\x64', '/LIBPATH:external\SDL2_image\lib\x64', 'SDL2.lib', 'SDL2_image.lib', 'psapi.lib', 'user32.lib')
