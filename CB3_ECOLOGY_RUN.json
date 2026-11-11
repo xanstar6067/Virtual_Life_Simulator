@@ -1,0 +1,121 @@
+{
+  "models": {
+    "before": "e3456b9298812e2e62c6c3c803b65197e61e0dc5",
+    "after": "163e297111011f85b650bacc996b4fb2d30e0dd6"
+  },
+  "compiler": "MSVC v143 14.44.35207, x64, /O2 /GL /MD /LTCG",
+  "source_unchanged": true,
+  "study": {
+    "seeds": [
+      1009,
+      8928,
+      16847,
+      24766,
+      32685,
+      40604,
+      48523,
+      56442,
+      64361,
+      72280,
+      80199,
+      88118,
+      96037,
+      103956,
+      111875,
+      119794,
+      127713,
+      135632,
+      143551,
+      151470
+    ],
+    "ticks": 600,
+    "cases": [
+      [
+        "normal",
+        0
+      ],
+      [
+        "cluster",
+        0
+      ],
+      [
+        "scarce",
+        0
+      ],
+      [
+        "crisis",
+        0
+      ],
+      [
+        "normal",
+        359
+      ],
+      [
+        "neutral",
+        0
+      ],
+      [
+        "neutral",
+        359
+      ]
+    ],
+    "threads": 4,
+    "executables": {
+      "before": "2119af919231e35218f8b5289b65fbb39b8b2106b901baf79d0a87caf0023ed7",
+      "after": "7dbe19db036bd0ee4cbae43028124d8cafa2cdca59a9137767bcc7bb8236fac9"
+    },
+    "protocol_sha256": "edba4670fdac41098e425e80fc3ccbb7e5b5b839a5346d60a6e95b384f58e222",
+    "measurement_sha256": "92f7347ad6f571fe82c631d79ca049ceebc71deba1394d91a704c366900bb1d4",
+    "runner_sha256": "d45e30a83bb5f680730a47c34357812b98f671884b7a98e8a923016dfeb28ed2"
+  },
+  "observations": 3640,
+  "runs": 280,
+  "comparisons": 81,
+  "statuses": {
+    "equivalent": 70,
+    "not_observed": 11
+  },
+  "historical_world_validation": [
+    {
+      "World": "x64/ecology/validate-before.world",
+      "Reference": "x64/perf-audit/checkpoints/growth-500000.world",
+      "SHA256": "FDA6048AFFCF091850D75580AB9C31A98B40E1C0C1483311E93E80BF1DC53EAA"
+    },
+    {
+      "World": "x64/ecology/validate-after.world",
+      "Reference": "x64/perf-audit/balancing-comparison/growth-4t-after-r1/growth-500000.world",
+      "SHA256": "CBE6F68293A996DA81526AB34B9C062171BE7AF86F7B3C227747FC034181986E"
+    }
+  ],
+  "pinned_rebuild_validation": [
+    {
+      "Variant": "before",
+      "Tick": 450,
+      "Seed": 12345,
+      "SHA256": "FDA6048AFFCF091850D75580AB9C31A98B40E1C0C1483311E93E80BF1DC53EAA"
+    },
+    {
+      "Variant": "after",
+      "Tick": 450,
+      "Seed": 12345,
+      "SHA256": "CBE6F68293A996DA81526AB34B9C062171BE7AF86F7B3C227747FC034181986E"
+    }
+  ],
+  "analysis": {
+    "bootstrap_replicates": 10000,
+    "bootstrap_seed": 20261111,
+    "confidence": 0.95,
+    "independent_unit": "seed",
+    "late_ticks": [
+      450,
+      500,
+      550,
+      600
+    ],
+    "rare_event_interval": "Wilson",
+    "ratio": "geometric mean of paired ratios"
+  },
+  "results_csv_sha256_lf": "4c524de2439e6b063eff668c232b227e1b3fcacdbdaaf9446669c7d733e49fb4",
+  "summary_csv_sha256_lf": "87a87ad93a95efc75d9d432d35cc0e22ef4269a31a328b2b0bc18997b27ac1de",
+  "analyzer_sha256_lf": "75069c8fc534f3b31b548d02d1fea8927dfa52dab634ae75f80933f55008be8c"
+}

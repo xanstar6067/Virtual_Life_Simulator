@@ -12,6 +12,7 @@
 [Dd]ebug/
 [Rr]elease/
 /x64/
+/tests/__pycache__/
 [Bb]in/
 [Oo]bj/
 
