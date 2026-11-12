@@ -4,6 +4,10 @@ The checks exercise the real Classic and CyberBiology3 interfaces using SDL soft
 
 Coverage includes initial seeding through the header button, pause/run, a single step, organism selection at the new field origin and after zooming, brush tool selection, world save/load, opening the existing tool windows, and resizing from 640×480 to 1920×1080. Header and footer overflow is checked on every frame.
 
+Frame-background regressions use the shared production `SDLBeginScene` instead of clearing the background in the test. They prefill the render target with a light color, check the outer margin and panel gaps, open and close the real save window across a gap, and verify that hidden-field mode clears the world area. `closed-window-background.png` records the result for each engine. The headless frame driver still bypasses FPS limiting and platform window handling in `Main::Render`.
+
+Saved-bot checks click the picker and confirmation/cancel buttons, verify repeated tool activation, place a real saved bot independently of the library selection, protect occupied cells, and exercise separate Worlds/Bots lists, selection clearing, the empty picker, source renaming and deletion. Picker, tool and library PNGs are included.
+
 PNG previews and isolated save fixtures are written under `x64/Debug/ui-smoke-classic/` and `x64/Debug/ui-smoke-cb3/`. The tests do not overwrite the project's saved worlds or `imgui.ini`.
 
 Brain viewer regressions cover neuron selection, switching current/initial brains without stale pointers, dragging the window with its diagram, closing using its title-bar cross, and keeping the viewer inside a resized desktop. Input is injected into ImGui in memory, not into Windows. Undo/redo checks click the real randomize and clear buttons, keep three edits of one neuron independent from two edits of another, isolate current/initial histories, preserve other neurons and live memory, discard only the selected neuron's redo branch, ignore no-op edits, record CB3 whole-brain mutation per changed neuron, and release all histories on owner changes, deselection, closing and reopening.

@@ -345,7 +345,14 @@ void Main::DrawSidePanelWindow()
 		LoadFilenames();
 		showSaveLoad = true;
 	}
-	mouseFunc = (MouseFunction)vlsui::DrawWorkspaceTools(layout, (int)mouseFunc, brushSize, 1);
+	bool chooseBot = false;
+	mouseFunc = (MouseFunction)vlsui::DrawWorkspaceTools(layout, (int)mouseFunc, brushSize, 1,
+		savedBotPicker.sourceName.c_str(), chooseBot);
+	if (chooseBot)
+	{
+		LoadFilenames();
+		savedBotPicker.Open();
+	}
 
 	// Tick counters are stale after editing a paused world. Refresh only the
 	// displayed counts; this does not step the world or alter simulation state.
@@ -606,6 +613,17 @@ void Main::DrawSidePanelWindow()
 	}
 }
 
+void Main::DrawSavedBotPicker()
+{
+	savedBotPicker.Draw(allFilenames, SimulationMode::CyberBiology3, [this](const std::filesystem::path& path)
+	{
+		std::unique_ptr<Object> object(saver.LoadObject(path));
+		if (!object || object->type() != bot) return false;
+		mouseFunc = mouse_from_file;
+		return true;
+	}, [this] { LoadFilenames(); });
+}
+
 void Main::DrawSaveLoadWindow()
 {
 	if (!showSaveLoad)
@@ -653,7 +671,21 @@ void Main::DrawSaveLoadWindow()
 		}
 
 		vlsui::SectionTitle("Библиотека сохранений");
-		TextDisabled("Файлов: %d", (int)allFilenames.size());
+		if (vlsui::ModeButton("Миры", !showBotSaves, ImVec2(110, 30)))
+		{
+			if (showBotSaves) SelectFile(-1);
+			showBotSaves = false;
+		}
+		ImGui::SameLine();
+		if (vlsui::ModeButton("Боты", showBotSaves, ImVec2(110, 30)))
+		{
+			if (!showBotSaves) SelectFile(-1);
+			showBotSaves = true;
+		}
+		int visibleFiles = 0;
+		for (const auto& file : allFilenames)
+			if (showBotSaves ? file.fileType == "бот" : file.isWorld) ++visibleFiles;
+		TextDisabled("Файлов: %d", visibleFiles);
 		SameLine();
 		const float refreshWidth = 105.0f;
 		SetCursorPosX(GetWindowContentRegionMax().x - refreshWidth);
@@ -661,29 +693,29 @@ void Main::DrawSaveLoadWindow()
 			LoadFilenames();
 
 		float fileTableHeight = GetContentRegionAvail().y - 190.0f;
-		if (fileTableHeight < 160.0f)
-			fileTableHeight = 160.0f;
+		if (fileTableHeight < 100.0f)
+			fileTableHeight = 100.0f;
 
-		if (BeginTable("##SaveFilesCB3", 5,
+		if (BeginTable("##SaveFilesCB3", 4,
 			ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
 			ImGuiTableFlags_Resizable, ImVec2(0.0f, fileTableHeight)))
 		{
 			TableSetupColumn("Имя", ImGuiTableColumnFlags_WidthStretch);
 			TableSetupColumn("Размер", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-			TableSetupColumn("Тип", ImGuiTableColumnFlags_WidthFixed, 55.0f);
 			TableSetupColumn("Режим", ImGuiTableColumnFlags_WidthFixed, 115.0f);
 			TableSetupColumn("Дата", ImGuiTableColumnFlags_WidthFixed, 125.0f);
 			TableHeadersRow();
 
-			if (allFilenames.empty())
+			if (visibleFiles == 0)
 			{
 				TableNextRow();
 				TableSetColumnIndex(0);
-				TextDisabled("Сохранений CyberBiology3 пока нет");
+				TextDisabled(showBotSaves ? "Сохранённых ботов пока нет" : "Сохранённых миров пока нет");
 			}
 
 			for (int i = 0; i < allFilenames.size(); ++i)
 			{
+				if (showBotSaves ? allFilenames[i].fileType != "бот" : !allFilenames[i].isWorld) continue;
 				TableNextRow();
 				TableSetColumnIndex(0);
 
@@ -695,10 +727,8 @@ void Main::DrawSaveLoadWindow()
 				TableSetColumnIndex(1);
 				TextUnformatted(allFilenames[i].fileSize.c_str());
 				TableSetColumnIndex(2);
-				TextUnformatted(allFilenames[i].fileType.c_str());
-				TableSetColumnIndex(3);
 				TextUnformatted(allFilenames[i].modeText.c_str());
-				TableSetColumnIndex(4);
+				TableSetColumnIndex(3);
 				TextUnformatted(allFilenames[i].modifiedTimeText.c_str());
 			}
 
@@ -745,7 +775,7 @@ void Main::DrawSaveLoadWindow()
 			TableNextRow();
 			TableSetColumnIndex(0);
 			BeginDisabled(!canLoadSelected);
-			const char* loadLabel = (selectedFile && !selectedFile->isWorld) ? "Загрузить бота" : "Загрузить мир";
+			const char* loadLabel = showBotSaves ? "Загрузить бота" : "Загрузить мир";
 			if (vlsui::ColoredButton(loadLabel, ImVec2(-1.0f, 34.0f), vlsui::Accent()))
 			{
 				if (selectedFile->isWorld)
@@ -1144,6 +1174,7 @@ void Main::DrawWindows()
 	DrawBotBrainWindow();
 	DrawAAWindow();
 	DrawModeSwitchConfirmWindow();
+	DrawSavedBotPicker();
 }
 
 void Main::MouseClick()
@@ -1206,39 +1237,26 @@ void Main::MouseClick()
 			}
 			else if (mouseFunc == mouse_from_file)
 			{
-				//Cell is empty				
 				if (!obj)
 				{
-					if (selectedFile)
+					std::unique_ptr<Object> loaded(saver.LoadObject(savedBotPicker.sourcePath));
+					if (!loaded || loaded->type() != bot)
 					{
-						if (selectedFile->mode != SimulationMode::CyberBiology3)
-						{
-							LogPrint("Режим файла: ");
-							LogPrint(SimulationModeName(selectedFile->mode));
-							LogPrint(", текущий режим: CyberBiology3. Загрузка отменена.\r\n");
-							return;
-						}
-
-						obj = saver.LoadObject(selectedFile->pathFull);
-
-						if (obj)
-						{
-							obj->x = fieldCoords.x;
-							obj->y = fieldCoords.y;
-							obj->energy = field->params.botMaxEnergy;
-
-							if (field->AddObject(obj))
-							{
-								showFirstPopulationHint = false;
-							LogPrint("Объект загружен\r\n");
-							}
-						}
-						else
-						{
-							LogPrint("Ошибка загрузки объекта\r\n");
-						}
+						savedBotPicker.ClearSource();
+						LoadFilenames();
+						savedBotPicker.Open();
+						return;
 					}
-				}				
+					loaded->x = fieldCoords.x;
+					loaded->y = fieldCoords.y;
+					loaded->energy = field->params.botMaxEnergy;
+					if (field->AddObject(loaded.get()))
+					{
+						loaded.release();
+						showFirstPopulationHint = false;
+						LogPrint("Объект загружен\r\n");
+					}
+				}
 			}
 			else if (mouseFunc == mouse_force_mutation)
 			{
@@ -1300,10 +1318,7 @@ bool Main::Render()
 
 	//Clear background
 	UpdateWindowSize();
-	glClearColor(BackgroundColorFloat);
-	glClear(GL_COLOR_BUFFER_BIT);
-	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-	SDL_RenderClear(renderer);
+	SDLBeginScene();
 
 	//Render
 	if (renderType != noRender)

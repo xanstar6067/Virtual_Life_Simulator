@@ -26,6 +26,7 @@ void DeInitSDL();
 void UpdateWindowSize();
 bool CreateWindowSDL();
 bool CreateRenderer();
+void SDLBeginScene();
 void SDLPresentScene();
 
 namespace cb3
@@ -43,5 +44,6 @@ namespace cb3
     using ::UpdateWindowSize;
     using ::CreateWindowSDL;
     using ::CreateRenderer;
+    using ::SDLBeginScene;
     using ::SDLPresentScene;
 }

@@ -111,6 +111,7 @@
     <ClInclude Include="source\Settings.h" />
     <ClInclude Include="source\Systems.h" />
     <ClInclude Include="source\UITheme.h" />
+    <ClInclude Include="source\SavedBotPicker.h" />
     <ClInclude Include="source\EcosystemChart.h" />
     <ClInclude Include="source\SimulationTelemetry.h" />
     <ClInclude Include="source\BotDiet.h" />

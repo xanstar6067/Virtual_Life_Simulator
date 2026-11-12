@@ -31,6 +31,7 @@ void UpdateWindowSize();
 bool CreateWindowSDL();
 bool CreateRenderer();
 
+void SDLBeginScene();
 
 
 extern inline void SDLPresentScene();

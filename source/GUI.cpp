@@ -375,7 +375,14 @@ void Main::DrawSidePanelWindow()
 		LoadFilenames();
 		showSaveLoad = true;
 	}
-	mouseFunc = (MouseFunction)vlsui::DrawWorkspaceTools(layout, (int)mouseFunc, brushSize, 0);
+	bool chooseBot = false;
+	mouseFunc = (MouseFunction)vlsui::DrawWorkspaceTools(layout, (int)mouseFunc, brushSize, 0,
+		savedBotPicker.sourceName.c_str(), chooseBot);
+	if (chooseBot)
+	{
+		LoadFilenames();
+		savedBotPicker.Open();
+	}
 
 	// Tick counters are stale after editing a paused world. Refresh only the
 	// displayed counts; this does not step the world or alter simulation state.
@@ -681,6 +688,17 @@ void Main::DrawFieldScrollbars()
 	field->ClampViewOffset();
 }
 
+void Main::DrawSavedBotPicker()
+{
+	savedBotPicker.Draw(allFilenames, activeMode, [this](const std::filesystem::path& path)
+	{
+		std::unique_ptr<Object> object(saver.LoadObject(path));
+		if (!object || object->type != bot) return false;
+		mouseFunc = mouse_from_file;
+		return true;
+	}, [this] { LoadFilenames(); });
+}
+
 void Main::DrawSaveLoadWindow()
 {
 	if (!showSaveLoad)
@@ -690,7 +708,7 @@ void Main::DrawSaveLoadWindow()
 	}
 
 	ImGui::SetNextWindowBgAlpha(1.0f);
-	vlsui::PrepareToolWindow(ImVec2(860.0f, 560.0f), ImVec2(680.0f, 480.0f));
+	vlsui::PrepareToolWindow(ImVec2(860.0f, 600.0f), ImVec2(680.0f, 480.0f));
 
 	ImGui::Begin("Сохранения и загрузка", &showSaveLoad, ImGuiWindowFlags_NoCollapse);
 	{
@@ -732,7 +750,21 @@ void Main::DrawSaveLoadWindow()
 		}
 
 		vlsui::SectionTitle("Библиотека сохранений");
-		ImGui::TextDisabled("Файлов: %d", (int)allFilenames.size());
+		if (vlsui::ModeButton("Миры", !showBotSaves, ImVec2(110, 30)))
+		{
+			if (showBotSaves) SelectFile(-1);
+			showBotSaves = false;
+		}
+		ImGui::SameLine();
+		if (vlsui::ModeButton("Боты", showBotSaves, ImVec2(110, 30)))
+		{
+			if (!showBotSaves) SelectFile(-1);
+			showBotSaves = true;
+		}
+		int visibleFiles = 0;
+		for (const auto& file : allFilenames)
+			if (showBotSaves ? file.fileType == "бот" : file.isWorld) ++visibleFiles;
+		ImGui::TextDisabled("Файлов: %d", visibleFiles);
 		ImGui::SameLine();
 		const float refreshWidth = 105.0f;
 		ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - refreshWidth);
@@ -742,29 +774,29 @@ void Main::DrawSaveLoadWindow()
 		}
 
 		float fileTableHeight = ImGui::GetContentRegionAvail().y - 145.0f;
-		if (fileTableHeight < 160.0f)
-			fileTableHeight = 160.0f;
+		if (fileTableHeight < 100.0f)
+			fileTableHeight = 100.0f;
 
-		if (ImGui::BeginTable("##SaveFiles", 5,
+		if (ImGui::BeginTable("##SaveFiles", 4,
 			ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
 			ImGuiTableFlags_Resizable, ImVec2(0.0f, fileTableHeight)))
 		{
 			ImGui::TableSetupColumn("Имя", ImGuiTableColumnFlags_WidthStretch);
 			ImGui::TableSetupColumn("Размер", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-			ImGui::TableSetupColumn("Тип", ImGuiTableColumnFlags_WidthFixed, 95.0f);
 			ImGui::TableSetupColumn("Режим", ImGuiTableColumnFlags_WidthFixed, 130.0f);
 			ImGui::TableSetupColumn("Дата", ImGuiTableColumnFlags_WidthFixed, 125.0f);
 			ImGui::TableHeadersRow();
 
-			if (allFilenames.empty())
+			if (visibleFiles == 0)
 			{
 				ImGui::TableNextRow();
 				ImGui::TableSetColumnIndex(0);
-				ImGui::TextDisabled("Сохранений Classic пока нет");
+				ImGui::TextDisabled(showBotSaves ? "Сохранённых ботов пока нет" : "Сохранённых миров пока нет");
 			}
 
 			for (int i = 0; i < allFilenames.size(); ++i)
 			{
+				if (showBotSaves ? allFilenames[i].fileType != "бот" : !allFilenames[i].isWorld) continue;
 				ImGui::TableNextRow();
 
 				ImGui::TableSetColumnIndex(0);
@@ -776,10 +808,8 @@ void Main::DrawSaveLoadWindow()
 				ImGui::TableSetColumnIndex(1);
 				ImGui::TextUnformatted(allFilenames[i].fileSize.c_str());
 				ImGui::TableSetColumnIndex(2);
-				ImGui::TextUnformatted(allFilenames[i].fileType.c_str());
-				ImGui::TableSetColumnIndex(3);
 				ImGui::TextUnformatted(allFilenames[i].modeText.c_str());
-				ImGui::TableSetColumnIndex(4);
+				ImGui::TableSetColumnIndex(3);
 				ImGui::TextUnformatted(allFilenames[i].modifiedTimeText.c_str());
 			}
 
@@ -828,7 +858,7 @@ void Main::DrawSaveLoadWindow()
 			ImGui::TableNextRow();
 			ImGui::TableSetColumnIndex(0);
 			ImGui::BeginDisabled(!canLoadSelected);
-			const char* loadLabel = (selectedFile && !selectedFile->isWorld) ? "Загрузить бота" : "Загрузить мир";
+			const char* loadLabel = showBotSaves ? "Загрузить бота" : "Загрузить мир";
 			if (vlsui::ColoredButton(loadLabel, ImVec2(-1.0f, 34.0f), vlsui::Accent()))
 			{
 				if (selectedFile->isWorld)
@@ -1227,6 +1257,7 @@ void Main::DrawWindows()
 	DrawInfoWindow();
 	DrawExitConfirmWindow();
 	DrawModeSwitchConfirmWindow();
+	DrawSavedBotPicker();
 }
 
 void Main::HandleFieldNavigation()
@@ -1351,41 +1382,26 @@ void Main::MouseClick()
 			}
 			else if (mouseFunc == mouse_from_file)
 			{
-				//Cell is empty				
 				if (!obj)
 				{
-					if (selectedFile)
+					std::unique_ptr<Object> loaded(saver.LoadObject(savedBotPicker.sourcePath));
+					if (!loaded || loaded->type != bot)
 					{
-						if (selectedFile->mode != activeMode)
-						{
-							LogPrint("Файл сохранен в режиме ");
-							LogPrint(SimulationModeName(selectedFile->mode));
-							LogPrint(". Текущий режим: ");
-							LogPrint(SimulationModeName(activeMode));
-							LogPrint(". Загрузка отменена.\r\n");
-							return;
-						}
-
-						obj = saver.LoadObject(selectedFile->pathFull);
-
-						if (obj)
-						{
-							obj->x = fieldCoords.x;
-							obj->y = fieldCoords.y;
-							obj->energy = MaxPossibleEnergyForABot;
-
-							if (field->AddObject(obj))
-							{
-								showFirstPopulationHint = false;
-							LogPrint("Объект загружен\r\n");
-							}
-						}
-						else
-						{
-							LogPrint("Ошибка загрузки объекта\r\n");
-						}
+						savedBotPicker.ClearSource();
+						LoadFilenames();
+						savedBotPicker.Open();
+						return;
 					}
-				}				
+					loaded->x = fieldCoords.x;
+					loaded->y = fieldCoords.y;
+					loaded->energy = MaxPossibleEnergyForABot;
+					if (field->AddObject(loaded.get()))
+					{
+						loaded.release();
+						showFirstPopulationHint = false;
+						LogPrint("Объект загружен\r\n");
+					}
+				}
 			}
 			else if (mouseFunc == mouse_force_mutation)
 			{
@@ -1463,8 +1479,7 @@ bool Main::Render()
 
 	//Clear background
 	UpdateWindowSize();
-	glClearColor(BackgroundColorFloat);
-	glClear(GL_COLOR_BUFFER_BIT);
+	SDLBeginScene();
 
 	//Render
 	if (renderType != noRender)

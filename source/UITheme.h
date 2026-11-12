@@ -289,7 +289,8 @@ inline HeaderActions DrawWorkspaceHeader(const WorkspaceLayout& layout,
 	return actions;
 }
 
-inline int DrawWorkspaceTools(const WorkspaceLayout& layout, int tool, int& brush, int minimumBrush)
+inline int DrawWorkspaceTools(const WorkspaceLayout& layout, int tool, int& brush, int minimumBrush,
+    const char* spawnBotName, bool& chooseBot)
 {
 	BeginWorkspaceWindow("##WorkspaceTools", layout.tools);
 	ImGui::TextDisabled("МЫШЬ");
@@ -298,22 +299,38 @@ inline int DrawWorkspaceTools(const WorkspaceLayout& layout, int tool, int& brus
 		"Нажмите на бота, чтобы изучить его",
 		"Удалять объекты в области кисти",
 		"Размещать камни в области кисти",
-		"Размещать выбранного в сохранениях бота",
+		"Выбрать сохранённого бота и размещать его копии в мире",
 		"Мутировать ботов в области кисти"
 	};
 	const int order[] = {0, 2, 3, 4, 1};
 	for (int value : order)
 	{
 		if (ModeButton(names[value], tool == value, ImVec2(-1.0f, 34.0f)))
-			tool = value;
+		{
+			if (value == 3 && !*spawnBotName)
+				chooseBot = true;
+			else
+				tool = value;
+		}
 		ItemTooltip(hints[value]);
 	}
 	ImGui::Spacing();
 	ImGui::Separator();
-	ImGui::TextWrapped("Радиус кисти");
-	ImGui::SetNextItemWidth(-1.0f);
-	ImGui::SliderInt("##ToolBrush", &brush, minimumBrush, 50, "%d");
-	ImGui::TextWrapped("%s", hints[tool]);
+	if (tool == 3)
+	{
+		ImGui::TextDisabled("Бот:");
+		ImGui::TextWrapped("%s", *spawnBotName ? spawnBotName : "Не выбран");
+		if (ImGui::Button(*spawnBotName ? "Сменить…" : "Выбрать…", ImVec2(-1.0f, 30)))
+			chooseBot = true;
+		ImGui::TextWrapped("Нажмите на пустую клетку, чтобы добавить бота.");
+	}
+	else
+	{
+		ImGui::TextWrapped("Радиус кисти");
+		ImGui::SetNextItemWidth(-1.0f);
+		ImGui::SliderInt("##ToolBrush", &brush, minimumBrush, 50, "%d");
+		ImGui::TextWrapped("%s", hints[tool]);
+	}
 	ImGui::End();
 	return tool;
 }

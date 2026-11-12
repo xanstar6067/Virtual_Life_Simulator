@@ -71,7 +71,7 @@ source/Main.cpp: wWinMain
 | --- | --- |
 | `Main.h/.cpp` | Точка входа, глобальный `simulation`, жизненный цикл мира, seed/id/tick, TPS/FPS, клавиатура, выбор объекта, файловые операции, quicksave, переключение движков. `MakeStep`, `CatchKeyboard`, `Deselect`, `LoadFilenames`, `LoadWorldFromFile`, `RecordChartSample`, `Shutdown` |
 | `GUI.h/.cpp` | Инициализация/завершение ImGui и реализация UI-методов `Main`: шапка, инструменты, инспектор, подвал, среда, файлы, опасные действия, справка, подтверждения, мозг, графики. Здесь также `Render`, `MouseClick`, `HandleFieldNavigation`, `ClearWorld` |
-| `SDL.h/.cpp` | Общие `window`, `renderer`, размеры окна, `io`, `mouseState`; SDL-init, resize, чтение мыши, вывод ImGui и кадра. `CreateWindowSDL`, `CreateRenderer`, `UpdateWindowSize`, `ReadMouseState`, `SDLPresentScene` |
+| `SDL.h/.cpp` | Общие `window`, `renderer`, размеры окна, `io`, `mouseState`; SDL-init, resize, чтение мыши, вывод ImGui и кадра. `CreateWindowSDL`, `CreateRenderer`, `UpdateWindowSize`, `ReadMouseState`, `SDLBeginScene` (очистка всего SDL-кадра), `SDLPresentScene` |
 | `Field.h/.cpp` | Сетка объектов, создание/удаление/перемещение, вода/ил, яблоки, шаг мира, рабочие потоки, счётчики, viewport и камера, преобразование экранных координат, телеметрия. `tick`, `AddObject`, `RemoveObject`, `RemoveBot`, `ScreenCoordsToLocal`, `ZoomAtScreenPoint`, `TrackObject`, `ReadTelemetry` |
 | `Object.h/.cpp` | База всех объектов: координаты, энергия, возраст, тип, защита от повторного tick в одном кадре, доступ к полю и отрисовка. Статические указатели привязываются через `SetPointers` |
 | `Bot.h/.cpp` | Жизненный цикл бота: восприятие, решения мозга, движение/поворот, атака, фотосинтез, размножение, мутации, родство, энергия и искусственный отбор. `tick`, `FillBrainInput`, `think`, `Multiply`, `Attack`, `Photosynthesis`, `GiveEnergy`, `Mutagen`. Мозг — общий `GenomeRef genome` + своя `brainMemory`; `GetActiveBrain`/`GetInitialBrain` дают редактируемый `BrainView`, `GetGenome` — только чтение, `SetObservedBot` — бот для значений в окне мозга |
@@ -93,6 +93,7 @@ source/Main.cpp: wWinMain
 | Файл | Назначение |
 | --- | --- |
 | `UILayout.h` | `CalculateLayout`, `WorkspaceLayout`: прямоугольники header/tools/world/inspector/footer, компактный режим. Геометрия UI отделена от размеров мира |
+| `SavedBotPicker.h` | Общий выбор сохранённого бота для «Из файла»: список только ботов текущего режима, независимый от библиотеки источник размещения и подтверждение выбора. |
 | `UITheme.h` | Общая тема, цвета, шрифт Segoe UI с кириллицей, вспомогательные элементы и оформление рабочего пространства |
 | `BotDiet.h` | `ClassifyFeeding`, `FeedingTypeName`: единая интерпретация питания для карточки и телеметрии |
 | `NeuralGraphView.h` | Общий ImGui-canvas мозга: узлы/рёбра, выделение, масштаб, pan, clipping и фильтр связей |

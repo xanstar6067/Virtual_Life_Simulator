@@ -15,6 +15,7 @@
 #include <cassert>
 #include <crtdbg.h>
 #include <cstdlib>
+#include <cstring>
 #include <cstdio>
 #include <filesystem>
 
@@ -89,9 +90,8 @@ struct InterfaceSmokeTest
         for (int i = 0; i < 3; ++i) io->MouseDown[i] = down && i == button;
         ImGui_ImplSDLRenderer_NewFrame();
         ImGui::NewFrame();
-        SDL_SetRenderDrawColor(renderer, 19, 26, 29, 255);
-        SDL_RenderClear(renderer);
-        app.field->draw(app.renderType);
+        SDLBeginScene();
+        if (app.renderType != noRender) app.field->draw(app.renderType);
         app.DrawWindows();
         ImGui::Render();
         ImGui_ImplSDLRenderer_RenderDrawData(ImGui::GetDrawData());
@@ -1145,6 +1145,210 @@ struct InterfaceSmokeTest
         assert(false && "No bot found in the visible test area");
     }
 
+    static void CheckSavedBotPlacement(Main& app, SDL_Surface* surface)
+    {
+        const auto botA = std::filesystem::path(DirectoryName) / L"UI-Хищник-А.bot";
+        const auto botB = std::filesystem::path(DirectoryName) / L"UI-Бот-Б.bot";
+        assert(app.selectedObject);
+        const BrainSnapshot original(((Bot*)app.selectedObject)->GetGenome());
+        assert(app.saver.SaveObject(app.selectedObject, botA));
+        Bot other(0, 0, 300);
+        assert(app.saver.SaveObject(&other, botB));
+        app.QuickSaveWorld();
+        app.SelectFile(-1);
+        app.savedBotPicker.ClearSource();
+        app.mouseFunc = mouse_place_rock;
+        auto popup = [] { return ImGui::FindWindowByName("Выберите бота##SavedBotPicker"); };
+        auto footer = [&](bool accept) {
+            auto* w = popup();
+            assert(w && w->Active);
+            // The last row has fixed-size Place and Cancel buttons.
+            Click(app, surface, w->Pos.x + w->WindowPadding.x + (accept ? 75 : 213),
+                w->DC.CursorPosPrevLine.y + 17);
+        };
+        auto chooseRow = [&](const std::filesystem::path& path) {
+            auto* w = popup();
+            auto* list = w->DC.ChildWindows[0];
+            int row = 0;
+            for (const auto& file : app.allFilenames)
+            {
+#ifdef TEST_CB3
+                const auto mode = SimulationMode::CyberBiology3;
+#else
+                const auto mode = SimulationMode::Classic;
+#endif
+                if (file.fileType != "бот" || file.mode != mode) continue;
+                if (file.pathFull == path)
+                {
+                    Click(app, surface, list->Pos.x + 80,
+                        list->Pos.y + list->WindowPadding.y + row * ImGui::GetTextLineHeightWithSpacing() + 8);
+                    assert(app.savedBotPicker.candidatePath == path);
+                    return;
+                }
+                ++row;
+            }
+            assert(false && "Fixture missing from picker");
+        };
+        const auto layout = vlsui::CalculateLayout(windowWidth, windowHeight);
+        Click(app, surface, (float)layout.tools.x + 55, (float)layout.tools.y + 140);
+        assert(popup() && popup()->Active);
+        assert(app.mouseFunc == mouse_place_rock); // Unconfirmed selection preserves the tool.
+        Frame(app, surface);
+        assert(IMG_SavePNG(surface, "saved-bot-picker.png") == 0);
+        footer(false);
+        assert(app.mouseFunc == mouse_place_rock && app.savedBotPicker.sourcePath.empty());
+
+        Click(app, surface, (float)layout.tools.x + 55, (float)layout.tools.y + 140);
+        chooseRow(botA);
+        footer(true);
+        assert(app.mouseFunc == mouse_from_file && app.savedBotPicker.sourcePath == botA);
+        Frame(app, surface);
+        assert(IMG_SavePNG(surface, "saved-bot-tool.png") == 0);
+        app.SelectFileByPath(botB);
+        app.LoadFilenames();
+        assert(app.selectedFile && app.selectedFile->pathFull == botB);
+        assert(app.savedBotPicker.sourcePath == botA);
+        app.mouseFunc = mouse_select;
+        Frame(app, surface);
+        Click(app, surface, (float)layout.tools.x + 55, (float)layout.tools.y + 140);
+        assert(app.mouseFunc == mouse_from_file && !popup()->Active);
+
+        // Change and cancel preserves the previously chosen source.
+        app.savedBotPicker.Open();
+        Frame(app, surface); Frame(app, surface);
+        chooseRow(botB);
+        const auto heldBot = botB.parent_path() / "UI-held-bot.tmp";
+        std::filesystem::rename(botB, heldBot);
+        footer(true); // The selected file disappeared before confirmation.
+        assert(popup()->Active && !app.savedBotPicker.error.empty());
+        assert(app.savedBotPicker.sourcePath == botA);
+        std::filesystem::rename(heldBot, botB);
+        footer(false);
+        assert(app.savedBotPicker.sourcePath == botA);
+
+        // Real field click uses A even while B is selected in the save library.
+        bool placed = false;
+        for (int x = 1; x < 90 && !placed; ++x)
+            for (int y = 1; y < 60 && !placed; ++y)
+            {
+                if (app.field->GetObjectLocalCoords(x, y)) continue;
+                const double scale = Field::GetViewScale();
+                mouseState.mouseX = FieldX + (int)std::ceil(x * FieldCellSize * scale + 1e-6) - Field::viewX;
+                mouseState.mouseY = FieldY + (int)std::ceil(y * FieldCellSize * scale + 1e-6) - Field::viewY;
+                Frame(app, surface, (float)mouseState.mouseX, (float)mouseState.mouseY);
+                if (io->WantCaptureMouse) continue;
+                const auto count = CountBots(app);
+                app.MouseClick();
+                assert(CountBots(app) == count + 1);
+                auto* added = (Bot*)app.field->GetObjectLocalCoords(x, y);
+                assert(added && original.SameNeurons(added->GetGenome()));
+                app.MouseClick(); // Occupied cells stay unchanged.
+                assert(CountBots(app) == count + 1);
+                placed = true;
+            }
+        assert(placed);
+        app.mouseFunc = mouse_select;
+
+        // Library switches filter actual rendered rows and clear hidden selection.
+        app.showSaveLoad = true;
+        app.SelectFileByPath(botB);
+        Frame(app, surface); Frame(app, surface);
+        auto* library = ImGui::FindWindowByName("Сохранения и загрузка");
+#ifdef TEST_CB3
+        const char* tableId = "##SaveFilesCB3";
+#else
+        const char* tableId = "##SaveFiles";
+#endif
+        auto table = [&] { return ImGui::TableFindByID(library->GetID(tableId)); };
+        assert(app.showBotSaves && table()->ColumnsCount == 4);
+        int bots = 0, worlds = 0;
+        for (const auto& file : app.allFilenames)
+        {
+            bots += file.fileType == "бот";
+            worlds += file.isWorld;
+        }
+        assert(table()->CurrentRow == bots); // Header is row zero.
+        const float switchY = table()->OuterRect.Min.y - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.y * 2 - 15;
+        Click(app, surface, library->Pos.x + library->WindowPadding.x + 55, switchY);
+        assert(!app.showBotSaves && !app.selectedFile);
+        assert(table()->CurrentRow == worlds);
+        assert(app.savedBotPicker.sourcePath == botA);
+        Frame(app, surface);
+        assert(IMG_SavePNG(surface, "saved-worlds-library.png") == 0);
+        Click(app, surface, library->Pos.x + library->WindowPadding.x + 175, switchY);
+        assert(app.showBotSaves && table()->CurrentRow == bots);
+        for (const auto& file : app.allFilenames) assert(!file.isSelected);
+        Frame(app, surface);
+        assert(IMG_SavePNG(surface, "saved-bots-library.png") == 0);
+        app.showSaveLoad = false;
+
+        // An empty picker has no confirmation target and cancel changes nothing.
+        app.SelectFile(-1);
+        app.allFilenames.clear();
+        app.savedBotPicker.Open();
+        Frame(app, surface); Frame(app, surface);
+        assert(IMG_SavePNG(surface, "saved-bot-picker-empty.png") == 0);
+        footer(true);
+        assert(popup()->Active && app.mouseFunc == mouse_select);
+        footer(false);
+        app.LoadFilenames();
+
+        // Renaming the source follows the file; deleting it invalidates the source.
+        app.SelectFileByPath(botA);
+        strcpy_s(app.renameFileName, "UI-renamed-source.bot");
+        app.RenameSelectedFile();
+        const auto renamed = botA.parent_path() / "UI-renamed-source.bot";
+        assert(app.savedBotPicker.sourcePath == renamed);
+        assert(app.savedBotPicker.sourceName == "UI-renamed-source.bot");
+        std::filesystem::remove(renamed);
+        std::filesystem::remove(botB);
+        app.LoadFilenames();
+        assert(app.savedBotPicker.sourcePath.empty());
+        app.SelectFile(-1);
+    }
+
+    static void CheckFrameBackground(Main& app, SDL_Surface* surface)
+    {
+        const auto layout = vlsui::CalculateLayout(surface->w, surface->h);
+        const int gapX = layout.world.x + layout.world.w + 5;
+        const int gapY = surface->h / 2;
+        const auto black = SDL_MapRGBA(surface->format, 0, 0, 0, 255);
+        const auto pixel = [&](int x, int y) {
+            Uint32 value;
+            std::memcpy(&value, (Uint8*)surface->pixels + y * surface->pitch + x * 4, sizeof(value));
+            return value;
+        };
+
+        // Dirty the actual render target; Frame must use production clearing.
+        SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255);
+        SDL_RenderClear(renderer);
+        Frame(app, surface);
+        assert(pixel(5, 5) == black);
+        assert(pixel(gapX, gapY) == black);
+        assert(pixel(layout.world.x + 20, layout.world.y + layout.world.h + 5) == black);
+
+        app.showSaveLoad = true;
+        Frame(app, surface); Frame(app, surface);
+        assert(pixel(gapX, gapY) != black); // The real window crosses this gap.
+        app.showSaveLoad = false;
+        Frame(app, surface);
+        assert(pixel(gapX, gapY) == black);
+        assert(IMG_SavePNG(surface, "closed-window-background.png") == 0);
+
+        const auto previousRenderType = app.renderType;
+        const bool previousHint = app.showFirstPopulationHint;
+        app.renderType = noRender;
+        app.showFirstPopulationHint = false;
+        SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255);
+        SDL_RenderClear(renderer);
+        Frame(app, surface);
+        assert(pixel(layout.world.x + 20, layout.world.y + 20) == black);
+        assert(pixel(gapX, gapY) == black);
+        app.renderType = previousRenderType;
+        app.showFirstPopulationHint = previousHint;
+        Frame(app, surface);
+    }
+
     static void Run(Main& app, SDL_Surface* surface)
     {
         CheckHistory();
@@ -1154,6 +1358,7 @@ struct InterfaceSmokeTest
         Frame(app, surface);
         assert(ImGui::FindWindowByName("##FirstPopulation")->Active);
         assert(IMG_SavePNG(surface, "empty-world.png") == 0);
+        CheckFrameBackground(app, surface);
 
         // Exercise the actual header button, rather than calling the seed handler.
         Click(app, surface, 95, 42);
@@ -1190,6 +1395,8 @@ struct InterfaceSmokeTest
         Click(app, surface, (float)layout.tools.x + 55, (float)layout.tools.y + 82);
         assert(app.mouseFunc == mouse_place_rock);
         app.mouseFunc = mouse_select;
+
+        CheckSavedBotPlacement(app, surface);
 
         // Round-trip a real world through the existing, mode-specific save slot.
         const auto originalCount = CountBots(app);
@@ -1251,6 +1458,15 @@ struct InterfaceSmokeTest
             }
             if (size.x == 640)
             {
+                app.savedBotPicker.Open();
+                Frame(app, resized); Frame(app, resized);
+                const auto picker = ImGui::FindWindowByName("Выберите бота##SavedBotPicker");
+                assert(picker && picker->Active && !picker->ScrollbarX && !picker->ScrollbarY);
+                assert(picker->Pos.x >= 0 && picker->Pos.y >= 0);
+                assert(picker->Pos.x + picker->Size.x <= size.x);
+                assert(picker->Pos.y + picker->Size.y <= size.y);
+                assert(IMG_SavePNG(resized, "compact-saved-bot-picker.png") == 0);
+                BrainEscape(app, resized);
                 CheckCharts(app, resized, "compact");
                 Frame(app, resized);
                 assert(IMG_SavePNG(resized, "compact-workspace.png") == 0);
@@ -1273,7 +1489,7 @@ struct InterfaceSmokeTest
         renderer = SDL_CreateSoftwareRenderer(surface);
         assert(renderer);
         ImGui_ImplSDLRenderer_Init(renderer);
-        std::puts("PASS: workspace, brain viewer, all four chart modes/periods/tooltips, chart selectors, age panel, exact telemetry, lifecycle/manual edits, bounded history with extrema");
+        std::puts("PASS: workspace, saved-bot picker/placement and separate world/bot libraries, brain viewer, all four chart modes/periods/tooltips, chart selectors, age panel, exact telemetry, lifecycle/manual edits, bounded history with extrema");
     }
 };
 

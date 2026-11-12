@@ -547,6 +547,7 @@ void Main::LoadFilenames()
 	}
 
 	SelectFile(selectedIndex);
+	savedBotPicker.RefreshSource(allFilenames, activeMode);
 }
 
 
@@ -554,6 +555,11 @@ void Main::LoadFilenames()
 
 void Main::SelectFile(int index)
 {
+	for (size_t i = 0; i < allFilenames.size(); ++i)
+	{
+		allFilenames[i].isSelected = false;
+	}
+
 	if (index < 0 || index >= (int)allFilenames.size())
 	{
 		selectedFile = NULL;
@@ -561,13 +567,9 @@ void Main::SelectFile(int index)
 		return;
 	}
 
-	for (size_t i = 0; i < allFilenames.size(); ++i)
-	{
-		allFilenames[i].isSelected = false;
-	}
-
 	allFilenames[index].isSelected = true;
 	selectedFile = &allFilenames[index];
+	showBotSaves = !selectedFile->isWorld;
 
 	size_t len = selectedFile->nameShort.size();
 	if (len >= sizeof(renameFileName))
@@ -621,6 +623,8 @@ void Main::RenameSelectedFile()
 	try
 	{
 		std::filesystem::rename(oldPath, newPath);
+		if (savedBotPicker.sourcePath == oldPath)
+			savedBotPicker.sourcePath = newPath;
 		LogPrint("Файл переименован\r\n");
 
 		LoadFilenames();
@@ -989,7 +993,7 @@ void Main::CatchKeyboard()
 		return;
 	}
 
-	if (saveFileNameInputActive)
+	if (saveFileNameInputActive || (io && io->WantCaptureKeyboard))
 	{
 		return;
 	}

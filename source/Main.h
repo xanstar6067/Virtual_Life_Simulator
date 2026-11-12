@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI.h"
+#include "SavedBotPicker.h"
 #include "Field.h"
 #include "NeuralNetRenderer.h"
 #include "Cb3Runtime.h"
@@ -76,6 +77,7 @@ private:
 
 	//Hidden windows
 	void DrawSaveLoadWindow();
+	void DrawSavedBotPicker();
 	void DrawDangerousWindow();
 	void DrawAdaptationWindow();
 	void DrawChartWindow();
@@ -149,6 +151,8 @@ private:
 
 	std::vector<listed_file> allFilenames;
 	listed_file* selectedFile = NULL;
+	bool showBotSaves = false;
+	vlsui::SavedBotPicker savedBotPicker;
 	char newSaveFileName[128] = "";
 	char renameFileName[128] = "";
 	bool saveFileNameInputActive = false;
