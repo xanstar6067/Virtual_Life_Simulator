@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI.h"
+#include "ActionFeedback.h"
 #include "SavedBotPicker.h"
 #include "Field.h"
 #include "NeuralNetRenderer.h"
@@ -125,9 +126,11 @@ private:
 
 	//Log
 	ImGuiTextBuffer logText;
+	vlsui::ActionFeedback feedback;
+	void RequestWorldLoad(const std::filesystem::path& path);
 
 	void ClearLog();
-	void LogPrint(const char* str, bool newLine = false);
+	void LogPrint(const char* str, bool newLine = false, bool isError = false);
 	void LogPrint(int num, bool newLine = true);
 
 	//Save/load

@@ -207,9 +207,19 @@ void Main::SpawnWorldRocks()
 
 void Main::MutateWholeWorld()
 {
-	field->mutateWorld();
-	RecordChartSample(true, "Мутация всего мира");
-	LogPrint("[Солнечная вспышка!]");
+    feedback.Confirm("Мутировать весь мир?", "Мозг, цвет и метки родства ботов будут изменены мутагеном.", [this] {
+        field->mutateWorld();
+        RecordChartSample(true, "Мутация всего мира");
+        LogPrint("Мутация всего мира выполнена\r\n");
+    });
+}
+
+void Main::RequestWorldLoad(const std::filesystem::path& path)
+{
+    const auto filePath = path;
+    const std::string description = "Будет загружен файл «" + PathToUtf8(filePath.filename()) +
+        "». Текущий мир, его параметры и история графиков будут заменены сохранением.";
+    feedback.Confirm("Загрузить мир?", description.c_str(), [this, filePath] { LoadWorldFromFile(filePath); });
 }
 
 bool Main::LoadWorldFromFile(const std::filesystem::path& filePath)
@@ -219,7 +229,7 @@ bool Main::LoadWorldFromFile(const std::filesystem::path& filePath)
 
 	if (ret.id == -1)
 	{
-		LogPrint("Ошибка загрузки мира\r\n");
+		LogPrint("Ошибка загрузки мира\r\n", false, true);
 		return false;
 	}
 
@@ -251,7 +261,7 @@ void Main::QuickSaveWorld()
 	}
 	else
 	{
-		LogPrint("Ошибка быстрого сохранения мира\r\n");
+		LogPrint("Ошибка быстрого сохранения мира\r\n", false, true);
 	}
 }
 
@@ -261,11 +271,11 @@ void Main::QuickLoadWorld()
 
 	if (!std::filesystem::exists(quickSavePath))
 	{
-		LogPrint("Быстрое сохранение CyberBiology3 еще не создано\r\n");
+		LogPrint("Быстрое сохранение CyberBiology3 еще не создано\r\n", false, true);
 		return;
 	}
 
-	LoadWorldFromFile(quickSavePath);
+	RequestWorldLoad(quickSavePath);
 }
 
 void Main::RecordChartSample(bool force, const char* event)
@@ -278,6 +288,7 @@ void Main::RecordChartSample(bool force, const char* event)
 
 bool Main::MakeStep()
 {
+	if (feedback.HasConfirmation()) return false;
 	//Simulation step
 	currentTick = clock.now();
 
@@ -397,9 +408,10 @@ void Main::ClearLog()
 	logText.clear();
 }
 
-void Main::LogPrint(const char* str, bool newLine)
+void Main::LogPrint(const char* str, bool newLine, bool isError)
 {
 	logText.append(str);
+	feedback.Notify(str, isError);
 
 	if (newLine)
 		LogPrint("\r\n");
@@ -537,7 +549,7 @@ void Main::RenameSelectedFile()
 {
 	if (!selectedFile)
 	{
-		LogPrint("Файл не выбран\r\n");
+		LogPrint("Файл не выбран\r\n", false, true);
 		return;
 	}
 
@@ -545,7 +557,7 @@ void Main::RenameSelectedFile()
 
 	if (newName.empty())
 	{
-		LogPrint("Имя файла пустое\r\n");
+		LogPrint("Имя файла пустое\r\n", false, true);
 		return;
 	}
 
@@ -553,7 +565,7 @@ void Main::RenameSelectedFile()
 
 	if (newNamePath.filename() != newNamePath)
 	{
-		LogPrint("Имя файла не должно содержать путь\r\n");
+		LogPrint("Имя файла не должно содержать путь\r\n", false, true);
 		return;
 	}
 
@@ -567,7 +579,7 @@ void Main::RenameSelectedFile()
 
 	if (std::filesystem::exists(newPath))
 	{
-		LogPrint("Файл с таким именем уже существует\r\n");
+		LogPrint("Файл с таким именем уже существует\r\n", false, true);
 		return;
 	}
 
@@ -583,7 +595,7 @@ void Main::RenameSelectedFile()
 	}
 	catch (const std::filesystem::filesystem_error&)
 	{
-		LogPrint("Ошибка переименования файла\r\n");
+		LogPrint("Ошибка переименования файла\r\n", false, true);
 	}
 }
 
@@ -642,7 +654,7 @@ void Main::SaveSelectedObjectToNamedFile()
 {
 	if (!selectedObject)
 	{
-		LogPrint("Бот не выбран\r\n");
+		LogPrint("Бот не выбран\r\n", false, true);
 		return;
 	}
 
@@ -657,7 +669,7 @@ void Main::SaveSelectedObjectToNamedFile()
 	}
 	else
 	{
-		LogPrint("Ошибка сохранения объекта\r\n");
+		LogPrint("Ошибка сохранения объекта\r\n", false, true);
 	}
 }
 
@@ -674,7 +686,7 @@ void Main::SaveWorldToNamedFile()
 	}
 	else
 	{
-		LogPrint("Ошибка сохранения мира\r\n");
+		LogPrint("Ошибка сохранения мира\r\n", false, true);
 	}
 }
 
@@ -682,7 +694,7 @@ void Main::DeleteSelectedFile()
 {
 	if (!selectedFile)
 	{
-		LogPrint("Файл не выбран\r\n");
+		LogPrint("Файл не выбран\r\n", false, true);
 		return;
 	}
 
@@ -702,7 +714,7 @@ void Main::DeleteSelectedFile()
 	}
 	else
 	{
-		LogPrint("Ошибка удаления файла\r\n");
+		LogPrint("Ошибка удаления файла\r\n", false, true);
 	}
 }
 
@@ -870,7 +882,7 @@ void Main::MainLoop()
 
 void Main::CatchKeyboard()
 {
-	if (saveFileNameInputActive || (io && io->WantCaptureKeyboard))
+	if (feedback.HasConfirmation() || saveFileNameInputActive || (io && io->WantCaptureKeyboard))
 	{
 		return;
 	}

@@ -120,6 +120,111 @@ struct InterfaceSmokeTest
         Frame(app, surface, x, y, false, button);
     }
 
+    static void ConfirmAction(Main& app, SDL_Surface* surface, bool accept)
+    {
+        assert(app.feedback.HasConfirmation());
+        Frame(app, surface); Frame(app, surface);
+        const auto popup = ImGui::FindWindowByName(vlsui::ActionFeedback::ConfirmationTitle);
+        assert(popup && popup->Active);
+        assert(popup->Pos.x >= 0 && popup->Pos.x + popup->Size.x <= surface->w);
+        const float x = popup->WorkRect.Min.x + popup->WorkRect.GetWidth() * (accept ? .75f : .25f);
+        Click(app, surface, x, popup->DC.CursorMaxPos.y - 17);
+        assert(!app.feedback.HasConfirmation());
+    }
+
+    static void CheckActionFeedback(Main& app, SDL_Surface* surface)
+    {
+        app.feedback.ClearNotices();
+        const auto originalCount = CountBots(app);
+        const auto originalTick = app.ticknum;
+        app.QuickSaveWorld();
+        assert(!app.feedback.Success().empty());
+        app.SelectFile(-1);
+        app.RenameSelectedFile();
+        assert(app.feedback.Error() == "Файл не выбран");
+        app.QuickSaveWorld();
+        assert(app.feedback.Error() == "Файл не выбран"); // Success must not hide an error.
+        app.showSaveLoad = true;
+        Frame(app, surface); Frame(app, surface);
+        assert(IMG_SavePNG(surface, "action-error.png") == 0);
+        const auto notice = ImGui::FindWindowByName("##ActionNotice");
+        assert(notice && notice->Active && !(notice->Flags & ImGuiWindowFlags_NoInputs));
+        const float line = ImGui::GetTextLineHeight(), spacing = ImGui::GetStyle().ItemSpacing.y;
+        Click(app, surface, notice->WorkRect.Min.x + 90,
+            notice->WorkRect.Min.y + 2 * (line + spacing) + ImGui::GetFrameHeight() * .5f);
+        assert(app.feedback.Error().empty());
+        Frame(app, surface);
+        assert(ImGui::FindWindowByName("##ActionNotice")->Flags & ImGuiWindowFlags_NoInputs);
+        app.showSaveLoad = false;
+        app.feedback.ClearNotices();
+
+        // Open the actual destructive-action button, then cancel by Escape and button.
+        app.showDangerous = true;
+        Frame(app, surface); Frame(app, surface);
+        const auto tools = ImGui::FindWindowByName("Инструменты");
+        const char* description = "Эти действия меняют весь мир. Перед выполнением появится подтверждение.";
+        const float textHeight = ImGui::CalcTextSize(description, nullptr, false, tools->WorkRect.GetWidth()).y;
+        const float x = tools->WorkRect.GetCenter().x;
+        const float y = tools->WorkRect.Min.y + textHeight + spacing + 18;
+        Click(app, surface, x, y);
+        assert(app.feedback.HasConfirmation() && CountBots(app) == originalCount);
+        assert(!app.MakeStep() && app.ticknum == originalTick);
+        Frame(app, surface); Frame(app, surface);
+        assert(ImGui::FindWindowByName(vlsui::ActionFeedback::ConfirmationTitle)->Active);
+        assert(IMG_SavePNG(surface, "action-confirmation.png") == 0);
+        BrainEscape(app, surface);
+        assert(!app.feedback.HasConfirmation() && CountBots(app) == originalCount);
+        Click(app, surface, x, y);
+        ConfirmAction(app, surface, false);
+        assert(CountBots(app) == originalCount && app.ticknum == originalTick);
+        Click(app, surface, x, y + 44);
+        ConfirmAction(app, surface, false);
+        assert(CountBots(app) == originalCount);
+        Click(app, surface, x, y + 44);
+        ConfirmAction(app, surface, true);
+        assert(CountBots(app) == 0 && app.ticknum == originalTick);
+        app.QuickLoadWorld(); ConfirmAction(app, surface, true);
+        Click(app, surface, x, y + 88);
+        ConfirmAction(app, surface, true);
+        assert(CountBots(app) == originalCount && app.ticknum == 0);
+        assert(app.chart.history.samples.size() == 1 && app.chart.history.samples.back().lastTick == 0);
+        app.QuickLoadWorld(); ConfirmAction(app, surface, true);
+        Click(app, surface, x, y);
+        ConfirmAction(app, surface, true);
+        assert(CountBots(app) == 0 && app.ticknum == 0);
+        app.showDangerous = false;
+        app.QuickLoadWorld();
+        assert(CountBots(app) == 0);
+        app.SelectFile(-1); app.allFilenames.clear(); // Pending load owns its path.
+        ConfirmAction(app, surface, true);
+        assert(CountBots(app) == originalCount && app.ticknum == originalTick);
+        app.LoadFilenames();
+
+        // Merely viewing percentages must not round or change stored engine values.
+        const auto originalParams = app.field->params;
+        app.field->params.adaptation_landBirthBlock = 333;
+        app.showAdaptation = true;
+        app.feedback.ClearNotices();
+        Frame(app, surface); Frame(app, surface);
+        const auto environment = ImGui::FindWindowByName("Условия среды");
+        assert(environment && environment->Active && !environment->ScrollbarX);
+        assert(app.field->params.adaptation_landBirthBlock == 333);
+        assert(IMG_SavePNG(surface, "environment-explained.png") == 0);
+        ImGui::SetScrollY(environment, environment->ScrollMax.y);
+        Frame(app, surface); Frame(app, surface);
+        auto resetConditions = [&] {
+            Click(app, surface, environment->WorkRect.GetCenter().x, environment->DC.CursorMaxPos.y - 17);
+        };
+        resetConditions(); ConfirmAction(app, surface, false);
+        assert(app.field->params.adaptation_landBirthBlock == 333);
+        resetConditions(); ConfirmAction(app, surface, true);
+        assert(app.field->params.adaptation_landBirthBlock == 0 && CountBots(app) == originalCount);
+        app.showAdaptation = false;
+        app.field->params = originalParams;
+        app.feedback.ClearNotices();
+        Frame(app, surface);
+    }
+
     static unsigned CountBots(Main& app)
     {
         unsigned count = 0;
@@ -467,7 +572,7 @@ struct InterfaceSmokeTest
 #endif
     }
 
-    static void CheckTelemetry(Main& app)
+    static void CheckTelemetry(Main& app, SDL_Surface* surface)
     {
         app.ClearWorld();
         assert(app.field->AddObject(new BirthProbe(0, 10)));
@@ -517,6 +622,7 @@ struct InterfaceSmokeTest
         assert(!std::isfinite(empty.values[vlsui::LowEnergy]));
         assert(!std::isfinite(empty.values[vlsui::Photosynthetic]));
         app.QuickLoadWorld();
+        ConfirmAction(app, surface, true);
     }
 
     static void CheckHistory()
@@ -1398,6 +1504,8 @@ struct InterfaceSmokeTest
 
         CheckSavedBotPlacement(app, surface);
 
+        CheckActionFeedback(app, surface);
+
         // Round-trip a real world through the existing, mode-specific save slot.
         const auto originalCount = CountBots(app);
         app.QuickSaveWorld();
@@ -1405,6 +1513,7 @@ struct InterfaceSmokeTest
         app.ClearWorld();
         assert(CountBots(app) == 0);
         app.QuickLoadWorld();
+        ConfirmAction(app, surface, true);
         assert(CountBots(app) == originalCount);
         assert(!app.showFirstPopulationHint);
 #ifdef TEST_CB3
@@ -1416,7 +1525,7 @@ struct InterfaceSmokeTest
         CheckCb3MutationSharing(app);
 #endif
         CheckGenomeSharing(app);
-        CheckTelemetry(app);
+        CheckTelemetry(app, surface);
         CheckCharts(app, surface, "wide");
 
         app.showSaveLoad = true;

@@ -45,9 +45,11 @@ void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, R
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 8));
 	if (ModeButton("Текущий", version == 0, ImVec2(92, 28)))
 		version = 0;
+	ItemTooltip("Мозг, которым бот пользуется сейчас. Правки меняют его поведение; потомки наследуют начальный мозг.");
 	ImGui::SameLine();
 	if (ModeButton("Начальный", version == 1, ImVec2(104, 28)))
 		version = 1;
+	ItemTooltip("Наследуемая версия мозга. Правки передаются будущим потомкам; текущий мозг этого бота не заменяется.");
 	ImGui::PopStyleVar();
 	ImGui::SameLine();
 	if (ImGui::Button("Вписать", ImVec2(82, 28)))
@@ -63,21 +65,22 @@ void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, R
 	const int historyLayer = selected ? renderer.view.selectedLayer : -1;
 	const int historyIndex = selected ? renderer.view.selectedIndex : -1;
 	ImGui::BeginDisabled(!renderer.history.CanUndo(version, historyLayer, historyIndex));
-	if (ImGui::Button("Назад", ImVec2(92, 28)))
+	if (ImGui::Button("Отменить", ImVec2(92, 28)))
 		renderer.history.Undo(version, historyLayer, historyIndex, *renderer.selectedNeuron);
 	ImGui::EndDisabled();
 	ItemTooltip("Отменить изменение только выбранного нейрона");
 	ImGui::SameLine();
 	ImGui::BeginDisabled(!renderer.history.CanRedo(version, historyLayer, historyIndex));
-	if (ImGui::Button("Вперёд", ImVec2(92, 28)))
+	if (ImGui::Button("Повторить", ImVec2(92, 28)))
 		renderer.history.Redo(version, historyLayer, historyIndex, *renderer.selectedNeuron);
 	ImGui::EndDisabled();
 	ItemTooltip("Повторить отменённое изменение только выбранного нейрона");
 	ImGui::SameLine();
-	ImGui::Text("История нейрона: %zu / %zu", renderer.history.Position(version, historyLayer, historyIndex),
+	ImGui::Text("Только этот нейрон: %zu / %zu", renderer.history.Position(version, historyLayer, historyIndex),
 		renderer.history.Size(version, historyLayer, historyIndex));
 	ItemTooltip("У каждого нейрона своя история для текущего и начального мозга. Хранится до закрытия окна или смены бота.");
 	ImGui::Checkbox("Только связи выбранного нейрона", &renderer.view.selectedConnectionsOnly);
+	ImGui::TextWrapped("%s", version == 0 ? "Текущий мозг управляет этим ботом." : "Начальный мозг наследуют будущие потомки.");
 
 	auto details = [&]() {
 		auto neuron = renderer.selectedNeuron;

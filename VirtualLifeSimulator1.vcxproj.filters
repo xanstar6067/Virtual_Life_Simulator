@@ -143,6 +143,9 @@
     <ClInclude Include="source\BotDiet.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="source\ActionFeedback.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
     <ClInclude Include="source\SavedBotPicker.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>

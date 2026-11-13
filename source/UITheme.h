@@ -4,6 +4,8 @@
 #include "UILayout.h"
 #include "BotDiet.h"
 #include <cfloat>
+#include <algorithm>
+#include <cmath>
 
 namespace vlsui
 {
@@ -17,7 +19,7 @@ inline void AddInterfaceFont(ImGuiIO& io)
 	{
 		ImFontGlyphRangesBuilder builder;
 		builder.AddRanges(io.Fonts->GetGlyphRangesCyrillic());
-		builder.AddText("• — – →");
+		builder.AddText("• — – → …");
 		builder.BuildRanges(&ranges);
 	}
 	io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 16.0f, nullptr, ranges.Data);
@@ -45,7 +47,7 @@ inline ImVec4 Warning()
 
 inline ImVec4 Muted()
 {
-	return ImVec4(0.65f, 0.72f, 0.72f, 1.00f);
+    return ImVec4(0.76f, 0.81f, 0.81f, 1.00f);
 }
 
 inline ImVec4 Panel()
@@ -235,6 +237,32 @@ inline float HalfWidth()
 	return (width > 1.0f) ? width : 1.0f;
 }
 
+inline bool ProbabilitySlider(const char* label, int* perThousand, const char* explanation)
+{
+	// Display percentages, preserving the engine's existing 0..1000 values.
+	ImGui::PushID(label);
+	ImGui::TextWrapped("%s", label);
+	ItemTooltip(explanation);
+	ImGui::SetNextItemWidth(-1.0f);
+	float percent = *perThousand / 10.0f;
+	const bool changed = ImGui::SliderFloat("##Probability", &percent, 0.0f, 100.0f, "%.1f %%", ImGuiSliderFlags_AlwaysClamp);
+	if (changed) *perThousand = (int)std::lround(percent * 10.0f);
+	ItemTooltip(explanation);
+	ImGui::PopID();
+	return changed;
+}
+
+inline void IntegerSetting(const char* label, int* value, int minimum, int maximum, const char* format, const char* explanation)
+{
+	ImGui::PushID(label);
+	ImGui::TextWrapped("%s", label);
+	ItemTooltip(explanation);
+	ImGui::SetNextItemWidth(-1.0f);
+	ImGui::SliderInt("##Value", value, minimum, maximum, format, ImGuiSliderFlags_AlwaysClamp);
+	ItemTooltip(explanation);
+	ImGui::PopID();
+}
+
 inline void DrawStatus(bool running)
 {
 	const ImVec4 color = running ? Success() : Warning();
@@ -261,15 +289,15 @@ struct HeaderActions
 };
 
 inline HeaderActions DrawWorkspaceHeader(const WorkspaceLayout& layout,
-	bool running, int& tpsLimit, int maxTPS)
+	bool running, int& tpsLimit, int maxTPS, bool needsPopulation)
 {
 	HeaderActions actions;
 	BeginWorkspaceWindow("##WorkspaceHeader", layout.header);
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, (36.0f - ImGui::GetFontSize()) * 0.5f));
-	actions.seed = ColoredButton("Заселить мир", ImVec2(layout.compact ? 125.0f : 155.0f, 36.0f), Accent());
+	actions.seed = ModeButton("Заселить мир", needsPopulation, ImVec2(layout.compact ? 125.0f : 155.0f, 36.0f));
 	ItemTooltip("F1 · Добавить стартовую группу случайных ботов к текущему миру");
 	ImGui::SameLine();
-	actions.pause = ImGui::Button(running ? "Пауза" : "Запустить", ImVec2(layout.compact ? 98.0f : 108.0f, 36.0f));
+	actions.pause = ModeButton(running ? "Пауза" : "Запустить", !needsPopulation, ImVec2(layout.compact ? 98.0f : 108.0f, 36.0f));
 	ItemTooltip("Space / Pause · запуск и остановка симуляции");
 	ImGui::SameLine();
 	ImGui::BeginDisabled(running);
@@ -278,10 +306,18 @@ inline HeaderActions DrawWorkspaceHeader(const WorkspaceLayout& layout,
 	ItemTooltip("Num + · шаг симуляции на паузе");
 	ImGui::SameLine();
 	const float savesWidth = layout.compact ? 115.0f : 180.0f;
-	ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - savesWidth - ImGui::GetStyle().ItemSpacing.x);
+	if (!layout.compact)
+	{
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextUnformatted("Скорость");
+		ImGui::SameLine();
+	}
+	const float remaining = ImGui::GetContentRegionAvail().x - savesWidth - ImGui::GetStyle().ItemSpacing.x;
+	ImGui::SetNextItemWidth((std::min)(240.0f, remaining));
 	ImGui::SliderInt("##HeaderTPS", &tpsLimit, 0, maxTPS, "%d тиков/с");
-	ItemTooltip("Лимит скорости симуляции · 0 = без ограничения");
+	ItemTooltip("Лимит скорости симуляции. 0 — без ограничения. Ctrl + щелчок — ввести точное значение. Фактическая скорость показана внизу (TPS).");
 	ImGui::SameLine();
+	ImGui::SetCursorPosX(ImGui::GetWindowSize().x - ImGui::GetStyle().WindowPadding.x - savesWidth);
 	actions.saves = ImGui::Button("Сохранения", ImVec2(savesWidth, 36.0f));
 	ItemTooltip("Z · сохранение и загрузка миров и отдельных ботов");
 	ImGui::PopStyleVar();

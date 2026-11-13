@@ -163,9 +163,9 @@ struct BrainGraphEditor
                         record([&] { neuron.ClearConnections(); });
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Назад", nullptr, false, history.CanUndo(version, sourceLayer, sourceIndex)))
+                if (ImGui::MenuItem("Отменить", nullptr, false, history.CanUndo(version, sourceLayer, sourceIndex)))
                     history.Undo(version, sourceLayer, sourceIndex, neuron);
-                if (ImGui::MenuItem("Вперёд", nullptr, false, history.CanRedo(version, sourceLayer, sourceIndex)))
+                if (ImGui::MenuItem("Повторить", nullptr, false, history.CanRedo(version, sourceLayer, sourceIndex)))
                     history.Redo(version, sourceLayer, sourceIndex, neuron);
             }
             else

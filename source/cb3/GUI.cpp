@@ -333,7 +333,7 @@ void Main::DrawSidePanelWindow()
 	const auto layout = vlsui::CalculateLayout(windowWidth, windowHeight);
 	int displayMode = (int)renderType;
 	const auto actions =
-		vlsui::DrawWorkspaceHeader(layout, simulate, limit_ticks_per_second, GUI_Max_tps);
+		vlsui::DrawWorkspaceHeader(layout, simulate, limit_ticks_per_second, GUI_Max_tps, showFirstPopulationHint);
 	if (actions.seed)
 		SpawnInitialPopulation();
 	if (actions.pause)
@@ -411,8 +411,9 @@ void Main::DrawSidePanelWindow()
 								   ImVec4(color.c[0] / 255.0f, color.c[1] / 255.0f, color.c[2] / 255.0f, 1.0f),
 								   ImGuiColorEditFlags_NoTooltip, ImVec2(28.0f, 28.0f));
 				ImGui::SameLine();
-				if (ImGui::Button("Новый цвет", ImVec2(110.0f, 28.0f)))
+				if (ImGui::Button("Цвет линии", ImVec2(130.0f, 28.0f)))
 					field->RepaintBot((Bot *)selectedObject, Color::GetRandomColor(), RepaintTolerance);
+				vlsui::ItemTooltip("Перекрасить выбранного бота и его близких родственников в случайный цвет.");
 				ImGui::SameLine();
 				if (ImGui::Button("Мозг", ImVec2(-1.0f, 28.0f)))
 					showBrain = !showBrain;
@@ -576,7 +577,7 @@ void Main::DrawSidePanelWindow()
 					showAutomaticAdaptation = !showAutomaticAdaptation;
 				ImGui::TableSetColumnIndex(1);
 				if (ImGui::Button("Выход", ImVec2(-1.0f, 34.0f)))
-					terminate = true;
+					feedback.Confirm("Выйти из приложения?", "Текущий мир будет закрыт. Сохраните эксперимент перед выходом.", [this] { terminate = true; });
 				ImGui::EndTable();
 			}
 
@@ -775,53 +776,61 @@ void Main::DrawSaveLoadWindow()
 			TableNextRow();
 			TableSetColumnIndex(0);
 			BeginDisabled(!canLoadSelected);
-			const char* loadLabel = showBotSaves ? "Загрузить бота" : "Загрузить мир";
+			const char* loadLabel = showBotSaves
+				? (selectedObject ? "Заменить выбранного бота…" : "Загрузить бота") : "Загрузить мир…";
 			if (vlsui::ColoredButton(loadLabel, ImVec2(-1.0f, 34.0f), vlsui::Accent()))
 			{
 				if (selectedFile->isWorld)
 				{
-					LoadWorldFromFile(selectedFile->pathFull);
+					RequestWorldLoad(selectedFile->pathFull);
 				}
 				else
 				{
-					Object* loadedObject = saver.LoadObject(selectedFile->pathFull);
+					const auto botPath = selectedFile->pathFull;
+					auto loadBot = [this, botPath] {
+						Object* loadedObject = saver.LoadObject(botPath);
 
-					if (loadedObject)
-					{
-						int targetX = loadedObject->x;
-						int targetY = loadedObject->y;
-
-						if (selectedObject && field->ValidateObjectExistance(selectedObject))
+						if (loadedObject)
 						{
-							targetX = selectedObject->x;
-							targetY = selectedObject->y;
-							Deselect();
-							field->RemoveObject(targetX, targetY);
-						}
-						else if (selectedObject)
-						{
-							Deselect();
-						}
+							int targetX = loadedObject->x;
+							int targetY = loadedObject->y;
 
-						loadedObject->x = targetX;
-						loadedObject->y = targetY;
+							if (selectedObject && field->ValidateObjectExistance(selectedObject))
+							{
+								targetX = selectedObject->x;
+								targetY = selectedObject->y;
+								Deselect();
+								field->RemoveObject(targetX, targetY);
+							}
+							else if (selectedObject)
+							{
+								Deselect();
+							}
 
-						if (field->IsInBounds(targetX, targetY) && field->AddObject(loadedObject))
-						{
-							selectedObject = loadedObject;
-							revealSelection = true;
-							field->TrackObject(selectedObject);
-							showFirstPopulationHint = false;
-							LogPrint("Объект загружен\r\n");
+							loadedObject->x = targetX;
+							loadedObject->y = targetY;
+
+							if (field->IsInBounds(targetX, targetY) && field->AddObject(loadedObject))
+							{
+								selectedObject = loadedObject;
+								revealSelection = true;
+								field->TrackObject(selectedObject);
+								showFirstPopulationHint = false;
+								LogPrint("Объект загружен\r\n");
+							}
+							else
+							{
+								delete loadedObject;
+								LogPrint("Ошибка загрузки объекта: клетка занята или вне поля\r\n", false, true);
+							}
 						}
 						else
-						{
-							delete loadedObject;
-							LogPrint("Ошибка загрузки объекта: клетка занята или вне поля\r\n");
-						}
-					}
+							LogPrint("Ошибка загрузки объекта\r\n", false, true);
+					};
+					if (selectedObject && field->ValidateObjectExistance(selectedObject))
+						feedback.Confirm("Заменить выбранного бота?", "Выбранный бот будет удалён и заменён ботом из файла. Для размещения копий на пустых клетках используйте инструмент «Из файла».", loadBot);
 					else
-						LogPrint("Ошибка загрузки объекта\r\n");
+						loadBot();
 				}
 			}
 			EndDisabled();
@@ -854,7 +863,7 @@ void Main::DrawSaveLoadWindow()
 							LogPrint("Ландшафт загружен\r\n");
 					}
 					else
-						LogPrint("Ошибка загрузки ландшафта\r\n");
+						LogPrint("Ошибка загрузки ландшафта\r\n", false, true);
 				}
 
 				TableSetColumnIndex(1);
@@ -871,7 +880,7 @@ void Main::DrawSaveLoadWindow()
 							LogPrint("Боты загружены\r\n");
 					}
 					else
-						LogPrint("Ошибка загрузки ботов\r\n");
+						LogPrint("Ошибка загрузки ботов\r\n", false, true);
 				}
 				EndTable();
 			}
@@ -882,133 +891,107 @@ void Main::DrawSaveLoadWindow()
 
 void Main::DrawDangerousWindow()
 {
-	if (showDangerous)
-	{
-		SetNextWindowBgAlpha(1.0f);
-		vlsui::PrepareToolWindow(ImVec2(400.0f, 210.0f), ImVec2(360.0f, 190.0f));
-
-		Begin("Инструменты", &showDangerous, ImGuiWindowFlags_NoCollapse);
-		{
-			TextDisabled("Операции применяются ко всему миру");
-			if (BeginTable("##Cb3DangerActions", 2, ImGuiTableFlags_SizingStretchSame))
-			{
-				TableNextRow();
-				TableSetColumnIndex(0);
-				if (Button("Очистить мир", ImVec2(-1.0f, 36.0f)))
-				{
-					ClearWorld();
-					field->params.Reset();
-				}
-				TableSetColumnIndex(1);
-				if (Button("Убить всех ботов", ImVec2(-1.0f, 36.0f)))
-				{
-					Deselect();
-					for (int cx = 0; cx < FieldCellsWidth; ++cx)
-					{
-						for (int cy = 0; cy < FieldCellsHeight; ++cy)
-						{
-							Object* o = field->GetObjectLocalCoords(cx, cy);
-							if (o && o->type() == bot)
-								field->RemoveObject(cx, cy);
-						}
-					}
-				}
-
-				TableNextRow();
-				TableSetColumnIndex(0);
-				if (Button("Обнулить время", ImVec2(-1.0f, 36.0f)))
-					ticknum = 0;
-				TableSetColumnIndex(1);
-				if (Button("Выход", ImVec2(-1.0f, 36.0f)))
-					terminate = true;
-				EndTable();
-			}
-		}
-		End();
-	}
+    if (!showDangerous) return;
+    vlsui::PrepareToolWindow(ImVec2(460, 240), ImVec2(340, 200));
+    ImGui::Begin("Инструменты", &showDangerous, ImGuiWindowFlags_NoCollapse);
+    ImGui::TextWrapped("Эти действия меняют весь мир. Перед выполнением появится подтверждение.");
+    if (vlsui::ColoredButton("Очистить мир…", ImVec2(-1, 36), ImVec4(0.54f, 0.22f, 0.19f, 1)))
+        feedback.Confirm("Очистить мир?", "Будут удалены все объекты, обнулено время и очищена история графиков. Параметры среды также вернутся к начальным значениям.", [this] {
+            ClearWorld(); field->params.Reset();
+            LogPrint("Мир очищен\r\n");
+        });
+    if (ImGui::Button("Удалить всех ботов…", ImVec2(-1, 36)))
+        feedback.Confirm("Удалить всех ботов?", "Все живые боты будут удалены без превращения в органику. Камни и пища останутся.", [this] {
+            Deselect();
+            for (int x = 0; x < FieldCellsWidth; ++x)
+                for (int y = 0; y < FieldCellsHeight; ++y)
+                    if (auto* o = field->GetObjectLocalCoords(x, y); o && o->type() == bot)
+                        field->RemoveObject(x, y);
+            RecordChartSample(true, "Боты удалены вручную");
+            LogPrint("Все боты удалены\r\n");
+        });
+    if (ImGui::Button("Обнулить время…", ImVec2(-1, 36)))
+        feedback.Confirm("Обнулить время?", "Счётчик тиков начнётся с нуля, история графиков будет очищена. Объекты и их возраст сохранятся.", [this] {
+            ticknum = 0;
+            chart.ClearChart();
+            RecordChartSample(true, "Время обнулено");
+            LogPrint("Время обнулено, начата новая история графиков\r\n");
+        });
+    ImGui::End();
 }
 
 void Main::DrawAdaptationWindow()
 {
-	if (showAdaptation)
-	{
-		SetNextWindowBgAlpha(1.0f);
-		vlsui::PrepareToolWindow(ImVec2(660.0f, 740.0f), ImVec2(500.0f, 520.0f));
+    if (!showAdaptation) return;
+    vlsui::PrepareToolWindow(ImVec2(620, 720), ImVec2(460, 460));
+    ImGui::Begin("Условия среды", &showAdaptation, ImGuiWindowFlags_NoCollapse);
+    ImGui::TextWrapped("Изменения действуют сразу. Вероятности: 0 %% — правило отключено, 100 %% — срабатывает при каждой проверке.");
+    ImGui::TextWrapped("Наведите на настройку для пояснения. Ctrl + щелчок по шкале — точный ввод.");
+    auto& p = field->params;
+    if (ImGui::CollapsingHeader("Отбор по движению"))
+    {
+        vlsui::IntegerSetting("Удаление от места рождения перед делением в воде", &p.adaptation_StepsNumToDivide_Winds,
+            0, 200, "%d клеток по X", "Для размножения в воде бот должен отдалиться от места рождения по X на это расстояние. Считается расстояние, а не число сделанных шагов. 0 — ограничение отключено.");
+        vlsui::ProbabilitySlider("Гибель при недостатке движений по X", &p.adaptation_forceBotMovementsX,
+            "После первых 3 тиков: если число движений по X меньше (возраст − 3) / 3, бот может погибнуть с этой вероятностью в каждом тике.");
+        vlsui::ProbabilitySlider("Гибель при недостатке движений по Y", &p.adaptation_forceBotMovementsY,
+            "После первых 3 тиков: если число движений по Y меньше (возраст − 3) / 3, бот может погибнуть с этой вероятностью в каждом тике.");
+    }
+    if (ImGui::CollapsingHeader("Вода, суша и размножение", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        vlsui::ProbabilitySlider("Вероятность запрета рождения на суше", &p.adaptation_landBirthBlock,
+            "Отменяет попытку размножения на суше с указанной вероятностью.");
+        vlsui::ProbabilitySlider("Вероятность запрета рождения в воде", &p.adaptation_seaBirthBlock,
+            "Отменяет попытку размножения в воде над слоем ила. На ил это правило не распространяется.");
+        vlsui::ProbabilitySlider("Вероятность блокировки фотосинтеза в воде", &p.adaptation_PSInOceanBlock,
+            "Бот не получит энергию при попытке фотосинтеза в воде над илом.");
+        vlsui::ProbabilitySlider("Вероятность блокировки фотосинтеза в иле", &p.adaptation_PSInMudBlock,
+            "Бот не получит энергию при попытке фотосинтеза в слое ила.");
 
-		Begin("Условия среды", &showAdaptation, ImGuiWindowFlags_NoCollapse);
-		{
-			PushItemWidth(GetContentRegionAvail().x * 0.55f);
-			if(CollapsingHeader("Ветры"))			
-			{
-				SliderInt("Шагов X до деления", &field->params.adaptation_StepsNumToDivide_Winds, 0, 200);
-				SliderInt("Сила движения X", &field->params.adaptation_forceBotMovementsX, 0, 1000);
-			}
-
-			NewLine();
-
-			if (CollapsingHeader("Ныряльщики", ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				SliderInt("Блок деления на суше", &field->params.adaptation_landBirthBlock, 0, 1000);
-				SliderInt("Блок деления в море", &field->params.adaptation_seaBirthBlock, 0, 1000);
-
-				NewLine();
-
-				SliderInt("Блок ФС в океане", &field->params.adaptation_PSInOceanBlock, 0, 1000, "%d");
-				SliderInt("Блок ФС в иле", &field->params.adaptation_PSInMudBlock, 0, 1000, "%d");
-				SliderInt("ФС на суше хотя бы раз", &field->params.adaptation_botShouldDoPSOnLandOnceToMultiply, 0, 1000, "%d");				
-				SliderInt("Сила движения Y", &field->params.adaptation_forceBotMovementsY, 0, 1000);
-
-				NewLine();
-
-				SliderInt("Уровень океана", &field->params.oceanLevel, 0, FieldCellsHeight);
-				SliderInt("Уровень ила", &field->params.mudLevel, 0, FieldCellsHeight);
-			}
-
-			NewLine();
-
-			if (CollapsingHeader("Органика"))
-			{
-				SliderInt("Частота появления органики", &field->params.adaptation_organicSpawnRate, 0, 1000);
-			}
-
-			NewLine();
-
-			if (CollapsingHeader("Яблоки"))
-			{
-				SliderInt("Энергия яблока", &field->params.appleEnergy, 1, 200);
-				Checkbox("Создавать яблоки", &field->params.spawnApples);
-			}
-
-			NewLine();
-
-			if (CollapsingHeader("Прочее"))
-			{
-				SliderInt("Макс. возраст бота", &field->params.botMaxLifetime, MaxBotLifetime_Min, MaxBotLifetime_Max);
-				SliderInt("Макс. энергия бота", &field->params.botMaxEnergy, 100, 2000);
-				SliderInt("Задержка размножения", &field->params.fertility_delay, 0, field->params.botMaxLifetime);
-
-				Checkbox("Без мутаций", &field->params.noMutations);
-				Checkbox("Без хищников", &field->params.noPredators);
-			}
-
-			NewLine();
-
-			if (CollapsingHeader("Сезоны"))
-			{	
-				Checkbox("Использовать сезоны", &field->params.useSeasons);
-				SliderInt("Интервал смены сезона", &field->params.seasonInterval, 200, 4000);
-			}
-
-			NewLine();
-
-			if (Button("Сброс", { 70, 20 }))
-			{
-				field->params.Reset();
-			}
-			PopItemWidth();
-		}
-		End();
-	}
+        vlsui::ProbabilitySlider("Запрет рождения без 4 фотосинтезов на суше", &p.adaptation_botShouldDoPSOnLandOnceToMultiply,
+            "Пока бот не выполнил фотосинтез на суше хотя бы 4 раза, попытка размножения блокируется с указанной вероятностью.");
+        vlsui::IntegerSetting("Глубина океана", &p.oceanLevel, 0, FieldCellsHeight, "%d клеток",
+            "Число нижних рядов мира, занятых водой. 0 — воды нет.");
+        vlsui::IntegerSetting("Толщина слоя ила", &p.mudLevel, 0, FieldCellsHeight, "%d клеток",
+            "Число нижних рядов, считающихся илом. Ил виден внутри водной области.");
+    }
+    if (ImGui::CollapsingHeader("Пища"))
+    {
+        vlsui::ProbabilitySlider("Вероятность органики после гибели бота", &p.adaptation_organicSpawnRate,
+            "При естественной гибели бот может оставить органику с оставшейся положительной энергией. Это не частота случайного появления пищи.");
+        vlsui::IntegerSetting("Энергия нового яблока", &p.appleEnergy, 1, 200, "%d ед.",
+            "Запас энергии яблок, которые появятся после изменения настройки.");
+        ImGui::Checkbox("Создавать яблоки", &p.spawnApples);
+        vlsui::ItemTooltip("Разрешить появление новых яблок на суше. Уже существующие яблоки сохраняются.");
+    }
+    if (ImGui::CollapsingHeader("Жизнь и наследование"))
+    {
+        vlsui::IntegerSetting("Предельный возраст бота", &p.botMaxLifetime, MaxBotLifetime_Min, MaxBotLifetime_Max, "%d тиков",
+            "При достижении этого возраста бот погибает.");
+        vlsui::IntegerSetting("Предельный запас энергии", &p.botMaxEnergy, 100, 2000, "%d ед.",
+            "Верхняя граница энергии бота.");
+        vlsui::IntegerSetting("Задержка размножения", &p.fertility_delay, 0, p.botMaxLifetime, "%d тиков",
+            "Минимальный возраст размножения для новых ботов. Между рождениями эта задержка не повторяется; уже живущие боты сохраняют прежний порог.");
+        ImGui::Checkbox("Без мутаций при рождении", &p.noMutations);
+        vlsui::ItemTooltip("Отключает наследственные мутации при рождении. Ручные изменения мозга и мутаген остаются доступны.");
+        ImGui::Checkbox("Гибель при попытке атаки", &p.noPredators);
+        vlsui::ItemTooltip("Бот погибает, когда мозг выбирает атаку, даже если перед ним нет жертвы. Это жёсткий отбор против атакующего поведения.");
+    }
+    if (ImGui::CollapsingHeader("Сезоны"))
+    {
+        ImGui::Checkbox("Использовать сезоны", &p.useSeasons);
+        vlsui::ItemTooltip("Периодически меняет награду за фотосинтез на суше. Под водой сезонный множитель не применяется.");
+        vlsui::IntegerSetting("Интервал смены сезона", &p.seasonInterval, 200, 4000, "%d тиков",
+            "Число тиков между сменами сезона при включённых сезонах.");
+    }
+    ImGui::Spacing();
+    if (ImGui::Button("Вернуть начальные условия…", ImVec2(-1, 34)))
+        feedback.Confirm("Сбросить условия среды?", "Параметры среды вернутся к начальным значениям режима. Объекты и время мира сохранятся.", [this] {
+            field->params.Reset();
+            RecordChartSample(true, "Условия среды сброшены");
+            LogPrint("Начальные условия среды восстановлены\r\n");
+        });
+    ImGui::End();
 }
 
 void Main::DrawChartWindow()
@@ -1175,11 +1158,12 @@ void Main::DrawWindows()
 	DrawAAWindow();
 	DrawModeSwitchConfirmWindow();
 	DrawSavedBotPicker();
+	feedback.Draw();
 }
 
 void Main::MouseClick()
 {
-	if (!io->WantCaptureMouse)
+	if (!feedback.HasConfirmation() && !io->WantCaptureMouse)
 	{
 		if (field->IsInBoundsScreenCoords(mouseState.mouseX, mouseState.mouseY))
 		{
