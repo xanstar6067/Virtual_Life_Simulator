@@ -76,6 +76,60 @@ static Snapshot Inspect(Field& field)
     }
     return s;
 }
+// Optional arena for Bot objects (--bot-layout sequential|shuffled), active only while a world is loaded.
+// It isolates the cost of memory layout: the same bots in iteration order or in random memory order.
+namespace layout
+{
+    constexpr size_t SlotSize = 256, SlotCount = size_t(1) << 20;
+    static char* arena = nullptr;
+    static std::vector<uint32_t> order;
+    static size_t next = 0;
+    static bool active = false;
+    static bool Owns(void* p) { return arena && p >= arena && p < arena + SlotSize * SlotCount; }
+    static void Init(bool shuffled)
+    {
+        arena = static_cast<char*>(VirtualAlloc(nullptr, SlotSize * SlotCount, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+        if (!arena) std::abort();
+        order.resize(SlotCount);
+        std::iota(order.begin(), order.end(), 0u);
+        if (shuffled) { std::mt19937 rng(777); std::shuffle(order.begin(), order.end(), rng); }
+        active = true;
+    }
+}
+void* operator new(size_t n)
+{
+    if (layout::active && n == sizeof(cb3::Bot) && layout::next < layout::SlotCount)
+        return layout::arena + size_t(layout::order[layout::next++]) * layout::SlotSize;
+    if (void* p = std::malloc(n ? n : 1)) return p;
+    throw std::bad_alloc();
+}
+void operator delete(void* p) noexcept { if (!layout::Owns(p)) std::free(p); }
+void operator delete(void* p, size_t) noexcept { operator delete(p); }
+
+// Dependent random loads over a buffer: average memory latency for a given working-set size.
+static void MeasureLatency()
+{
+    for (size_t kib : {16, 128, 512, 2048, 8192, 32768, 262144, 1048576})
+    {
+        const size_t n = kib * 1024 / 64;
+        std::vector<uint32_t> perm(n);
+        std::iota(perm.begin(), perm.end(), 0u);
+        std::mt19937 rng(1);
+        std::shuffle(perm.begin() + 1, perm.end(), rng);
+        auto* buf = static_cast<uint32_t*>(_aligned_malloc(n * 64, 64));
+        if (!buf) std::abort();
+        for (size_t i = 0; i < n; ++i) buf[size_t(perm[i]) * 16] = perm[(i + 1) % n];
+        uint32_t at = 0;
+        for (size_t i = 0; i < n; ++i) at = buf[size_t(at) * 16];
+        const size_t loads = 20000000;
+        const auto t0 = audit::Now();
+        for (size_t i = 0; i < loads; ++i) at = buf[size_t(at) * 16];
+        const double ns = Milliseconds(audit::Now() - t0) * 1e6 / loads;
+        scanSink += at;
+        std::printf("LATENCY kib=%zu ns=%.2f\n", kib, ns);
+        _aligned_free(buf);
+    }
+}
 static void PrintSnapshot(const char* label, const Snapshot& s)
 {
     std::printf("%s bots=%zu genomes=%zu apples=%zu organics=%zu rocks=%zu private_mib=%.3f working_mib=%.3f mean_connections=%.2f mean_active_neurons=%.2f plan_mib=%.3f neuron_mib=%.3f editable_mib=%.3f\n",
@@ -129,6 +183,8 @@ int wmain(int argc, wchar_t** argv)
     unsigned pool = 1024, warmup = 10, minTicks = 0, waves = 5, seed = 12345;
     double targetMs = 600;
     bool duplicate = false, clustered = false;
+    std::wstring botLayout;
+    unsigned age = 0;
     for (int i = 1; i < argc; ++i)
     {
         std::wstring a = argv[i];
@@ -146,11 +202,16 @@ int wmain(int argc, wchar_t** argv)
         else if (a == L"--waves") waves = _wtoi(value());
         else if (a == L"--duplicate-genomes") duplicate = true;
         else if (a == L"--clustered") clustered = true;
+        else if (a == L"--bot-layout") botLayout = value();
+        else if (a == L"--age") age = _wtoi(value());
         else if (a == L"--fixed-partitions") audit::fixedPartitions = true;
         else { std::fprintf(stderr, "Unknown option\n"); return 2; }
     }
     if (count > FieldCellsWidth * FieldCellsHeight || audit::requestedThreads < 1 || audit::requestedThreads > NumThreads) return 2;
     LARGE_INTEGER f; QueryPerformanceFrequency(&f); frequency = double(f.QuadPart);
+    if (mode == L"latency") { MeasureLatency(); return 0; }
+    if (!botLayout.empty() && botLayout != L"sequential" && botLayout != L"shuffled") return 2;
+    if (!botLayout.empty() && world.empty()) return 2;
     MEMORYSTATUSEX mem{}; mem.dwLength = sizeof(mem); GlobalMemoryStatusEx(&mem);
     std::printf("CONFIG threads=%d cpu_count=%d ram_mib=%.0f Bot=%zu Genome=%zu Neuron=%zu grid_bytes=%zu seed=%u profile=%d\n",
         audit::requestedThreads, SDL_GetCPUCount(), mem.ullTotalPhys / 1048576.0, sizeof(Bot), sizeof(BrainGenome), sizeof(Neuron),
@@ -161,8 +222,10 @@ int wmain(int argc, wchar_t** argv)
         0
 #endif
     );
-    audit::freeze = mode == L"fixed" || mode == L"skipbrain" || mode == L"stunned";
-    audit::skipBrain = mode == L"skipbrain";
+    const bool freezeMode = mode == L"fixed" || mode == L"skipbrain" || mode == L"stunned";
+    // With --age a loaded world first runs real ticks, so births and deaths fragment memory naturally.
+    audit::freeze = freezeMode && !age;
+    audit::skipBrain = mode == L"skipbrain" && !age;
     srand(seed); Field::seed = seed;
     auto field = std::make_unique<Field>();
     PrintSnapshot("EMPTY", Inspect(*field));
@@ -171,7 +234,9 @@ int wmain(int argc, wchar_t** argv)
     if (!world.empty())
     {
         ObjectSaver saver;
+        if (!botLayout.empty()) layout::Init(botLayout == L"shuffled");
         const auto loaded = saver.LoadWorld(field.get(), std::filesystem::path(world));
+        layout::active = false;
         if (loaded.width < 0) { std::fprintf(stderr, "Load failed\n"); return 3; }
         frame = unsigned(loaded.tick + 1);
         Field::seed = loaded.seed;
@@ -187,6 +252,9 @@ int wmain(int argc, wchar_t** argv)
     else if (mode == L"growth")
         for (unsigned i = 0; i < waves; ++i) field->SpawnControlGroup();
     else Fill(*field, count, pool, duplicate, clustered, mode == L"stunned");
+    for (unsigned i = 0; i < age; ++i) field->tick(frame++);
+    audit::freeze = freezeMode;
+    audit::skipBrain = mode == L"skipbrain";
     if (audit::freeze) { field->params.botMaxLifetime = INT_MAX; field->params.spawnApples = false; field->params.useSeasons = false; }
     std::printf("SETUP ms=%.3f frame=%u\n", Milliseconds(audit::Now() - setupStart), frame);
     PrintSnapshot("START", Inspect(*field));
