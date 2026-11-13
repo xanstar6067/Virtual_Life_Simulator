@@ -237,7 +237,7 @@ void Bot::Multiply(int numChildren, float energy_to_pass)
 				TakeEnergy(GiveBirthCost + toGive);
 
 				//Adaptation check
-				pField->AddObject(new Bot(freeSpace.x, freeSpace.y, toGive, this, RandomPercent(MutationChancePercent)));
+				pField->AddObject(new (botpool::AtColumn{ freeSpace.x }) Bot(freeSpace.x, freeSpace.y, toGive, this, RandomPercent(MutationChancePercent)));
 
 				return;
 			}

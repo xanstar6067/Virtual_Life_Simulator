@@ -3,12 +3,11 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $out = Join-Path $repoRoot 'x64\brain-equivalence'
 New-Item -ItemType Directory -Path $out -Force | Out-Null
-$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-$vsRoot = & $vswhere -latest -property installationPath
-$version = Get-ChildItem (Join-Path $vsRoot 'VC\Tools\MSVC') -Directory |
-    Where-Object { [Version]$_.Name -ge [Version]'14.30' -and [Version]$_.Name -lt [Version]'14.50' } |
-    Sort-Object { [Version]$_.Name } -Descending | Select-Object -First 1 -ExpandProperty Name
-if (!$version) { throw 'The tests require v143.' }
+. (Join-Path $PSScriptRoot 'Find-VisualStudioV143.ps1')
+$vs = Find-VisualStudioV143
+if (!$vs) { throw 'The tests require v143.' }
+$vsRoot = $vs.Root
+$version = $vs.Version
 $compileFlags = if ($DebugBuild) { '/MDd /Od /RTC1 /D_DEBUG' } else { '/MD /O2 /GL /DNDEBUG' }
 $linkFlags = if ($DebugBuild) { '' } else { '/LTCG' }
 $compilerArguments = @('/nologo', '/MP4', '/EHsc', '/std:c++20', '/utf-8', '/Zi', $compileFlags,

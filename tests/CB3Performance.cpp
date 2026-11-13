@@ -132,11 +132,11 @@ static void MeasureLatency()
 }
 static void PrintSnapshot(const char* label, const Snapshot& s)
 {
-    std::printf("%s bots=%zu genomes=%zu apples=%zu organics=%zu rocks=%zu private_mib=%.3f working_mib=%.3f mean_connections=%.2f mean_active_neurons=%.2f plan_mib=%.3f neuron_mib=%.3f editable_mib=%.3f\n",
+    std::printf("%s bots=%zu genomes=%zu apples=%zu organics=%zu rocks=%zu private_mib=%.3f working_mib=%.3f mean_connections=%.2f mean_active_neurons=%.2f plan_mib=%.3f neuron_mib=%.3f editable_mib=%.3f bot_pool_mib=%.3f\n",
         label, s.bots, s.genomes, s.apples, s.organics, s.rocks, s.privateMiB, s.workingMiB,
         s.genomes ? double(s.connections) / s.genomes : 0,
         s.genomes ? double(s.activeNeurons) / s.genomes : 0, s.planBytes / 1048576.0,
-        s.neuronBytes / 1048576.0, s.editableBytes / 1048576.0);
+        s.neuronBytes / 1048576.0, s.editableBytes / 1048576.0, botpool::AllocatedBytes() / 1048576.0);
     std::fflush(stdout);
 }
 static void Fill(Field& field, size_t count, unsigned poolSize, bool duplicate, bool clustered, bool stunned)
@@ -237,6 +237,12 @@ int wmain(int argc, wchar_t** argv)
         if (!botLayout.empty()) layout::Init(botLayout == L"shuffled");
         const auto loaded = saver.LoadWorld(field.get(), std::filesystem::path(world));
         layout::active = false;
+        // Bot has its own pooled operator new, which the global replacement above cannot intercept.
+        if (!botLayout.empty() && !layout::next)
+        {
+            std::fprintf(stderr, "--bot-layout needs sources without the bot pool (an archived harness)\n");
+            return 4;
+        }
         if (loaded.width < 0) { std::fprintf(stderr, "Load failed\n"); return 3; }
         frame = unsigned(loaded.tick + 1);
         Field::seed = loaded.seed;

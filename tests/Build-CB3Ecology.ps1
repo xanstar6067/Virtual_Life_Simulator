@@ -4,12 +4,11 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $base = Join-Path $repoRoot $OutputDirectory
 New-Item -ItemType Directory -Force $base | Out-Null
-$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-$vsRoot = & $vswhere -latest -property installationPath
-$version = Get-ChildItem (Join-Path $vsRoot 'VC/Tools/MSVC') -Directory |
-    Where-Object { [version]$_.Name -ge [version]'14.30' -and [version]$_.Name -lt [version]'14.50' } |
-    Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1 -ExpandProperty Name
-if (!$version) { throw 'v143 is required.' }
+. (Join-Path $PSScriptRoot 'Find-VisualStudioV143.ps1')
+$vs = Find-VisualStudioV143
+if (!$vs) { throw 'v143 is required.' }
+$vsRoot = $vs.Root
+$version = $vs.Version
 function Replace-Once($text, $old, $new) {
     if (($text.Split(@($old), [StringSplitOptions]::None).Count - 1) -ne 1) { throw "Missing/ambiguous anchor: $old" }
     return $text.Replace($old, $new)

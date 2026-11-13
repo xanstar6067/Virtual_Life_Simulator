@@ -218,6 +218,9 @@
     <ClInclude Include="source\cb3\BotNeuralNet.h">
       <Filter>Файлы заголовков\cb3</Filter>
     </ClInclude>
+    <ClInclude Include="source\cb3\BotPool.h">
+      <Filter>Файлы заголовков\cb3</Filter>
+    </ClInclude>
     <ClInclude Include="source\cb3\Chart.h">
       <Filter>Файлы заголовков\cb3</Filter>
     </ClInclude>

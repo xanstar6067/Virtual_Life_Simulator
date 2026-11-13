@@ -44,18 +44,11 @@ $brain = '#include "CB3PerformanceHooks.h"' + "`n" + $brain
 if ($Profile) { $brain = Instrument-Function $brain 'void BrainGenome::RebuildActive()' '    audit::Scope auditRebuild(audit::Rebuild);' }
 Set-Content -LiteralPath (Join-Path $outputDir 'BotNeuralNet.cpp') -Value $brain -Encoding utf8
 
-$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-# The newest installation may lack v143 (e.g. VS 2026 next to Build Tools 2022), so check every one.
-$vsRoot = $null; $compilerVersion = $null
-foreach ($candidate in @(& $vswhere -all -products '*' -sort -property installationPath)) {
-    $msvcDir = Join-Path $candidate 'VC\Tools\MSVC'
-    if (!(Test-Path -LiteralPath $msvcDir)) { continue }
-    $version = Get-ChildItem $msvcDir -Directory |
-        Where-Object { [Version]$_.Name -ge [Version]'14.30' -and [Version]$_.Name -lt [Version]'14.50' } |
-        Sort-Object { [Version]$_.Name } -Descending | Select-Object -First 1 -ExpandProperty Name
-    if ($version) { $vsRoot = $candidate; $compilerVersion = $version; break }
-}
-if (!$compilerVersion) { throw 'The benchmark requires the v143 C++ toolset.' }
+. (Join-Path $PSScriptRoot 'Find-VisualStudioV143.ps1')
+$vs = Find-VisualStudioV143
+if (!$vs) { throw 'The benchmark requires the v143 C++ toolset.' }
+$vsRoot = $vs.Root
+$compilerVersion = $vs.Version
 $devCmd = Join-Path $vsRoot 'Common7\Tools\VsDevCmd.bat'
 $arguments = @('/nologo', '/MP4', '/MD', '/EHsc', '/std:c++20', '/utf-8', '/O2', '/GL', '/Zi', '/DNDEBUG', '/D_CRT_SECURE_NO_WARNINGS', '/DSDL_MAIN_HANDLED',
     '/Itests', '/Iexternal\SDL2\include', '/Iexternal\SDL2_image\include', '/Iimgui', '/Iimgui\backends', '/IIMplot', '/Isource\cb3',

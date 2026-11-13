@@ -1257,6 +1257,8 @@ struct InterfaceSmokeTest
         const auto botB = std::filesystem::path(DirectoryName) / L"UI-Бот-Б.bot";
         assert(app.selectedObject);
         const BrainSnapshot original(((Bot*)app.selectedObject)->GetGenome());
+        // The folder is normally created by the file list; a fresh artifact directory may not have it yet.
+        std::filesystem::create_directories(DirectoryName);
         assert(app.saver.SaveObject(app.selectedObject, botA));
         Bot other(0, 0, 300);
         assert(app.saver.SaveObject(&other, botB));

@@ -3,6 +3,7 @@
 
 #include "Field.h"
 #include "BotNeuralNet.h"
+#include "BotPool.h"
 
 
 
@@ -268,6 +269,13 @@ public:
 
 	//New bot
 	Bot(int X, int Y, uint Energy = BotMaxEnergyInitial);
+
+	// Bots live in botpool, grouped by column. `new (botpool::AtColumn{ x }) Bot(x, ...)` places a bot near
+	// its column; plain `new Bot` uses the current botpool::ColumnHint. Plain `delete` works for both.
+	static void* operator new(size_t size) { return botpool::Allocate(size, botpool::columnHint); }
+	static void* operator new(size_t size, botpool::AtColumn at) { return botpool::Allocate(size, at.column); }
+	static void operator delete(void* p) noexcept { botpool::Free(p); }
+	static void operator delete(void* p, botpool::AtColumn) noexcept { botpool::Free(p); }
 
 
 	static void SetBodyImage(SDL_Texture* img);

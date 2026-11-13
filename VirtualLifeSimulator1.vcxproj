@@ -128,6 +128,7 @@
     <ClInclude Include="source\cb3\AutomaticAdaptation.h" />
     <ClInclude Include="source\cb3\Bot.h" />
     <ClInclude Include="source\cb3\BotNeuralNet.h" />
+    <ClInclude Include="source\cb3\BotPool.h" />
     <ClInclude Include="source\cb3\Chart.h" />
     <ClInclude Include="source\cb3\Field.h" />
     <ClInclude Include="source\cb3\GUI.h" />

@@ -1,14 +1,13 @@
 param([switch]$SkipBuild, [string]$ApplicationTargetName = 'VirtualLifeSimulator1')
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
-$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-$vsRoot = & $vswhere -latest -property installationPath
+. (Join-Path $PSScriptRoot 'Find-VisualStudioV143.ps1')
+$vs = Find-VisualStudioV143
+if (!$vs) { throw 'The project requires the v143 C++ toolset.' }
+$vsRoot = $vs.Root
+$compilerVersion = $vs.Version
 $msbuild = Join-Path $vsRoot 'MSBuild\Current\Bin\MSBuild.exe'
 $devCmd = Join-Path $vsRoot 'Common7\Tools\VsDevCmd.bat'
-$compilerVersion = Get-ChildItem (Join-Path $vsRoot 'VC\Tools\MSVC') -Directory |
-    Where-Object { [Version]$_.Name -ge [Version]'14.30' -and [Version]$_.Name -lt [Version]'14.50' } |
-    Sort-Object { [Version]$_.Name } -Descending | Select-Object -First 1 -ExpandProperty Name
-if (!$compilerVersion) { throw 'The project requires the v143 C++ toolset.' }
 
 Push-Location $repoRoot
 try {

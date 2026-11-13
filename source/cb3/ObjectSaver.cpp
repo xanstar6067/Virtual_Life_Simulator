@@ -198,6 +198,8 @@ ObjectSaver::WorldParams ObjectSaver::LoadWorld(Field* world, const std::filesys
             int x = file.ReadUShort();
             int y = file.ReadUShort();
 
+            // Objects are saved column by column: a loaded world starts with bots in processing order.
+            botpool::ColumnHint column(x);
             tmpObj = LoadObjectCompact(file);
 
             if (!tmpObj)
