@@ -237,67 +237,69 @@ void brain::ExecutionPlan::Build(const NeuronRow* neurons)
 	ready = true;
 }
 
-static float& PlanValue(NeuronValueRow* values, byte index)
-{
-	return values[index / NumNeuronsInLayerMax][index % NumNeuronsInLayerMax];
-}
+// Slots index the rectangular value/memory layout directly: slot = layer * NumNeuronsInLayerMax + index.
+static_assert(NumInputNeurons == NumNeuronsInLayerMax, "input values fill the first row of the value layout");
 
-static const byte* PlanFeed(NeuronValueRow* values, const byte* next, uint count, float value)
+// Adds value * weight to every target of one node; returns the next record.
+// Skipping a zero value gives bitwise the same result: targets start at +0 and only
+// accumulate products, so they are never -0, and x + (+-0) == x for any other x.
+// Activations are mostly 0 or 1, so this skips the edges of every inactive neuron.
+static const byte* PlanFeed(float* values, const byte* next, uint count, float value)
 {
+	const byte* const end = next + 2 * count;
+	if (value == 0.0f) return end;
 	// Plans contain only nonempty nodes, so the first edge always exists.
 	do
 	{
-		const byte dest = *next++;
-		const float weight = ScaledWeight[*next++];
-		PlanValue(values, dest) += value * weight;
-	} while (--count);
-	return next;
+		values[next[0]] += value * ScaledWeight[next[1]];
+		next += 2;
+	} while (next != end);
+	return end;
 }
 
-void brain::ExecutionPlan::Process(NeuronValueRow* values, NeuronMemoryRow* memory, const BrainInput& input) const
+// Hidden neuron types other than basic; rare enough to keep out of the common path.
+static float SpecialActivation(byte type, float value, int8_t& state)
 {
-	memset(values, 0, sizeof(float) * NumNeuronLayers * NumNeuronsInLayerMax);
-	memcpy(values[NeuronInputLayerIndex], input.fields, sizeof(input.fields));
+	switch (type)
+	{
+	case random: return (RandomVal(1000) <= static_cast<int>(value * 1000.0f)) ? 1.0f : 0.0f;
+	case radialbasis: return RadialBasisActivation(value);
+	case NeuronType::memory:
+		if (value < -1.0f) state = 0;
+		else if (value > 1.0f) state = 1;
+		return state * 1.0f;
+	default: return value;
+	}
+}
+
+void brain::ExecutionPlan::Process(NeuronValueRow* allValues, NeuronMemoryRow* allMemory, const BrainInput& input) const
+{
+	float* const values = allValues[0];
+	int8_t* const memory = allMemory[0];
+	memcpy(values, input.fields, sizeof(input.fields));
+	memset(values + NumNeuronsInLayerMax, 0, sizeof(float) * (NumNeuronLayers - 1) * NumNeuronsInLayerMax);
 	const byte* next = code.get();
 	for (uint i = 0; i < inputCount; ++i)
 	{
-		const byte index = *next++;
-		const byte count = *next++;
-		const float value = PlanValue(values, index) + ScaledBias[*next++];
-		next = PlanFeed(values, next, count, value);
+		const byte index = next[0];
+		const byte count = next[1];
+		const float value = values[index] + ScaledBias[next[2]];
+		next = PlanFeed(values, next + 3, count, value);
 	}
 	for (uint i = 0; i < hiddenCount; ++i)
 	{
-		const byte index = *next++;
-		const byte type = *next++;
-		const byte count = *next++;
-		float value = PlanValue(values, index) + ScaledBias[*next++];
-		switch (type)
-		{
-		case basic: value = ActivationSimple(value); break;
-		case random: value = (RandomVal(1000) <= static_cast<int>(value * 1000.0f)) ? 1.0f : 0.0f; break;
-		case radialbasis: value = RadialBasisActivation(value); break;
-		case NeuronType::memory:
-		{
-			auto& state = memory[index / NumNeuronsInLayerMax][index % NumNeuronsInLayerMax];
-			if (value < -1.0f) state = 0;
-			else if (value > 1.0f) state = 1;
-			value = state * 1.0f;
-			break;
-		}
-		}
-		next = PlanFeed(values, next, count, value);
+		const byte index = next[0];
+		const byte type = next[1];
+		const byte count = next[2];
+		float value = values[index] + ScaledBias[next[3]];
+		value = (type == basic) ? ActivationSimple(value) : SpecialActivation(type, value, memory[index]);
+		next = PlanFeed(values, next + 4, count, value);
 	}
+	float* const outputs = allValues[NeuronOutputLayerIndex];
 	for (uint i = 0; i < 2; ++i)
-	{
-		const float value = values[NeuronOutputLayerIndex][i] + ScaledBias[outputBias[i]];
-		values[NeuronOutputLayerIndex][i] = PlusMinusActivation(value);
-	}
+		outputs[i] = PlusMinusActivation(outputs[i] + ScaledBias[outputBias[i]]);
 	for (uint i = 2; i < NumOutputNeurons; ++i)
-	{
-		const float value = values[NeuronOutputLayerIndex][i] + ScaledBias[outputBias[i]];
-		values[NeuronOutputLayerIndex][i] = ActivationSimple(value);
-	}
+		outputs[i] = ActivationSimple(outputs[i] + ScaledBias[outputBias[i]]);
 }
 
 void brain::Mutate(NeuronRow* allNeurons)

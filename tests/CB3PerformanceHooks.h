@@ -11,6 +11,8 @@ inline bool freeze = false;
 inline bool skipBrain = false;
 inline bool fixedPartitions = false;
 inline unsigned rebalances = 0;
+// Set by --mode brain: receives each bot's genome, neuron memory and brain input right before thinking.
+inline void (*recordBrain)(const void* genome, const int8_t* memory, const float* input) = nullptr;
 inline thread_local int slot = 16;
 inline thread_local bool sampling = false;
 enum Stage { BotTick, Sense, Think, Multiply, Mutate, Rebuild, StageCount };

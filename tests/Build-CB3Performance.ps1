@@ -30,7 +30,8 @@ Set-Content -LiteralPath (Join-Path $outputDir 'Field.cpp') -Value $field -Encod
 
 $bot = (Get-Content -LiteralPath (Join-Path $repoRoot 'source\cb3\Bot.cpp') -Raw).Replace("`r`n", "`n")
 $bot = '#include "CB3PerformanceHooks.h"' + "`n" + $bot
-$bot = Replace-Once $bot 'tmpOut = think(input);' "tmpOut = audit::skipBrain ? BrainOutput{} : think(input);`n    if (audit::freeze) tmpOut = {};"
+$bot = Replace-Once $bot 'tmpOut = think(input);' ("if (audit::recordBrain) audit::recordBrain(&GetGenome(), &brainMemory[0][0], input.fields);`n" +
+    "    tmpOut = audit::skipBrain ? BrainOutput{} : think(input);`n    if (audit::freeze) tmpOut = {};")
 if ($Profile) {
     $bot = Instrument-Function $bot 'int Bot::tick()' '    audit::SampleBot auditSample;'
     $bot = Instrument-Function $bot 'BrainInput Bot::FillBrainInput()' '    audit::Scope auditSense(audit::Sense);'

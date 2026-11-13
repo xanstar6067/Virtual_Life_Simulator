@@ -1,10 +1,13 @@
-# Paired comparison of the CB3 bot pool with the archived harness built before it.
-# Needs x64/perf-audit/before-pool/cb3-perf.exe (+ SDL2.dll), the current harness from Build-CB3Performance.ps1
+# Paired comparison of the current CB3 harness with an archived one (by default the build before the bot pool).
+# Needs x64/perf-audit/<Before>/cb3-perf.exe (+ SDL2.dll), the current harness from Build-CB3Performance.ps1
 # and growth-500000.world from the growth example in tests/README.md. Runs sequentially, alternating the order.
-param([int]$Repeats = 3, [string]$OutputDirectory = 'x64\perf-audit\pool-comparison', [string]$ResultsCsv = 'CB3_BOT_POOL_RESULTS.csv')
+# -Before before-brain -OutputDirectory x64\perf-audit\brain-comparison -ResultsCsv CB3_BRAIN_SKIP_RESULTS.csv
+# reproduces the comparison of the zero-skipping brain plan.
+param([int]$Repeats = 3, [string]$Before = 'before-pool', [string]$OutputDirectory = 'x64\perf-audit\pool-comparison',
+    [string]$ResultsCsv = 'CB3_BOT_POOL_RESULTS.csv')
 [Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
 Set-Location (Split-Path -Parent $PSScriptRoot)
-foreach ($required in 'x64\perf-audit\before-pool\cb3-perf.exe', 'x64\perf-audit\baseline\cb3-perf.exe', 'x64\perf-audit\checkpoints\growth-500000.world') {
+foreach ($required in "x64\perf-audit\$Before\cb3-perf.exe", 'x64\perf-audit\baseline\cb3-perf.exe', 'x64\perf-audit\checkpoints\growth-500000.world') {
     if (!(Test-Path -LiteralPath $required)) { throw "Missing $required" }
 }
 $world = 'x64/perf-audit/checkpoints/growth-500000.world'
@@ -22,7 +25,7 @@ $rows = @()
 for ($r = 1; $r -le $Repeats; ++$r) {
     foreach ($threads in 1, 16) {
         foreach ($case in $cases.Keys) {
-            $versions = @('before-pool', 'baseline'); if ($r % 2 -eq 0) { [array]::Reverse($versions) }
+            $versions = @($Before, 'baseline'); if ($r % 2 -eq 0) { [array]::Reverse($versions) }
             foreach ($v in $versions) {
                 $log = Join-Path $logDir "$v-$case-t$threads-r$r.log"
                 & ".\x64\perf-audit\$v\cb3-perf.exe" @($cases[$case]) --threads $threads *> $log

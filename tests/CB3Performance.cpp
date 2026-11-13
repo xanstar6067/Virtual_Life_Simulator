@@ -5,6 +5,7 @@
 #include <psapi.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <numeric>
 #include <random>
@@ -130,6 +131,79 @@ static void MeasureLatency()
         _aligned_free(buf);
     }
 }
+// --mode brain: records every bot's genome, memory and input during one frozen tick, then evaluates only
+// BrainGenome::Process + GetOutput for these records in processing order. The checksum covers all values,
+// memory and outputs, so it must match between implementations that are bitwise equivalent.
+namespace brainbench
+{
+    struct Record { const BrainGenome* genome; int8_t memory[NumNeuronLayers * NumNeuronsInLayerMax]; float input[NumInputNeurons]; };
+    static std::vector<Record> records;
+    static void Store(const void* genome, const int8_t* memory, const float* input)
+    {
+        Record r;
+        r.genome = static_cast<const BrainGenome*>(genome);
+        std::memcpy(r.memory, memory, sizeof(r.memory));
+        std::memcpy(r.input, input, sizeof(r.input));
+        records.push_back(r);
+    }
+}
+static void MeasureBrain(Field& field, unsigned& frame, double targetMs, unsigned seed, bool byGenome)
+{
+    using namespace brainbench;
+    records.reserve(1u << 20);
+    audit::recordBrain = &Store;
+    field.tick(frame++);
+    audit::recordBrain = nullptr;
+    // --brain-by-genome: same records grouped by genome, so the plan stays in cache (compute-bound reference).
+    if (byGenome) std::stable_sort(records.begin(), records.end(), [](const Record& a, const Record& b) { return a.genome < b.genome; });
+    // One pass evaluates every record in processing order; `full` also mixes all values, memory and outputs.
+    const auto pass = [&](bool full)
+    {
+        srand(seed);
+        uint64_t sum = 1469598103934665603ull;
+        for (const auto& r : records)
+        {
+            int8_t memory[NumNeuronLayers][NumNeuronsInLayerMax];
+            std::memcpy(memory, r.memory, sizeof(memory));
+            BrainInput input;
+            std::memcpy(input.fields, r.input, sizeof(input.fields));
+            float values[NumNeuronLayers][NumNeuronsInLayerMax];
+            r.genome->Process(values, memory, input);
+            const BrainOutput out = brain::GetOutput(values);
+            const auto mix = [&](const void* data, size_t bytes)
+            {
+                const auto* b = static_cast<const uint8_t*>(data);
+                for (size_t i = 0; i < bytes; i += 8)
+                {
+                    uint64_t v = 0;
+                    std::memcpy(&v, b + i, (std::min)(size_t(8), bytes - i));
+                    sum = (sum ^ v) * 1099511628211ull;
+                }
+            };
+            if (full) { mix(values, sizeof(values)); mix(memory, sizeof(memory)); }
+            mix(out.fields, sizeof(out.fields));
+        }
+        return sum;
+    };
+    const uint64_t checksum = pass(true);
+    std::vector<double> passes;
+    uint64_t outputs = 0;
+    const auto start = audit::Now();
+    do
+    {
+        const auto t0 = audit::Now();
+        const uint64_t sum = pass(false);
+        passes.push_back(Milliseconds(audit::Now() - t0));
+        if (passes.size() > 1 && sum != outputs) { std::fprintf(stderr, "Brain outputs differ between passes\n"); std::exit(5); }
+        outputs = sum;
+    } while (passes.size() < 3 || Milliseconds(audit::Now() - start) < targetMs);
+    if (pass(true) != checksum) { std::fprintf(stderr, "Brain checksum differs between passes\n"); std::exit(5); }
+    std::sort(passes.begin(), passes.end());
+    std::printf("BRAIN records=%zu passes=%zu ns_per_call_p50=%.3f ns_per_call_min=%.3f checksum=%016llx\n",
+        records.size(), passes.size(), passes[passes.size() / 2] * 1e6 / records.size(), passes[0] * 1e6 / records.size(),
+        static_cast<unsigned long long>(checksum));
+    std::fflush(stdout);
+}
 static void PrintSnapshot(const char* label, const Snapshot& s)
 {
     std::printf("%s bots=%zu genomes=%zu apples=%zu organics=%zu rocks=%zu private_mib=%.3f working_mib=%.3f mean_connections=%.2f mean_active_neurons=%.2f plan_mib=%.3f neuron_mib=%.3f editable_mib=%.3f bot_pool_mib=%.3f\n",
@@ -185,6 +259,7 @@ int wmain(int argc, wchar_t** argv)
     bool duplicate = false, clustered = false;
     std::wstring botLayout;
     unsigned age = 0;
+    bool brainByGenome = false;
     for (int i = 1; i < argc; ++i)
     {
         std::wstring a = argv[i];
@@ -204,6 +279,7 @@ int wmain(int argc, wchar_t** argv)
         else if (a == L"--clustered") clustered = true;
         else if (a == L"--bot-layout") botLayout = value();
         else if (a == L"--age") age = _wtoi(value());
+        else if (a == L"--brain-by-genome") brainByGenome = true;
         else if (a == L"--fixed-partitions") audit::fixedPartitions = true;
         else { std::fprintf(stderr, "Unknown option\n"); return 2; }
     }
@@ -222,7 +298,8 @@ int wmain(int argc, wchar_t** argv)
         0
 #endif
     );
-    const bool freezeMode = mode == L"fixed" || mode == L"skipbrain" || mode == L"stunned";
+    const bool freezeMode = mode == L"fixed" || mode == L"skipbrain" || mode == L"stunned" || mode == L"brain";
+    if (mode == L"brain" && (world.empty() || audit::requestedThreads != 1)) return 2;
     // With --age a loaded world first runs real ticks, so births and deaths fragment memory naturally.
     audit::freeze = freezeMode && !age;
     audit::skipBrain = mode == L"skipbrain" && !age;
@@ -264,6 +341,7 @@ int wmain(int argc, wchar_t** argv)
     if (audit::freeze) { field->params.botMaxLifetime = INT_MAX; field->params.spawnApples = false; field->params.useSeasons = false; }
     std::printf("SETUP ms=%.3f frame=%u\n", Milliseconds(audit::Now() - setupStart), frame);
     PrintSnapshot("START", Inspect(*field));
+    if (mode == L"brain") { MeasureBrain(*field, frame, targetMs, seed, brainByGenome); return 0; }
     if (mode == L"growth")
     {
         unsigned checkpoint = 0;
