@@ -77,3 +77,10 @@ The runner saves results atomically after each complete experiment and can resum
 `CB3_ECOLOGY_RUN.json` preserves the measured endpoint commit IDs, compiler configuration, study manifest, executable and input hashes, historical-world checks, analysis parameters and normalized CSV hashes. It distinguishes the measured study from later rebuilds. All 20 normal/crisis pairs in each version must also have identical sampled prefixes through tick 250, before the intervention; this is checked without treating those repeated prefixes as additional independent seeds.
 
 Action-feedback regressions click the real clear-world, delete-all-bots, reset-time and reset-environment buttons and verify Escape cancellation, button cancellation, explicit confirmation, unchanged state before approval, and suspended ticks while the dialog is open. Quickload is deferred until confirmation and owns its file path even when the library selection/list changes. A real rename error remains visible across a successful save until dismissed through the notification button; success-only notices do not capture input. Opening environment controls preserves the exact stored probability (333 per thousand, displayed as 33.3%). Previews: `action-error.png`, `action-confirmation.png`, and `environment-explained.png` for each engine. Existing brain-history and header-overflow checks also cover the renamed undo/redo actions and shorter speed control.
+
+Theme regressions run in both UI smoke executables. They apply a temporary custom
+palette, render the workspace and verify the SDL background pixel, unchanged
+layout spacing and paused tick count, ImPlot colors, owned theme data, and retained
+selection in new ImGui/ImPlot contexts. The original theme is restored before the
+remaining scenarios. `theme-probe.png` is an isolated test palette preview, not a
+new application theme.

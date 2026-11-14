@@ -16,8 +16,8 @@ ImVec4 SeriesColor(int metric)
     switch (metric)
     {
     case Bots: case Photosynthetic: case Births: return Success();
-    case Apples: return ImVec4(.94f, .77f, .34f, 1);
-    case Organics: return ImVec4(.64f, .60f, .88f, 1);
+    case Apples: return Palette().apples;
+    case Organics: return Palette().organics;
     case Predators: case Deaths: case LowEnergy: case AnyPredators: return FeedingColor(FeedingType::Predator);
     case OrganicFeeders: case MeanEnergy: return FeedingColor(FeedingType::Organic);
     case MixedFeeders: return FeedingColor(FeedingType::Mixed);
@@ -276,7 +276,7 @@ void EcosystemChart::PlotPanel(const char* id, const char* yLabel, const std::ve
             {
                 if (event.tick < GetPlotLimits().X.Min || event.tick > GetPlotLimits().X.Max) continue;
                 const float x = PlotToPixels(event.tick, 0).x;
-                const ImU32 color = ImGui::GetColorU32(ImVec4(.70f, .77f, .77f, .55f));
+                const ImU32 color = ImGui::GetColorU32(Palette().chartEvent);
                 for (float y = pos.y; y < pos.y + extent.y; y += 8) draw->AddLine(ImVec2(x, y), ImVec2(x, (std::min)(y + 4, pos.y + extent.y)), color);
                 draw->AddCircleFilled(ImVec2(x, pos.y + 5), 3, color);
                 if (extent.x > 500 && x - lastLabel > 100 && x + ImGui::CalcTextSize(event.kind.c_str()).x < pos.x + extent.x)

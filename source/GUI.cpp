@@ -17,7 +17,7 @@ void InitImGUI()
 	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
 	//Setup Dear ImGui style
-	vlsui::ApplyModernTheme();
+	vlsui::InitializeTheme();
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
@@ -104,15 +104,15 @@ void Main::DrawSystemWindow()
 
 	ImGui::Begin("Система", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 	{
-		ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Платформа");
+		ImGui::TextColored(vlsui::Palette().diagnostic, "Платформа");
 		ImGui::SameLine();
 		ImGui::Text(" %s", SDL_GetPlatform());
 
 		ImGui::SameLine();
 
-		ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Ядер процессора: %d", SDL_GetCPUCount());
+		ImGui::TextColored(vlsui::Palette().diagnostic, "Ядер процессора: %d", SDL_GetCPUCount());
 
-		ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
+		ImGui::TextColored(vlsui::Palette().diagnostic, "Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
 
 		ImGui::SameLine();
 
@@ -250,7 +250,7 @@ void Main::DrawConsoleWindow()
 
 	ImGui::Begin("Журнал", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 	{
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(LogBackgroundColor));
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, vlsui::Palette().logBackground);
 
 		ImGui::BeginChild("scrolling", ImVec2(240, 80), true);
 		{
@@ -937,7 +937,7 @@ void Main::DrawDangerousWindow()
     vlsui::PrepareToolWindow(ImVec2(460, 240), ImVec2(340, 200));
     ImGui::Begin("Инструменты", &showDangerous, ImGuiWindowFlags_NoCollapse);
     ImGui::TextWrapped("Эти действия меняют весь мир. Перед выполнением появится подтверждение.");
-    if (vlsui::ColoredButton("Очистить мир…", ImVec2(-1, 36), ImVec4(0.54f, 0.22f, 0.19f, 1)))
+    if (vlsui::ColoredButton("Очистить мир…", ImVec2(-1, 36), vlsui::Palette().danger))
         feedback.Confirm("Очистить мир?", "Будут удалены все объекты, обнулено время и очищена история графиков. Условия среды сохранятся.", [this] {
             ClearWorld();
             LogPrint("Мир очищен\r\n");

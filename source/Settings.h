@@ -59,7 +59,6 @@
 #define GUISidePanelWidth 360
 #define FieldScrollbarSize 18
 
-#define LogBackgroundColor 0.1f, 0.1f, 0.3f, 1.0f
 
 #define DefaultBrushRadius 1
 #define GUI_Max_tps 180

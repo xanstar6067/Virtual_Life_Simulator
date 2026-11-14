@@ -1,5 +1,6 @@
 
 #include "SDL.h"
+#include "Theme.h"
 
 #include <algorithm>
 
@@ -195,7 +196,9 @@ void SDLBeginScene()
 {
 	// Clear the renderer that draws the world and ImGui, including panel gaps.
 	// OpenGL calls cannot clear an SDL renderer backed by Direct3D.
-	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+	const ImVec4 color = vlsui::Palette().desktop;
+	SDL_SetRenderDrawColor(renderer, (Uint8)(color.x * 255), (Uint8)(color.y * 255),
+		(Uint8)(color.z * 255), (Uint8)(color.w * 255));
 	SDL_RenderClear(renderer);
 }
 

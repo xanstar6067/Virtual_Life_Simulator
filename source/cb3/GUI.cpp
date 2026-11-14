@@ -20,7 +20,7 @@ void InitImGUI()
 	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
 	//Setup Dear ImGui style
-	vlsui::ApplyModernTheme();
+	vlsui::InitializeTheme();
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
@@ -99,14 +99,14 @@ void Main::DrawSystemWindow()
 
 	Begin("Система", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 	{
-		TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Платформа");
+		TextColored(vlsui::Palette().diagnostic, "Платформа");
 		SameLine();
 		Text(" %s", SDL_GetPlatform());
 
 		SameLine();
 
-		TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Ядер процессора: %d", SDL_GetCPUCount());
-		TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
+		TextColored(vlsui::Palette().diagnostic, "Ядер процессора: %d", SDL_GetCPUCount());
+		TextColored(vlsui::Palette().diagnostic, "Память: %.2f ГБ", SDL_GetSystemRAM() / 1024.0f);
 
 		SameLine();
 
@@ -236,7 +236,7 @@ void Main::DrawLogWindow()
 
 	Begin("Журнал", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 	{
-		PushStyleColor(ImGuiCol_ChildBg, ImVec4(LogBackgroundColor));
+		PushStyleColor(ImGuiCol_ChildBg, vlsui::Palette().logBackground);
 
 		BeginChild("scrolling", ImVec2(265, 85), true);
 		{
@@ -895,7 +895,7 @@ void Main::DrawDangerousWindow()
     vlsui::PrepareToolWindow(ImVec2(460, 240), ImVec2(340, 200));
     ImGui::Begin("Инструменты", &showDangerous, ImGuiWindowFlags_NoCollapse);
     ImGui::TextWrapped("Эти действия меняют весь мир. Перед выполнением появится подтверждение.");
-    if (vlsui::ColoredButton("Очистить мир…", ImVec2(-1, 36), ImVec4(0.54f, 0.22f, 0.19f, 1)))
+    if (vlsui::ColoredButton("Очистить мир…", ImVec2(-1, 36), vlsui::Palette().danger))
         feedback.Confirm("Очистить мир?", "Будут удалены все объекты, обнулено время и очищена история графиков. Параметры среды также вернутся к начальным значениям.", [this] {
             ClearWorld(); field->params.Reset();
             LogPrint("Мир очищен\r\n");

@@ -1457,9 +1457,57 @@ struct InterfaceSmokeTest
         Frame(app, surface);
     }
 
+    static void CheckThemes(Main& app, SDL_Surface* surface)
+    {
+        const auto original = vlsui::GetTheme();
+        const auto padding = ImGui::GetStyle().WindowPadding;
+        const auto tick = app.ticknum;
+        {
+            auto custom = vlsui::MakeDefaultTheme();
+            custom.imguiColors[ImGuiCol_WindowBg] = ImVec4(.18f, .12f, .25f, 1);
+            custom.implotColors[ImPlotCol_PlotBg] = ImVec4(.20f, .15f, .30f, 1);
+            custom.palette.desktop = ImVec4(.2f, .3f, .4f, 1);
+            custom.palette.accent = ImVec4(.5f, .3f, .7f, 1);
+            custom.palette.brainCanvas = ImVec4(.1f, .05f, .15f, 1);
+            vlsui::ApplyTheme(custom);
+            custom.palette.accent = ImVec4(0, 0, 0, 1); // application owns its copy
+        }
+        assert(vlsui::Accent().x == .5f);
+        assert(ImGui::GetStyle().WindowPadding.x == padding.x);
+        assert(ImGui::GetStyle().WindowPadding.y == padding.y);
+        assert(ImPlot::GetStyle().Colors[ImPlotCol_PlotBg].z == .30f);
+        Frame(app, surface); Frame(app, surface);
+        assert(app.ticknum == tick && !app.simulate);
+        Uint8 r, g, b, alpha;
+        SDL_GetRGBA(*(Uint32*)surface->pixels, surface->format, &r, &g, &b, &alpha);
+        assert(r == 51 && g == 76 && b == 102 && alpha == 255);
+        const auto header = ImGui::FindWindowByName("##WorkspaceHeader");
+        assert(header && header->Pos.x == vlsui::CalculateLayout(surface->w, surface->h).header.x);
+        assert(IMG_SavePNG(surface, "theme-probe.png") == 0);
+
+        // A newly created UI context must retain the application selection.
+        auto* gui = ImGui::GetCurrentContext();
+        auto* plot = ImPlot::GetCurrentContext();
+        ImGui::SetCurrentContext(ImGui::CreateContext());
+        ImGui::GetIO().IniFilename = nullptr;
+        ImGui::GetIO().LogFilename = nullptr;
+        ImPlot::SetCurrentContext(ImPlot::CreateContext());
+        vlsui::InitializeTheme();
+        assert(ImGui::GetStyle().Colors[ImGuiCol_WindowBg].z == .25f);
+        assert(ImPlot::GetStyle().Colors[ImPlotCol_PlotBg].z == .30f);
+        assert(vlsui::Palette().brainCanvas.z == .15f);
+        ImPlot::DestroyContext();
+        ImGui::DestroyContext();
+        ImGui::SetCurrentContext(gui);
+        ImPlot::SetCurrentContext(plot);
+        vlsui::ApplyTheme(original);
+        Frame(app, surface);
+    }
+
     static void Run(Main& app, SDL_Surface* surface)
     {
         CheckHistory();
+        CheckThemes(app, surface);
         srand(12345);
         assert(!app.simulate);
         Frame(app, surface);
@@ -1629,7 +1677,7 @@ int main(int argc, char** argv)
     vlsui::AddInterfaceFont(*io);
     assert(io->Fonts->Fonts.Size > 0);
     ImPlot::CreateContext();
-    vlsui::ApplyModernTheme();
+    vlsui::InitializeTheme();
     ImGui_ImplSDLRenderer_Init(renderer);
 #ifdef TEST_CB3
     cb3::ImageFactory::CreateImages();

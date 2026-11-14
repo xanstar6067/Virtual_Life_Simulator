@@ -370,7 +370,7 @@ void AutomaticAdaptation::DrawWindow(bool* open)
 
 	Begin("Автоадаптация", open, ImGuiWindowFlags_NoCollapse);
 	{
-		PushStyleColor(ImGuiCol_ChildBg, ImVec4(LogBackgroundColor));
+		PushStyleColor(ImGuiCol_ChildBg, vlsui::Palette().logBackground);
 
 		BeginChild("Журнал автоадаптации", ImVec2(-1.0f, 200.0f), true);
 		{

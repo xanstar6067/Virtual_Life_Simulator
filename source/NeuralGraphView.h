@@ -93,11 +93,11 @@ struct NeuralGraphView
 
 	static ImVec4 Positive()
 	{
-		return ImVec4(0.90f, 0.48f, 0.38f, 1);
+		return Palette().positiveConnection;
 	}
 	static ImVec4 Negative()
 	{
-		return ImVec4(0.40f, 0.65f, 0.94f, 1);
+		return Palette().negativeConnection;
 	}
 
 	void Draw(const std::vector<GraphNeuron>& neurons, const std::vector<GraphConnection>& connections,
@@ -106,7 +106,7 @@ struct NeuralGraphView
 		contextRequested = false;
 		chosenTargetLayer = chosenTargetIndex = -1;
 		counts = layerCounts;
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.065f, 0.095f, 0.105f, 1));
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, Palette().brainCanvas);
 		ImGui::BeginChild("##NeuralGraphCanvas", size, true,
 						  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		canvasMin = ImGui::GetCursorScreenPos();
@@ -253,9 +253,7 @@ struct NeuralGraphView
 		}
 		for (const auto& node : neurons)
 		{
-			const ImVec4 colors[] = {ImVec4(.58f, .67f, .68f, 1), ImVec4(.88f, .70f, .39f, 1),
-									 ImVec4(.32f, .77f, .62f, 1), ImVec4(.43f, .65f, .93f, 1),
-									 ImVec4(.84f, .87f, .88f, 1), ImVec4(.70f, .51f, .83f, 1)};
+			const auto& colors = Palette().neuronTypes;
 			const ImVec2 p = NeuronPosition(node.layer, node.index);
 			draw->AddCircleFilled(p, radius, ImGui::ColorConvertFloat4ToU32(colors[std::clamp(node.type, 0, 5)]));
 			if (IsConnecting() && CanLinkTo(node.layer, node.index))

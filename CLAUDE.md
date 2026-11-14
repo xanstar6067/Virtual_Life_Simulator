@@ -94,7 +94,8 @@ source/Main.cpp: wWinMain
 | --- | --- |
 | `UILayout.h` | `CalculateLayout`, `WorkspaceLayout`: прямоугольники header/tools/world/inspector/footer, компактный режим. Геометрия UI отделена от размеров мира |
 | `SavedBotPicker.h` | Общий выбор сохранённого бота для «Из файла»: список только ботов текущего режима, независимый от библиотеки источник размещения и подтверждение выбора. |
-| `UITheme.h` | Общая тема, цвета, шрифт Segoe UI с кириллицей, вспомогательные элементы и оформление рабочего пространства; `ProbabilitySlider` отображает значения 0–1000 в процентах без изменения модели |
+| `Theme.h` | Общие `Theme`/`ThemePalette`, текущая палитра и `ApplyTheme`: цвета ImGui/ImPlot, интерфейса, графиков и мозга; выбор общий для обоих режимов и не входит в сохранение мира. Правила расширения: `THEMING.md` |
+| `UITheme.h` | Инициализация геометрии стиля через `InitializeTheme`, шрифт Segoe UI с кириллицей, вспомогательные элементы и оформление рабочего пространства; `ProbabilitySlider` отображает значения 0–1000 в процентах без изменения модели |
 | `ActionFeedback.h` | Общие уведомления об успехе/ошибке и отложенные подтверждения действий для обоих режимов. Успех скрывается через 5 секунд, ошибка — по кнопке; ожидающее подтверждение блокирует тики, горячие клавиши и инструменты поля. Callback владеет аргументами, не хранит указатель в список файлов |
 | `BotDiet.h` | `ClassifyFeeding`, `FeedingTypeName`: единая интерпретация питания для карточки и телеметрии |
 | `NeuralGraphView.h` | Общий ImGui-canvas мозга: узлы/рёбра, выделение, масштаб, pan, clipping и фильтр связей |
@@ -132,6 +133,7 @@ source/Main.cpp: wWinMain
 | Задача | Начни здесь → затем проверь |
 | --- | --- |
 | Старт, выход, выбор движка | `source/Main.cpp`: `wWinMain`, `SwitchSimulationMode`, `Shutdown` → `Cb3Runtime.cpp`, подтверждения в обоих `GUI.cpp` |
+| Темы и цвета интерфейса | `Theme.h`: `MakeDefaultTheme`, `GetTheme`, `Palette`, `ApplyTheme` → `UITheme.h::InitializeTheme`, оба `GUI.cpp`, `EcosystemChart.cpp`, `NeuralGraphView.h`; `THEMING.md` |
 | Кнопки, вкладки, окна, подписи | `GUI.cpp` нужного режима: `DrawMainWindow`, `DrawSidePanelWindow`, `DrawWindows` → `UITheme.h`, `HOW_TO_PLAY.md` |
 | Размеры/расположение панелей | `UILayout.h::CalculateLayout` → оба `GUI.cpp`, viewport/hit testing в обоих `Field.cpp` |
 | Выбор бота, кисть, мышь | `GUI.cpp::MouseClick`, `Main::Deselect` → `Field::ScreenCoordsToLocal`, `TrackObject`, `ValidateObjectExistance` |

@@ -100,7 +100,7 @@ public:
             }
             ImGui::SetItemDefaultFocus();
             ImGui::SameLine();
-            if (ColoredButton("Подтвердить", ImVec2(-1, 34), ImVec4(0.62f, 0.22f, 0.19f, 1)))
+            if (ColoredButton("Подтвердить", ImVec2(-1, 34), Palette().confirmation))
             {
                 accepted = std::move(pending);
                 pending = {};
