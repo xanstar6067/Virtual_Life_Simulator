@@ -108,3 +108,12 @@ checks write errors and recovery, and changing the working directory checks path
 independence. Each full smoke run leaves Retro selected through the actual queued
 save; the runner launches the executable again with `--theme-restart` to verify
 restored selection, geometry and technical font in a fresh process.
+
+Retro animation checks cover tick-driven activity, 10 Hz discrete motion, pause
+freeze, a one-position paused step, inactivity timeout, time reset and initial
+brain suppression. They verify the clock preserves the simulation RNG stream.
+A real ImGui/SDL graph fixture with positive and negative selected edges renders
+eight `retro-effects-0.png` … `retro-effects-7.png` frames. It checks lamp on/off
+states, paused motion, and disabling effects or switching to the normal theme.
+The existing real-bot editor checks still cover selection/context menus at wide
+and compact sizes in both modes. No simulation ticks are synthesized into worlds.

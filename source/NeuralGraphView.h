@@ -23,10 +23,58 @@ struct GraphConnection
 	float weight;
 };
 
+// UI-only activity clock. Never reads or advances the simulation RNG.
+// Motion is quantized to 10 positions/second, independent of simulation TPS.
+struct BrainActivity
+{
+    bool initialized = false, observedStep = false, lampOn = false;
+    unsigned lastTick = 0;
+    double lastFrame = 0, lastStep = 0, motionTime = 0;
+    int packetStep = 0;
+
+    void Observe(unsigned tick, bool running, bool liveBrain, double now)
+    {
+        if (!liveBrain) { *this = {}; return; }
+        if (!initialized || tick < lastTick)
+        {
+            *this = {};
+            initialized = true;
+            lastTick = tick;
+            lastFrame = now;
+            return;
+        }
+        const double elapsed = std::clamp(now - lastFrame, 0.0, .1);
+        lastFrame = now;
+        if (tick != lastTick)
+        {
+            observedStep = true;
+            lastStep = now;
+            if (!running) motionTime += .1; // one visible position per paused step
+        }
+        lastTick = tick;
+        const bool active = running && observedStep && now - lastStep < .20;
+        if (active) motionTime += elapsed;
+        packetStep = (int)std::floor(motionTime * 10 + .00001) % 12;
+        // A repeating uneven access-light pattern; only the small lamp flickers.
+        lampOn = active && ((0xD4u >> ((unsigned)(now * 16) % 8)) & 1u);
+    }
+};
+
 // Pure ImGui canvas: geometry, clipping and input follow the owning window.
 // No SDL overlay and no fixed screen coordinates are used by the brain viewer.
 struct NeuralGraphView
 {
+    BrainActivity activity;
+    bool effectsEnabled = true, simulationRunning = false, liveBrain = true;
+    unsigned simulationTick = 0;
+    void SetSimulationState(unsigned tick, bool running, bool current)
+    {
+        simulationTick = tick;
+        simulationRunning = running;
+        liveBrain = current;
+    }
+    bool HasRetroEffects() const { return GetTheme().style.retroBrainEffects && effectsEnabled; }
+
 	int selectedLayer = -1, selectedIndex = -1;
 	float zoomPercent = 100.0f;
 	bool selectedConnectionsOnly = false;
@@ -108,6 +156,9 @@ struct NeuralGraphView
 	void Draw(const std::vector<GraphNeuron>& neurons, const std::vector<GraphConnection>& connections,
 			  const std::vector<int>& layerCounts, const ImVec2& size)
 	{
+        const double now = ImGui::GetTime();
+        if (HasRetroEffects()) activity.Observe(simulationTick, simulationRunning, liveBrain, now);
+        else activity = {};
 		contextRequested = false;
 		chosenTargetLayer = chosenTargetIndex = -1;
 		counts = layerCounts;
@@ -231,6 +282,13 @@ struct NeuralGraphView
 			color.w = &edge == hoveredConnection ? 1.0f : selectedLayer >= 0 ? (attached ? .95f : .14f) : GetTheme().style.connectionOpacity;
 			DrawConnection(draw, NeuronPosition(edge.layer, edge.index), NeuronPosition(edge.destinationLayer, edge.destinationIndex),
 				ImGui::ColorConvertFloat4ToU32(color), &edge == hoveredConnection ? 3.0f : attached ? 1.8f : 1.0f, attached || &edge == hoveredConnection);
+            if (HasRetroEffects() && activity.observedStep && liveBrain && attached && edge.weight != 0)
+            {
+                const ImVec2 a = NeuronPosition(edge.layer, edge.index), b = NeuronPosition(edge.destinationLayer, edge.destinationIndex);
+                const float progress = (activity.packetStep + 1) / 14.0f;
+                draw->AddLine(CurvePoint(a, b, progress), CurvePoint(a, b, progress + .065f),
+                    ImGui::ColorConvertFloat4ToU32(edge.weight > 0 ? Palette().brainPulsePositive : Palette().brainPulseNegative), 3.0f);
+            }
 		}
 		if (IsConnecting())
 		{
@@ -275,13 +333,37 @@ struct NeuralGraphView
                     draw->AddRect(ImVec2(p.x-radius-3, p.y-radius-3), ImVec2(p.x+radius+3, p.y+radius+3),
                         ImGui::ColorConvertFloat4ToU32(Palette().predator), 0, 0, 1.5f);
                 else draw->AddCircle(p, radius + 4.0f, ImGui::GetColorU32(ImGuiCol_Text), 0, 1.5f);
+                if (HasRetroEffects())
+                {
+                    const int phase = (int)(now * 10) % 8;
+                    ImVec4 color = Palette().sectionTitle;
+                    color.w = phase == 0 || phase == 2 ? 1.0f : .22f;
+                    const float r = radius + 5, length = std::clamp(radius * .65f, 3.0f, 7.0f);
+                    for (int x : {-1, 1}) for (int y : {-1, 1})
+                    {
+                        const ImVec2 corner(p.x + x*r, p.y + y*r);
+                        draw->AddLine(corner, ImVec2(corner.x - x*length, corner.y), ImGui::ColorConvertFloat4ToU32(color), 2);
+                        draw->AddLine(corner, ImVec2(corner.x, corner.y - y*length), ImGui::ColorConvertFloat4ToU32(color), 2);
+                    }
+                }
             }
 		}
 		draw->PopClipRect();
-		draw->PushClipRect(canvasMin, canvasMax, true);
-		draw->AddText(ImVec2(canvasMin.x+2, canvasMin.y+2), ImGui::ColorConvertFloat4ToU32(Muted()),
-			IsConnecting() ? "ЛКМ по подсвеченной цели · Esc / ПКМ — отмена" : "ПКМ — меню нейрона или связи");
-		draw->PopClipRect();
+        const bool indicator = HasRetroEffects() && liveBrain;
+        const float indicatorWidth = indicator ? 60.0f : 0.0f;
+        draw->PushClipRect(canvasMin, ImVec2((std::max)(canvasMin.x, canvasMax.x-indicatorWidth), canvasMax.y), true);
+        draw->AddText(ImVec2(canvasMin.x+2, canvasMin.y+2), ImGui::ColorConvertFloat4ToU32(Muted()),
+            IsConnecting() ? "ЛКМ по подсвеченной цели · Esc / ПКМ — отмена" : "ПКМ — меню нейрона или связи");
+        draw->PopClipRect();
+        if (indicator)
+        {
+            draw->PushClipRect(canvasMin, canvasMax, true);
+            const ImVec2 lamp(canvasMax.x - 54, canvasMin.y + 6);
+            const ImVec4 color = activity.lampOn ? Palette().success : Muted();
+            draw->AddRectFilled(lamp, ImVec2(lamp.x+5, lamp.y+5), ImGui::ColorConvertFloat4ToU32(color));
+            draw->AddText(ImVec2(lamp.x+11, canvasMin.y+2), ImGui::ColorConvertFloat4ToU32(Muted()), "ТАКТ");
+            draw->PopClipRect();
+        }
 		if (hoveredNeuron)
 		{
 			ImGui::BeginTooltip();

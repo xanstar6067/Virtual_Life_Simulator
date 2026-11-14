@@ -1030,7 +1030,7 @@ void Main::DrawBotBrainWindow()
     auto current = bot->GetActiveBrain();
     auto initial = bot->GetInitialBrain();
     vlsui::DrawBrainWindow(showBrain, brainToShow, &current, &initial,
-        nn_renderer, bot->GetNeuronSummary(), BiasMultiplier, WeightMultiplier, true);
+        nn_renderer, bot->GetNeuronSummary(), BiasMultiplier, WeightMultiplier, true, ticknum, simulate);
     bot->RecheckBrain();
     if (!showBrain)
     {

@@ -3,6 +3,7 @@
 void NeuralNetRenderer::ResetSelection()
 {
 	view.ClearSelection();
+	view.activity = {};
 	editor.Reset();
 	selectedNeuron = nullptr;
 	selectedBrain = nullptr;

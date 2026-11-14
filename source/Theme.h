@@ -22,6 +22,7 @@ struct ThemePalette
     ImVec4 lowEnergy{1, .85f, .3f, 1}, apples{.94f, .77f, .34f, 1}, organics{.64f, .60f, .88f, 1};
     ImVec4 chartEvent{.70f, .77f, .77f, .55f};
     ImVec4 brainCanvas{.065f, .095f, .105f, 1}, positiveConnection{.90f, .48f, .38f, 1}, negativeConnection{.40f, .65f, .94f, 1};
+    ImVec4 brainPulsePositive{1, .45f, .35f, 1}, brainPulseNegative{.4f, .65f, 1, 1};
     std::array<ImVec4, 6> neuronTypes{{{.58f, .67f, .68f, 1}, {.88f, .70f, .39f, 1},
         {.32f, .77f, .62f, 1}, {.43f, .65f, .93f, 1}, {.84f, .87f, .88f, 1}, {.70f, .51f, .83f, 1}}};
 };
@@ -36,7 +37,7 @@ struct ThemeStyle
     float scrollbarRounding = 9, grabRounding = 6, tabRounding = 7;
     float windowBorder = 1, childBorder = 1, popupBorder = 1, frameBorder = 0;
     ThemeFont font = ThemeFont::Interface;
-    bool squareNeurons = false, straightConnections = false;
+    bool squareNeurons = false, straightConnections = false, retroBrainEffects = false;
     float neuronRadius = 8, connectionOpacity = .40f;
 };
 
@@ -197,7 +198,7 @@ inline Theme MakeRetroTheme()
     shape.scrollbarRounding = shape.grabRounding = shape.tabRounding = 0;
     shape.frameBorder = 1;
     shape.font = ThemeFont::Technical;
-    shape.squareNeurons = shape.straightConnections = true;
+    shape.squareNeurons = shape.straightConnections = shape.retroBrainEffects = true;
     shape.neuronRadius = 12;
     shape.connectionOpacity = .90f;
     auto& p = theme.palette;

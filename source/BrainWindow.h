@@ -8,7 +8,7 @@ inline constexpr const char* BrainWindowTitle = "Мозг бота###BotBrainWin
 
 template <class Brain, class Renderer, class Summary>
 void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, Renderer& renderer,
-					 const Summary& summary, float biasScale, float weightScale, bool allowBrainMutation)
+					 const Summary& summary, float biasScale, float weightScale, bool allowBrainMutation, unsigned tick, bool running)
 {
 	if (!open)
 		return;
@@ -80,6 +80,13 @@ void DrawBrainWindow(bool& open, int& version, Brain* current, Brain* initial, R
 		renderer.history.Size(version, historyLayer, historyIndex));
 	ItemTooltip("У каждого нейрона своя история для текущего и начального мозга. Хранится до закрытия окна или смены бота.");
 	ImGui::Checkbox("Только связи выбранного нейрона", &renderer.view.selectedConnectionsOnly);
+    if (GetTheme().style.retroBrainEffects)
+    {
+        ImGui::SameLine();
+        ImGui::Checkbox("Эффекты", &renderer.view.effectsEnabled);
+        ItemTooltip("Мигающие уголки и индикатор шагов мира. Импульсы на выбранных связях движутся скачками; на паузе замирают.");
+    }
+    renderer.view.SetSimulationState(tick, running, version == 0);
 	ImGui::TextWrapped("%s", version == 0 ? "Текущий мозг управляет этим ботом." : "Начальный мозг наследуют будущие потомки.");
 
 	auto details = [&]() {

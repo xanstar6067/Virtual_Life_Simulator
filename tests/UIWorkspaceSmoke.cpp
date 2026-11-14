@@ -1457,6 +1457,83 @@ struct InterfaceSmokeTest
         Frame(app, surface);
     }
 
+    static void CheckRetroEffects(Main& app, SDL_Surface* surface)
+    {
+        vlsui::BrainActivity clock;
+        clock.Observe(10, true, true, 0);
+        assert(!clock.observedStep && !clock.lampOn);
+        clock.Observe(11, true, true, .1);
+        assert(clock.observedStep && clock.packetStep == 1);
+        clock.Observe(12, true, true, .2);
+        assert(clock.packetStep == 2);
+        const auto stopped = clock.packetStep;
+        clock.Observe(12, false, true, .3);
+        clock.Observe(12, false, true, 3);
+        assert(clock.packetStep == stopped && !clock.lampOn);
+        clock.Observe(13, false, true, 3.1);
+        assert(clock.packetStep == (stopped + 1) % 12 && !clock.lampOn);
+        clock.Observe(13, true, true, 4);
+        assert(clock.packetStep == (stopped + 1) % 12 && !clock.lampOn); // no ticks, no activity
+        clock.Observe(1, true, true, 5);
+        assert(!clock.observedStep && clock.packetStep == 0); // reset/load
+        clock.Observe(2, true, false, 5.1);
+        assert(!clock.initialized && !clock.lampOn); // inherited brain is static
+        // The UI clock must not consume the simulation random stream.
+        srand(712); const auto expected = rand(); srand(712);
+        for (unsigned i = 0; i < 1000; ++i) clock.Observe(i, true, true, i * .016);
+        assert(rand() == expected);
+
+        const auto original = vlsui::GetTheme();
+        vlsui::ApplyTheme(vlsui::MakeRetroTheme());
+        vlsui::NeuralGraphView view;
+        view.selectedLayer = view.selectedIndex = 0;
+        const std::vector<vlsui::GraphNeuron> nodes{{0, 0, 1, "", "", 1}, {1, 0, 0, "", "", .5f}, {1, 1, 2, "", "", 1}};
+        const std::vector<vlsui::GraphConnection> edges{{0, 0, 1, 0, 1}, {0, 0, 1, 1, -1}};
+        const std::vector<int> counts{1, 2};
+        auto render = [&](unsigned tick, bool running, bool live) {
+            SDLBeginScene();
+            io->DisplaySize = ImVec2((float)surface->w, (float)surface->h);
+            io->DeltaTime = .1f;
+            io->MousePos = ImVec2(-100, -100);
+            ImGui_ImplSDLRenderer_NewFrame();
+            ImGui::NewFrame();
+            ImGui::SetNextWindowPos(ImVec2(20, 20));
+            ImGui::SetNextWindowSize(ImVec2((float)surface->w - 40, (float)surface->h - 40));
+            ImGui::Begin("Ретрофутуризм — эффекты", nullptr, ImGuiWindowFlags_NoSavedSettings);
+            view.SetSimulationState(tick, running, live);
+            view.Draw(nodes, edges, counts, ImGui::GetContentRegionAvail());
+            ImGui::End();
+            ImGui::Render();
+            ImGui_ImplSDLRenderer_RenderDrawData(ImGui::GetDrawData());
+            SDL_RenderPresent(renderer);
+        };
+        bool sawOn = false, sawOff = false;
+        for (int i = 0; i < 8; ++i)
+        {
+            render(100 + i, true, true);
+            sawOn |= view.activity.lampOn; sawOff |= !view.activity.lampOn;
+            char path[64]; snprintf(path, sizeof(path), "retro-effects-%d.png", i);
+            assert(IMG_SavePNG(surface, path) == 0);
+        }
+        assert(sawOn && sawOff && view.activity.packetStep > 0);
+        const auto phase = view.activity.packetStep;
+        for (int i = 0; i < 8; ++i) render(107, false, true);
+        assert(view.activity.packetStep == phase && !view.activity.lampOn);
+        render(108, false, true);
+        assert(view.activity.packetStep == (phase + 1) % 12);
+        view.effectsEnabled = false;
+        render(109, true, true);
+        assert(!view.activity.initialized);
+        view.effectsEnabled = true;
+        render(110, true, false);
+        assert(!view.activity.initialized);
+        vlsui::ApplyTheme(vlsui::MakeDefaultTheme());
+        render(111, true, true);
+        assert(!view.activity.initialized);
+        vlsui::ApplyTheme(original);
+        Frame(app, surface);
+    }
+
     static void SelectInspectorTab(Main& app, SDL_Surface* surface, const char* name)
     {
         Frame(app, surface); Frame(app, surface);
@@ -1602,6 +1679,7 @@ struct InterfaceSmokeTest
     {
         CheckHistory();
         CheckThemes(app, surface);
+        CheckRetroEffects(app, surface);
         CheckBuiltinThemes(app, surface, "wide");
         srand(12345);
         assert(!app.simulate);

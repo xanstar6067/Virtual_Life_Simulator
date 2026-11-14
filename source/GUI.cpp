@@ -1222,7 +1222,7 @@ void Main::DrawBotBrainWindow()
     auto current = selected->GetActiveBrain();
     auto initial = selected->GetInitialBrain();
     vlsui::DrawBrainWindow(showBrain, brainToShow, &current, &initial,
-        nn_renderer, selected->GetNeuronSummary(), 1.0f, 1.0f, false);
+        nn_renderer, selected->GetNeuronSummary(), 1.0f, 1.0f, false, ticknum, simulate);
     selected->RecheckBrain();
 }
 
