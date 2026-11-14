@@ -91,3 +91,11 @@ unchanged field/selection, population, tick and spacing. Previews are
 `wide-light-menu.png`, `compact-light-menu.png`, and
 `compact-light-brain-chart.png`. The latter renders the light brain and chart
 with a selected bot. Theme application is queued until the next SDL frame.
+
+Retro theme checks use the same real dropdown in both modes at wide and compact
+sizes. They verify square corners, frame borders, technical font selection and
+restoration, unchanged world/selection, straight-edge hit geometry, real square
+node selection and its context menu. `populated-retro-brain.png` and
+`compact-retro-brain.png` preview the editor; `*-retro-menu.png` preview the
+workspace. Test frames apply the queued theme before ImGui NewFrame, matching
+the application's SDLBeginScene order.

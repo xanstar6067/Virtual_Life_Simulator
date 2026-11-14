@@ -440,7 +440,7 @@ void EcosystemChart::PlotPreview(const ImVec2& size, bool& open)
     const ImVec2 extent((std::max)(1.0f, width), 24);
     ImGui::InvisibleButton("##ChartPreview", extent);
     auto* draw = ImGui::GetWindowDrawList();
-    draw->AddRectFilled(start, ImVec2(start.x + extent.x, start.y + extent.y), ImGui::GetColorU32(ImGuiCol_FrameBg), 4);
+    draw->AddRectFilled(start, ImVec2(start.x + extent.x, start.y + extent.y), ImGui::GetColorU32(ImGuiCol_FrameBg), (std::min)(4.0f, ImGui::GetStyle().FrameRounding));
     const auto range = VisibleTicks();
     std::vector<int> previewMetrics = mode == 0 ? std::vector<int>{Bots} : mode == 1 ? std::vector<int>{Photosynthetic, Predators, OrganicFeeders, MixedFeeders, UnknownFeeders}
         : mode == 2 ? std::vector<int>{MeanEnergy} : std::vector<int>{Births, Deaths};

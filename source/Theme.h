@@ -4,11 +4,12 @@
 #include "implot.h"
 #include <algorithm>
 #include <array>
+#include <cstring>
 
 namespace vlsui
 {
-// Presentation colors only. World/object colors describe simulation data and
-// stay in the engines. Layout, fonts and widget sizes are independent of a theme.
+// World/object colors describe simulation data and stay in the engines.
+// Themes own presentation colors, widget geometry, font choice and graph style.
 struct ThemePalette
 {
     ImVec4 accent{.14f, .48f, .40f, 1}, accentHovered{.19f, .58f, .48f, 1}, accentActive{.10f, .38f, .32f, 1};
@@ -25,17 +26,30 @@ struct ThemePalette
         {.32f, .77f, .62f, 1}, {.43f, .65f, .93f, 1}, {.84f, .87f, .88f, 1}, {.70f, .51f, .83f, 1}}};
 };
 
-enum class ThemeId { Custom, Dark, Light };
+enum class ThemeId { Custom, Dark, Light, Retro };
+inline constexpr ThemeId BuiltinThemes[] = {ThemeId::Dark, ThemeId::Light, ThemeId::Retro};
+enum class ThemeFont { Interface, Technical };
+
+struct ThemeStyle
+{
+    float windowRounding = 10, childRounding = 8, frameRounding = 7, popupRounding = 8;
+    float scrollbarRounding = 9, grabRounding = 6, tabRounding = 7;
+    float windowBorder = 1, childBorder = 1, popupBorder = 1, frameBorder = 0;
+    ThemeFont font = ThemeFont::Interface;
+    bool squareNeurons = false, straightConnections = false;
+    float neuronRadius = 8, connectionOpacity = .40f;
+};
 
 inline const char* ThemeName(ThemeId id)
 {
-    return id == ThemeId::Light ? "Светлая" : id == ThemeId::Dark ? "Тёмная" : "Другая";
+    return id == ThemeId::Retro ? "Ретрофутуризм" : id == ThemeId::Light ? "Светлая" : id == ThemeId::Dark ? "Тёмная" : "Другая";
 }
 
 struct Theme
 {
     ThemeId id = ThemeId::Custom;
     ThemePalette palette;
+    ThemeStyle style;
     std::array<ImVec4, ImGuiCol_COUNT> imguiColors;
     std::array<ImVec4, ImPlotCol_COUNT> implotColors;
 };
@@ -172,6 +186,95 @@ inline Theme MakeLightTheme()
     return theme;
 }
 
+// Inspired by the pre-redesign neural display (before f7452c5): black canvas,
+// square yellow I/O nodes, straight red/blue connections. Keep the current editor.
+inline Theme MakeRetroTheme()
+{
+    Theme theme = MakeDefaultTheme();
+    theme.id = ThemeId::Retro;
+    auto& shape = theme.style;
+    shape.windowRounding = shape.childRounding = shape.frameRounding = shape.popupRounding = 0;
+    shape.scrollbarRounding = shape.grabRounding = shape.tabRounding = 0;
+    shape.frameBorder = 1;
+    shape.font = ThemeFont::Technical;
+    shape.squareNeurons = shape.straightConnections = true;
+    shape.neuronRadius = 12;
+    shape.connectionOpacity = .90f;
+    auto& p = theme.palette;
+    p.accent = ImVec4(.12f, .29f, .30f, 1);
+    p.accentHovered = ImVec4(.17f, .39f, .40f, 1);
+    p.accentActive = ImVec4(.20f, .47f, .44f, 1);
+    p.panel = ImVec4(.025f, .045f, .055f, 1);
+    p.muted = ImVec4(.55f, .70f, .68f, 1);
+    p.sectionTitle = ImVec4(.45f, .91f, .80f, 1);
+    p.success = ImVec4(.36f, .90f, .63f, 1);
+    p.warning = ImVec4(1, .71f, .26f, 1);
+    p.desktop = ImVec4(.008f, .015f, .02f, 1);
+    p.logBackground = ImVec4(.015f, .028f, .035f, 1);
+    p.brainCanvas = ImVec4(0, 0, 0, 1);
+    p.positiveConnection = ImVec4(.73f, .06f, .06f, 1);
+    p.negativeConnection = ImVec4(.06f, .16f, .85f, 1);
+    p.neuronTypes = {{{.59f, .59f, .59f, 1}, {.92f, .92f, 0, 1}, {.92f, .92f, 0, 1},
+        {.08f, .22f, .90f, 1}, {1, 1, 1, 1}, {.70f, .08f, .70f, 1}}};
+    auto* c = theme.imguiColors.data();
+    c[ImGuiCol_Text] = ImVec4(.82f, .92f, .87f, 1);
+    c[ImGuiCol_TextDisabled] = p.muted;
+    c[ImGuiCol_WindowBg] = c[ImGuiCol_PopupBg] = p.panel;
+    c[ImGuiCol_ChildBg] = p.logBackground;
+    c[ImGuiCol_Border] = c[ImGuiCol_Separator] = ImVec4(.22f, .46f, .44f, 1);
+    c[ImGuiCol_FrameBg] = ImVec4(.035f, .09f, .10f, 1);
+    c[ImGuiCol_FrameBgHovered] = p.accent;
+    c[ImGuiCol_FrameBgActive] = p.accentHovered;
+    c[ImGuiCol_TitleBg] = c[ImGuiCol_TitleBgCollapsed] = p.panel;
+    c[ImGuiCol_TitleBgActive] = c[ImGuiCol_MenuBarBg] = ImVec4(.06f, .15f, .16f, 1);
+    c[ImGuiCol_ScrollbarBg] = p.panel;
+    c[ImGuiCol_ScrollbarGrab] = p.accent;
+    c[ImGuiCol_ScrollbarGrabHovered] = p.accentHovered;
+    c[ImGuiCol_ScrollbarGrabActive] = p.sectionTitle;
+    c[ImGuiCol_CheckMark] = c[ImGuiCol_SliderGrab] = p.sectionTitle;
+    c[ImGuiCol_SliderGrabActive] = p.success;
+    c[ImGuiCol_Button] = c[ImGuiCol_Header] = ImVec4(.05f, .13f, .14f, 1);
+    c[ImGuiCol_ButtonHovered] = c[ImGuiCol_HeaderHovered] = p.accentHovered;
+    c[ImGuiCol_ButtonActive] = c[ImGuiCol_HeaderActive] = p.accentActive;
+    c[ImGuiCol_SeparatorHovered] = c[ImGuiCol_SeparatorActive] = p.sectionTitle;
+    c[ImGuiCol_ResizeGrip] = c[ImGuiCol_ResizeGripHovered] = p.accentHovered;
+    c[ImGuiCol_ResizeGripActive] = p.sectionTitle;
+    c[ImGuiCol_Tab] = c[ImGuiCol_TabUnfocused] = c[ImGuiCol_FrameBg];
+    c[ImGuiCol_TabHovered] = p.accentHovered;
+    c[ImGuiCol_TabActive] = c[ImGuiCol_TabUnfocusedActive] = p.accent;
+    c[ImGuiCol_TableHeaderBg] = c[ImGuiCol_FrameBg];
+    c[ImGuiCol_TableBorderStrong] = c[ImGuiCol_Border];
+    c[ImGuiCol_TableBorderLight] = ImVec4(.13f, .27f, .27f, 1);
+    c[ImGuiCol_TableRowBgAlt] = ImVec4(.09f, .23f, .22f, .30f);
+    c[ImGuiCol_TextSelectedBg] = ImVec4(.20f, .70f, .55f, .35f);
+    c[ImGuiCol_NavHighlight] = p.sectionTitle;
+    c[ImGuiCol_PlotLines] = c[ImGuiCol_PlotHistogram] = p.success;
+    return theme;
+}
+
+inline void ApplyThemeStyle(const ThemeStyle& theme)
+{
+    if (!ImGui::GetCurrentContext()) return;
+    auto& style = ImGui::GetStyle();
+    style.WindowRounding = theme.windowRounding;
+    style.ChildRounding = theme.childRounding;
+    style.FrameRounding = theme.frameRounding;
+    style.PopupRounding = theme.popupRounding;
+    style.ScrollbarRounding = theme.scrollbarRounding;
+    style.GrabRounding = theme.grabRounding;
+    style.TabRounding = theme.tabRounding;
+    style.WindowBorderSize = theme.windowBorder;
+    style.ChildBorderSize = theme.childBorder;
+    style.PopupBorderSize = theme.popupBorder;
+    style.FrameBorderSize = theme.frameBorder;
+    auto& io = ImGui::GetIO();
+    const char* name = theme.font == ThemeFont::Technical ? "Technical" : "Interface";
+    io.FontDefault = nullptr;
+    for (const auto& config : io.Fonts->ConfigData)
+        if (!std::strcmp(config.Name, name)) io.FontDefault = config.DstFont;
+    // Missing optional technical font falls back to the first interface font.
+}
+
 namespace detail
 {
 inline Theme& ThemeStorage()
@@ -190,6 +293,7 @@ inline const ThemePalette& Palette() { return GetTheme().palette; }
 inline void ApplyTheme(const Theme& theme)
 {
     detail::ThemeStorage() = theme;
+    ApplyThemeStyle(theme.style);
     if (ImGui::GetCurrentContext())
         std::copy(theme.imguiColors.begin(), theme.imguiColors.end(), ImGui::GetStyle().Colors);
     if (ImPlot::GetCurrentContext())
@@ -204,7 +308,7 @@ inline ThemeId pendingTheme = ThemeId::Custom;
 // Commit it before clearing the next SDL frame so the entire frame agrees.
 inline void RequestTheme(ThemeId id)
 {
-    if (id == ThemeId::Dark || id == ThemeId::Light) detail::pendingTheme = id;
+    if (id == ThemeId::Dark || id == ThemeId::Light || id == ThemeId::Retro) detail::pendingTheme = id;
 }
 inline void ApplyPendingTheme()
 {
@@ -212,6 +316,7 @@ inline void ApplyPendingTheme()
     detail::pendingTheme = ThemeId::Custom;
     if (id == ThemeId::Dark) ApplyTheme(MakeDefaultTheme());
     if (id == ThemeId::Light) ApplyTheme(MakeLightTheme());
+    if (id == ThemeId::Retro) ApplyTheme(MakeRetroTheme());
 }
 
 } // namespace vlsui

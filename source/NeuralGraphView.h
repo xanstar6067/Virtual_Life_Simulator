@@ -71,6 +71,8 @@ struct NeuralGraphView
 
 	static ImVec2 CurvePoint(const ImVec2& a, const ImVec2& b, float t)
 	{
+		if (GetTheme().style.straightConnections)
+			return ImVec2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
 		const float bend = (b.x - a.x) * .40f;
 		const float u = 1 - t;
 		return ImVec2(u*u*u*a.x + 3*u*u*t*(a.x+bend) + 3*u*t*t*(b.x-bend) + t*t*t*b.x,
@@ -80,7 +82,10 @@ struct NeuralGraphView
 		bool arrow)
 	{
 		const float bend = (b.x - a.x) * .40f;
-		draw->AddBezierCubic(a, ImVec2(a.x+bend, a.y), ImVec2(b.x-bend, b.y), b, color, thickness);
+		if (GetTheme().style.straightConnections)
+			draw->AddLine(a, b, color, thickness);
+		else
+			draw->AddBezierCubic(a, ImVec2(a.x+bend, a.y), ImVec2(b.x-bend, b.y), b, color, thickness);
 		if (arrow)
 		{
 			const ImVec2 tip = CurvePoint(a, b, .65f), tail = CurvePoint(a, b, .60f);
@@ -139,7 +144,7 @@ struct NeuralGraphView
 		const float fitX = (available.x - 24.0f) / ((counts.size() - 1) * 90.0f + 64.0f);
 		const float fitY = (available.y - 48.0f) / ((maxRows - 1) * 44.0f + 80.0f);
 		scale = (std::max)(0.10f, (std::min)(1.0f, (std::min)(fitX, fitY))) * zoomPercent / 100.0f;
-		const float radius = 8.0f * scale;
+		const float radius = GetTheme().style.neuronRadius * scale;
 		const GraphNeuron* hoveredNeuron = nullptr;
 		float nearest = (std::max)(11.0f, radius + 4.0f);
 		const bool overPlot = hovered && mouse.y >= canvasMin.y + 24.0f;
@@ -148,7 +153,9 @@ struct NeuralGraphView
 			for (const auto& node : neurons)
 			{
 				const ImVec2 p = NeuronPosition(node.layer, node.index);
-				const float distance = std::hypot(p.x - mouse.x, p.y - mouse.y);
+				const float distance = GetTheme().style.squareNeurons
+                    ? (std::max)(std::abs(p.x - mouse.x), std::abs(p.y - mouse.y))
+                    : std::hypot(p.x - mouse.x, p.y - mouse.y);
 				if (distance < nearest)
 				{
 					nearest = distance;
@@ -221,7 +228,7 @@ struct NeuralGraphView
 			const bool attached = (edge.layer == selectedLayer && edge.index == selectedIndex) ||
 				(edge.destinationLayer == selectedLayer && edge.destinationIndex == selectedIndex);
 			ImVec4 color = edge.weight > 0 ? Positive() : edge.weight < 0 ? Negative() : Muted();
-			color.w = &edge == hoveredConnection ? 1.0f : selectedLayer >= 0 ? (attached ? .95f : .14f) : .40f;
+			color.w = &edge == hoveredConnection ? 1.0f : selectedLayer >= 0 ? (attached ? .95f : .14f) : GetTheme().style.connectionOpacity;
 			DrawConnection(draw, NeuronPosition(edge.layer, edge.index), NeuronPosition(edge.destinationLayer, edge.destinationIndex),
 				ImGui::ColorConvertFloat4ToU32(color), &edge == hoveredConnection ? 3.0f : attached ? 1.8f : 1.0f, attached || &edge == hoveredConnection);
 		}
@@ -255,11 +262,20 @@ struct NeuralGraphView
 		{
 			const auto& colors = Palette().neuronTypes;
 			const ImVec2 p = NeuronPosition(node.layer, node.index);
-			draw->AddCircleFilled(p, radius, ImGui::ColorConvertFloat4ToU32(colors[std::clamp(node.type, 0, 5)]));
+            const auto color = ImGui::ColorConvertFloat4ToU32(colors[std::clamp(node.type, 0, 5)]);
+            if (GetTheme().style.squareNeurons)
+                draw->AddRectFilled(ImVec2(p.x-radius, p.y-radius), ImVec2(p.x+radius, p.y+radius), color);
+            else
+                draw->AddCircleFilled(p, radius, color);
 			if (IsConnecting() && CanLinkTo(node.layer, node.index))
 				draw->AddCircle(p, radius + 6.0f, ImGui::ColorConvertFloat4ToU32(Accent()), 0, 2.0f);
-			if (node.layer == selectedLayer && node.index == selectedIndex)
-				draw->AddCircle(p, radius + 4.0f, ImGui::GetColorU32(ImGuiCol_Text), 0, 1.5f);
+            if (node.layer == selectedLayer && node.index == selectedIndex)
+            {
+                if (GetTheme().style.squareNeurons)
+                    draw->AddRect(ImVec2(p.x-radius-3, p.y-radius-3), ImVec2(p.x+radius+3, p.y+radius+3),
+                        ImGui::ColorConvertFloat4ToU32(Palette().predator), 0, 0, 1.5f);
+                else draw->AddCircle(p, radius + 4.0f, ImGui::GetColorU32(ImGuiCol_Text), 0, 1.5f);
+            }
 		}
 		draw->PopClipRect();
 		draw->PushClipRect(canvasMin, canvasMax, true);

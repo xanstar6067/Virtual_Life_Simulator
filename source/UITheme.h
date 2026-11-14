@@ -6,6 +6,8 @@
 #include <cfloat>
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <filesystem>
 
 namespace vlsui
 {
@@ -22,7 +24,16 @@ inline void AddInterfaceFont(ImGuiIO& io)
 		builder.AddText("• — – → …");
 		builder.BuildRanges(&ranges);
 	}
-	io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 16.0f, nullptr, ranges.Data);
+    ImFontConfig config;
+    std::snprintf(config.Name, sizeof(config.Name), "Interface");
+    io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 16.0f, &config, ranges.Data);
+    const char* technicalPath = "C:\\Windows\\Fonts\\consola.ttf";
+    std::error_code fontError;
+    if (std::filesystem::is_regular_file(technicalPath, fontError))
+    {
+        std::snprintf(config.Name, sizeof(config.Name), "Technical");
+        io.Fonts->AddFontFromFileTTF(technicalPath, 14.0f, &config, ranges.Data);
+    }
 }
 
 inline ImVec4 Accent() { return Palette().accent; }
@@ -32,7 +43,7 @@ inline ImVec4 Warning() { return Palette().warning; }
 inline ImVec4 Muted() { return Palette().muted; }
 inline ImVec4 Panel() { return Palette().panel; }
 
-// Geometry is initialized separately so changing colors never resets spacing.
+// Initialize layout spacing; theme-specific geometry/fonts are applied separately.
 inline void InitializeTheme()
 {
 	ImGuiStyle& style = ImGui::GetStyle();
@@ -44,18 +55,6 @@ inline void InitializeTheme()
 	style.IndentSpacing = 18.0f;
 	style.ScrollbarSize = 12.0f;
 	style.GrabMinSize = 12.0f;
-	style.WindowBorderSize = 1.0f;
-	style.ChildBorderSize = 1.0f;
-	style.PopupBorderSize = 1.0f;
-	style.FrameBorderSize = 0.0f;
-	style.WindowRounding = 10.0f;
-	style.ChildRounding = 8.0f;
-	style.FrameRounding = 7.0f;
-	style.PopupRounding = 8.0f;
-	style.ScrollbarRounding = 9.0f;
-	style.GrabRounding = 6.0f;
-	style.TabRounding = 7.0f;
-
     ApplyTheme(GetTheme());
 }
 
@@ -118,7 +117,7 @@ inline void DrawThemeMenu()
     ImGui::SetNextItemWidth(-1.0f);
     if (ImGui::BeginCombo("##Theme", ThemeName(GetTheme().id)))
     {
-        for (auto id : {ThemeId::Dark, ThemeId::Light})
+        for (auto id : BuiltinThemes)
         {
             const bool selected = GetTheme().id == id;
             if (ImGui::Selectable(ThemeName(id), selected)) RequestTheme(id);

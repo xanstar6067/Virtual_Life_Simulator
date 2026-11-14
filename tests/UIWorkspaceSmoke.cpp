@@ -88,9 +88,9 @@ struct InterfaceSmokeTest
         io->DeltaTime = 1.0f / 60.0f;
         io->MousePos = ImVec2(x, y);
         for (int i = 0; i < 3; ++i) io->MouseDown[i] = down && i == button;
+        SDLBeginScene();
         ImGui_ImplSDLRenderer_NewFrame();
         ImGui::NewFrame();
-        SDLBeginScene();
         if (app.renderType != noRender) app.field->draw(app.renderType);
         app.DrawWindows();
         ImGui::Render();
@@ -1486,7 +1486,7 @@ struct InterfaceSmokeTest
         Frame(app, surface); Frame(app, surface);
         const auto popup = ImGui::FindWindowByName("##Combo_00");
         assert(popup && popup->Active);
-        const int row = id == vlsui::ThemeId::Light ? 1 : 0;
+        const int row = id == vlsui::ThemeId::Retro ? 2 : id == vlsui::ThemeId::Light ? 1 : 0;
         Click(app, surface, popup->WorkRect.GetCenter().x,
             popup->WorkRect.Min.y + row * ImGui::GetTextLineHeightWithSpacing() + ImGui::GetTextLineHeight() * .5f);
         Frame(app, surface);
@@ -1495,6 +1495,7 @@ struct InterfaceSmokeTest
 
     static void CheckBuiltinThemes(Main& app, SDL_Surface* surface, const char* prefix)
     {
+        app.feedback.ClearNotices();
         const auto tick = app.ticknum;
         const auto count = CountBots(app);
         const auto selected = app.selectedObject;
@@ -1518,8 +1519,34 @@ struct InterfaceSmokeTest
             app.showBrain = app.showChart = false;
             Frame(app, surface);
         }
+        const auto interfaceFont = io->FontDefault;
+        ChooseTheme(app, surface, vlsui::ThemeId::Retro);
+        assert(ImGui::GetStyle().WindowRounding == 0 && ImGui::GetStyle().FrameBorderSize == 1);
+        assert(vlsui::GetTheme().style.squareNeurons && vlsui::GetTheme().style.straightConnections);
+        if (io->Fonts->Fonts.Size > 1) assert(io->FontDefault && io->FontDefault != interfaceFont);
+        const auto midpoint = vlsui::NeuralGraphView::CurvePoint(ImVec2(0, 0), ImVec2(100, 100), .25f);
+        assert(midpoint.x == 25 && midpoint.y == 25); // hit testing follows the straight line
+        snprintf(path, sizeof(path), "%s-retro-menu.png", prefix);
+        assert(IMG_SavePNG(surface, path) == 0);
+        if (selected)
+        {
+            app.showBrain = true;
+            Frame(app, surface); Frame(app, surface);
+            const auto node = app.nn_renderer.view.NeuronPosition(1, 0);
+            Click(app, surface, node.x, node.y);
+            assert(app.nn_renderer.view.selectedLayer == 1 && app.nn_renderer.view.selectedIndex == 0);
+            Click(app, surface, node.x, node.y, 1);
+            assert(BrainPopup());
+            BrainEscape(app, surface);
+            snprintf(path, sizeof(path), "%s-retro-brain.png", prefix);
+            assert(IMG_SavePNG(surface, path) == 0);
+            app.showBrain = false;
+            Frame(app, surface);
+        }
         ChooseTheme(app, surface, vlsui::ThemeId::Dark);
         assert(ImGui::GetStyle().Colors[ImGuiCol_WindowBg].x == vlsui::MakeDefaultTheme().imguiColors[ImGuiCol_WindowBg].x);
+        assert(ImGui::GetStyle().WindowRounding == 10 && ImGui::GetStyle().FrameBorderSize == 0);
+        assert(io->FontDefault == interfaceFont);
         assert(app.field == field && app.selectedObject == selected && app.ticknum == tick && CountBots(app) == count);
         SelectInspectorTab(app, surface, "Организм");
     }
@@ -1645,6 +1672,8 @@ struct InterfaceSmokeTest
         CheckGenomeSharing(app);
         CheckTelemetry(app, surface);
         CheckCharts(app, surface, "wide");
+        CheckSelection(app, surface);
+        CheckBuiltinThemes(app, surface, "populated");
 
         app.showSaveLoad = true;
         app.showAdaptation = true;

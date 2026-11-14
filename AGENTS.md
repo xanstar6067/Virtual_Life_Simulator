@@ -94,8 +94,8 @@ source/Main.cpp: wWinMain
 | --- | --- |
 | `UILayout.h` | `CalculateLayout`, `WorkspaceLayout`: прямоугольники header/tools/world/inspector/footer, компактный режим. Геометрия UI отделена от размеров мира |
 | `SavedBotPicker.h` | Общий выбор сохранённого бота для «Из файла»: список только ботов текущего режима, независимый от библиотеки источник размещения и подтверждение выбора. |
-| `Theme.h` | Общие `Theme`/`ThemePalette`, текущая палитра и `ApplyTheme`: цвета ImGui/ImPlot, интерфейса, графиков и мозга; тёмная/светлая темы, `RequestTheme`/`ApplyPendingTheme` применяют выбор перед очисткой SDL-кадра; выбор общий для обоих режимов, действует до выхода и не входит в сохранение мира. Правила расширения: `THEMING.md` |
-| `UITheme.h` | Инициализация геометрии стиля через `InitializeTheme`, общий список `DrawThemeMenu` во вкладке «Ещё», шрифт Segoe UI с кириллицей, вспомогательные элементы и оформление рабочего пространства; `ProbabilitySlider` отображает значения 0–1000 в процентах без изменения модели |
+| `Theme.h` | Общие `Theme`/`ThemePalette`/`ThemeStyle`, текущая палитра и `ApplyTheme`: цвета ImGui/ImPlot, интерфейса, графиков и мозга; тёмная/светлая/ретрофутуристическая темы; стиль задаёт рамки, скругления, шрифт и геометрию мозга, `RequestTheme`/`ApplyPendingTheme` применяют выбор перед очисткой SDL-кадра; выбор общий для обоих режимов, действует до выхода и не входит в сохранение мира. Правила расширения: `THEMING.md` |
+| `UITheme.h` | Инициализация геометрии стиля через `InitializeTheme`, общий список `DrawThemeMenu` во вкладке «Ещё», шрифты Segoe UI/Consolas с кириллицей в общем атласе, вспомогательные элементы и оформление рабочего пространства; `ProbabilitySlider` отображает значения 0–1000 в процентах без изменения модели |
 | `ActionFeedback.h` | Общие уведомления об успехе/ошибке и отложенные подтверждения действий для обоих режимов. Успех скрывается через 5 секунд, ошибка — по кнопке; ожидающее подтверждение блокирует тики, горячие клавиши и инструменты поля. Callback владеет аргументами, не хранит указатель в список файлов |
 | `BotDiet.h` | `ClassifyFeeding`, `FeedingTypeName`: единая интерпретация питания для карточки и телеметрии |
 | `NeuralGraphView.h` | Общий ImGui-canvas мозга: узлы/рёбра, выделение, масштаб, pan, clipping и фильтр связей |
@@ -133,7 +133,7 @@ source/Main.cpp: wWinMain
 | Задача | Начни здесь → затем проверь |
 | --- | --- |
 | Старт, выход, выбор движка | `source/Main.cpp`: `wWinMain`, `SwitchSimulationMode`, `Shutdown` → `Cb3Runtime.cpp`, подтверждения в обоих `GUI.cpp` |
-| Темы и цвета интерфейса | `Theme.h`: `MakeDefaultTheme`/`MakeLightTheme`, `GetTheme`, `Palette`, `RequestTheme`/`ApplyPendingTheme`, `ApplyTheme` → `UITheme.h::InitializeTheme`, оба `GUI.cpp`, `EcosystemChart.cpp`, `NeuralGraphView.h`; `THEMING.md` |
+| Темы и цвета интерфейса | `Theme.h`: `MakeDefaultTheme`/`MakeLightTheme`/`MakeRetroTheme`, `GetTheme`, `Palette`, `RequestTheme`/`ApplyPendingTheme`, `ApplyTheme` → `UITheme.h::InitializeTheme`, оба `GUI.cpp`, `EcosystemChart.cpp`, `NeuralGraphView.h`; `THEMING.md` |
 | Кнопки, вкладки, окна, подписи | `GUI.cpp` нужного режима: `DrawMainWindow`, `DrawSidePanelWindow`, `DrawWindows` → `UITheme.h`, `HOW_TO_PLAY.md` |
 | Размеры/расположение панелей | `UILayout.h::CalculateLayout` → оба `GUI.cpp`, viewport/hit testing в обоих `Field.cpp` |
 | Выбор бота, кисть, мышь | `GUI.cpp::MouseClick`, `Main::Deselect` → `Field::ScreenCoordsToLocal`, `TrackObject`, `ValidateObjectExistance` |
@@ -168,7 +168,7 @@ source/Main.cpp: wWinMain
 - **Телеметрия относится к сессии:** история не сохраняется в файл мира; после загрузки начинается заново. Разделяй рождения/гибель в тике и ручное добавление/удаление (`TelemetryCounters`).
 - `ClassifyFeeding`: меньше 20 учтённых единиц энергии — Unknown, доля источника от 2/3 — соответствующая категория, иначе Mixed. Это наблюдаемое питание, не вид бота; яблоки и органика учитываются вместе. В CB3 счётчики источников ограничены 100, в Classic такого ограничения нет.
 - История графиков укрупняет старые наблюдения с сохранением экстремумов; пустая популяция даёт NaN для неопределённых метрик. Не подменяй их нулями и не удаляй всю историю при заполнении буфера.
-- В исходниках есть русские UI-строки; сохраняй корректную кодировку, учитывай `/utf-8` в сборке. Подключение шрифта — `UITheme.h::AddInterfaceFont`, сейчас это Windows Segoe UI.
+- В исходниках есть русские UI-строки; сохраняй корректную кодировку, учитывай `/utf-8` в сборке. Подключение шрифта — `UITheme.h::AddInterfaceFont`, Windows Segoe UI и Consolas (ретрофутуризм, с возвратом к основному шрифту при отсутствии).
 - Новый `.cpp` нужно явно добавить в `.vcxproj`; для одноимённых CB3-файлов сохраняй отдельный `ObjectFileName` под `$(IntDir)cb3\`, иначе возникнут коллизии `.obj`. `.filters` отвечает только за отображение в IDE.
 - Сторонние `imgui/`, `IMplot/` и бинарные зависимости меняй только по относящейся к ним задаче. Не включай пользовательские сохранения и случайные изменения `imgui.ini` в правки.
 
