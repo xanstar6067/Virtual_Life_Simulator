@@ -252,6 +252,13 @@ inline Theme MakeRetroTheme()
     return theme;
 }
 
+inline Theme MakeBuiltinTheme(ThemeId id)
+{
+    if (id == ThemeId::Light) return MakeLightTheme();
+    if (id == ThemeId::Retro) return MakeRetroTheme();
+    return MakeDefaultTheme();
+}
+
 inline void ApplyThemeStyle(const ThemeStyle& theme)
 {
     if (!ImGui::GetCurrentContext()) return;
@@ -310,13 +317,13 @@ inline void RequestTheme(ThemeId id)
 {
     if (id == ThemeId::Dark || id == ThemeId::Light || id == ThemeId::Retro) detail::pendingTheme = id;
 }
-inline void ApplyPendingTheme()
+inline bool ApplyPendingTheme()
 {
     const auto id = detail::pendingTheme;
     detail::pendingTheme = ThemeId::Custom;
-    if (id == ThemeId::Dark) ApplyTheme(MakeDefaultTheme());
-    if (id == ThemeId::Light) ApplyTheme(MakeLightTheme());
-    if (id == ThemeId::Retro) ApplyTheme(MakeRetroTheme());
+    if (id == ThemeId::Custom) return false;
+    ApplyTheme(MakeBuiltinTheme(id));
+    return true;
 }
 
 } // namespace vlsui

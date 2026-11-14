@@ -1754,12 +1754,56 @@ struct InterfaceSmokeTest
 }
 #endif
 
+static void CheckThemePreferenceStorage(const std::filesystem::path& path)
+{
+    std::filesystem::create_directories(path.parent_path());
+    std::filesystem::remove(path); // isolated test-owned file only
+    assert(vlsui::ReadThemePreference(path) == vlsui::ThemeId::Dark);
+    for (auto id : vlsui::BuiltinThemes)
+    {
+        assert(vlsui::WriteThemePreference(path, id));
+        vlsui::ApplyTheme(vlsui::MakeDefaultTheme());
+        vlsui::InitializeThemePreferences(path);
+        assert(vlsui::GetTheme().id == id);
+    }
+    for (const char* invalid : {"", "theme=unknown\n", "theme=999\n", "theme=retro-with-invalid-trailing-data-and-a-very-long-line\n"})
+    {
+        { std::ofstream output(path); output << invalid; }
+        vlsui::InitializeThemePreferences(path);
+        assert(vlsui::GetTheme().id == vlsui::ThemeId::Dark);
+    }
+    // A directory in place of the file reliably simulates a write failure.
+    const auto blocked = path.parent_path() / "blocked.ini";
+    std::filesystem::create_directories(blocked);
+    vlsui::InitializeThemePreferences(blocked);
+    vlsui::RequestTheme(vlsui::ThemeId::Light);
+    SDLBeginScene();
+    assert(vlsui::GetTheme().id == vlsui::ThemeId::Light);
+    assert(vlsui::ThemePreferenceSaveFailed());
+    vlsui::InitializeThemePreferences(path);
+    vlsui::RequestTheme(vlsui::ThemeId::Dark);
+    SDLBeginScene();
+    assert(vlsui::ReadThemePreference(path) == vlsui::ThemeId::Dark);
+    assert(!vlsui::ThemePreferenceSaveFailed());
+
+    // The absolute preference path is independent of the launch/working folder.
+    const auto previousDirectory = std::filesystem::current_path();
+    std::filesystem::current_path(path.parent_path());
+    assert(vlsui::WriteThemePreference(path, vlsui::ThemeId::Retro));
+    vlsui::InitializeThemePreferences(path);
+    assert(vlsui::GetTheme().id == vlsui::ThemeId::Retro);
+    std::filesystem::current_path(previousDirectory);
+    assert(vlsui::WriteThemePreference(path, vlsui::ThemeId::Dark));
+    vlsui::InitializeThemePreferences(path);
+}
+
 int main(int argc, char** argv)
 {
     _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
-    assert(argc == 2);
+    assert(argc == 2 || (argc == 3 && !strcmp(argv[2], "--theme-restart")));
+    const bool themeRestart = argc == 3;
     std::filesystem::create_directories(argv[1]);
     std::filesystem::current_path(argv[1]);
     SDL_Init(SDL_INIT_TIMER);
@@ -1775,21 +1819,40 @@ int main(int argc, char** argv)
     vlsui::AddInterfaceFont(*io);
     assert(io->Fonts->Fonts.Size > 0);
     ImPlot::CreateContext();
+    const auto themePreferencePath = std::filesystem::absolute(L"theme-preferences/Настройки/ui.ini");
+    if (!themeRestart) CheckThemePreferenceStorage(themePreferencePath);
+    vlsui::InitializeThemePreferences(themePreferencePath);
     vlsui::InitializeTheme();
+    if (themeRestart)
+    {
+        assert(vlsui::GetTheme().id == vlsui::ThemeId::Retro);
+        assert(ImGui::GetStyle().WindowRounding == 0);
+        assert(vlsui::GetTheme().style.font == vlsui::ThemeFont::Technical);
+        if (io->Fonts->Fonts.Size > 1)
+            assert(io->FontDefault == io->Fonts->Fonts[1]);
+        std::puts("PASS: selected theme restored in a fresh process");
+    }
     ImGui_ImplSDLRenderer_Init(renderer);
 #ifdef TEST_CB3
     cb3::ImageFactory::CreateImages();
     {
         cb3::Main app;
-        cb3::InterfaceSmokeTest::Run(app, surface);
+        if (!themeRestart) cb3::InterfaceSmokeTest::Run(app, surface);
     }
 #else
     Apple::CreateImage();
     Bot::CreateImage();
     Organics::CreateImage();
-    InterfaceSmokeTest::Run(simulation, surface);
+    if (!themeRestart) InterfaceSmokeTest::Run(simulation, surface);
     simulation.Shutdown();
 #endif
+    if (!themeRestart)
+    {
+        // Exercise the same queued UI save, then verify it in the runner's next process.
+        vlsui::RequestTheme(vlsui::ThemeId::Retro);
+        SDLBeginScene();
+        assert(!vlsui::ThemePreferenceSaveFailed());
+    }
     ImGui_ImplSDLRenderer_Shutdown();
     SDL_DestroyRenderer(renderer);
     SDL_FreeSurface(surface);

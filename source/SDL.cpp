@@ -1,6 +1,6 @@
 
 #include "SDL.h"
-#include "Theme.h"
+#include "ThemePreferences.h"
 
 #include <algorithm>
 
@@ -194,7 +194,8 @@ bool ReadMouseState()
 
 void SDLBeginScene()
 {
-	vlsui::ApplyPendingTheme();
+	if (vlsui::ApplyPendingTheme())
+		vlsui::SaveSelectedThemePreference();
 	// Clear the renderer that draws the world and ImGui, including panel gaps.
 	// OpenGL calls cannot clear an SDL renderer backed by Direct3D.
 	const ImVec4 color = vlsui::Palette().desktop;

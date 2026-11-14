@@ -49,6 +49,8 @@ try {
         if ($LASTEXITCODE) { throw "$mode smoke test compilation failed." }
         & $testExe $artifactDir
         if ($LASTEXITCODE) { throw "$mode smoke test failed." }
+        & $testExe $artifactDir --theme-restart
+        if ($LASTEXITCODE) { throw "$mode theme persistence restart test failed." }
     }
 } finally {
     Pop-Location

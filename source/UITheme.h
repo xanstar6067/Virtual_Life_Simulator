@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Theme.h"
+#include "ThemePreferences.h"
 #include "UILayout.h"
 #include "BotDiet.h"
 #include <cfloat>
@@ -125,6 +125,8 @@ inline void DrawThemeMenu()
         }
         ImGui::EndCombo();
     }
+    if (ThemePreferenceSaveFailed())
+        ImGui::TextWrapped("Не удалось сохранить тему. При следующем запуске выбор может не восстановиться.");
 }
 
 inline bool ColoredButton(const char* label, const ImVec2& size, const ImVec4& color)

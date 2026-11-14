@@ -99,3 +99,12 @@ node selection and its context menu. `populated-retro-brain.png` and
 `compact-retro-brain.png` preview the editor; `*-retro-menu.png` preview the
 workspace. Test frames apply the queued theme before ImGui NewFrame, matching
 the application's SDLBeginScene order.
+
+Theme persistence checks use an explicit absolute path under each isolated test
+artifact directory (`theme-preferences/Настройки/ui.ini`), never the real SDL user
+preferences directory. All built-in themes are saved/reloaded; missing, invalid
+and overlong files fall back to Dark. A directory replacing the preference file
+checks write errors and recovery, and changing the working directory checks path
+independence. Each full smoke run leaves Retro selected through the actual queued
+save; the runner launches the executable again with `--theme-restart` to verify
+restored selection, geometry and technical font in a fresh process.

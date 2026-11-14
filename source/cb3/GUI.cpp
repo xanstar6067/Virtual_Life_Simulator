@@ -20,6 +20,7 @@ void InitImGUI()
 	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
 	//Setup Dear ImGui style
+	vlsui::InitializeThemePreferences();
 	vlsui::InitializeTheme();
 
 	// Setup Platform/Renderer backends
@@ -29,6 +30,8 @@ void InitImGUI()
 
 void DeInitImGUI()
 {
+	if (vlsui::ApplyPendingTheme())
+		vlsui::SaveSelectedThemePreference();
 	ImGui_ImplSDLRenderer_Shutdown();
 	ImPlot::DestroyContext();
 	DestroyContext();

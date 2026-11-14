@@ -152,6 +152,9 @@
     <ClInclude Include="source\Theme.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="source\ThemePreferences.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
     <ClInclude Include="source\UILayout.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
