@@ -111,6 +111,23 @@ inline void SectionTitle(const char* title, const char* hint = nullptr)
 	ImGui::Separator();
 }
 
+inline void DrawThemeMenu()
+{
+    SectionTitle("Оформление");
+    ImGui::TextUnformatted("Тема");
+    ImGui::SetNextItemWidth(-1.0f);
+    if (ImGui::BeginCombo("##Theme", ThemeName(GetTheme().id)))
+    {
+        for (auto id : {ThemeId::Dark, ThemeId::Light})
+        {
+            const bool selected = GetTheme().id == id;
+            if (ImGui::Selectable(ThemeName(id), selected)) RequestTheme(id);
+            if (selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+}
+
 inline bool ColoredButton(const char* label, const ImVec2& size, const ImVec4& color)
 {
 	ImVec4 hovered(

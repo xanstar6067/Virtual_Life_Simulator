@@ -25,8 +25,16 @@ struct ThemePalette
         {.32f, .77f, .62f, 1}, {.43f, .65f, .93f, 1}, {.84f, .87f, .88f, 1}, {.70f, .51f, .83f, 1}}};
 };
 
+enum class ThemeId { Custom, Dark, Light };
+
+inline const char* ThemeName(ThemeId id)
+{
+    return id == ThemeId::Light ? "Светлая" : id == ThemeId::Dark ? "Тёмная" : "Другая";
+}
+
 struct Theme
 {
+    ThemeId id = ThemeId::Custom;
     ThemePalette palette;
     std::array<ImVec4, ImGuiCol_COUNT> imguiColors;
     std::array<ImVec4, ImPlotCol_COUNT> implotColors;
@@ -36,6 +44,7 @@ struct Theme
 inline Theme MakeDefaultTheme()
 {
     Theme theme;
+    theme.id = ThemeId::Dark;
     ImGuiStyle gui;
     ImGui::StyleColorsDark(&gui);
     std::copy_n(gui.Colors, ImGuiCol_COUNT, theme.imguiColors.begin());
@@ -92,6 +101,77 @@ inline Theme MakeDefaultTheme()
     return theme;
 }
 
+inline Theme MakeLightTheme()
+{
+    Theme theme = MakeDefaultTheme();
+    theme.id = ThemeId::Light;
+    auto& p = theme.palette;
+    p.accent = ImVec4(.69f, .86f, .78f, 1);
+    p.accentHovered = ImVec4(.61f, .81f, .72f, 1);
+    p.accentActive = ImVec4(.55f, .76f, .66f, 1);
+    p.success = ImVec4(.08f, .40f, .27f, 1);
+    p.warning = ImVec4(.55f, .30f, .02f, 1);
+    p.danger = ImVec4(.93f, .73f, .70f, 1);
+    p.confirmation = ImVec4(.92f, .68f, .65f, 1);
+    p.muted = ImVec4(.35f, .42f, .41f, 1);
+    p.panel = ImVec4(.98f, .985f, .97f, 1);
+    p.sectionTitle = ImVec4(.17f, .32f, .28f, 1);
+    p.desktop = ImVec4(.87f, .91f, .89f, 1);
+    p.logBackground = ImVec4(.92f, .95f, .98f, 1);
+    p.diagnostic = ImVec4(.48f, .18f, .59f, 1);
+    p.predator = ImVec4(.72f, .20f, .17f, 1);
+    p.organicFeeder = ImVec4(.13f, .35f, .68f, 1);
+    p.mixedFeeder = ImVec4(.48f, .25f, .67f, 1);
+    p.lowEnergy = ImVec4(.55f, .38f, .02f, 1);
+    p.apples = ImVec4(.58f, .41f, .03f, 1);
+    p.organics = ImVec4(.45f, .32f, .62f, 1);
+    p.chartEvent = ImVec4(.25f, .35f, .32f, .55f);
+    p.brainCanvas = ImVec4(.94f, .96f, .94f, 1);
+    p.positiveConnection = ImVec4(.72f, .24f, .16f, 1);
+    p.negativeConnection = ImVec4(.13f, .36f, .72f, 1);
+    p.neuronTypes = {{{.36f, .45f, .44f, 1}, {.63f, .43f, .12f, 1},
+        {.10f, .48f, .33f, 1}, {.17f, .39f, .71f, 1}, {.23f, .30f, .29f, 1}, {.51f, .29f, .65f, 1}}};
+
+    ImGuiStyle gui;
+    ImGui::StyleColorsLight(&gui);
+    std::copy_n(gui.Colors, ImGuiCol_COUNT, theme.imguiColors.begin());
+    auto* c = theme.imguiColors.data();
+    c[ImGuiCol_Text] = ImVec4(.12f, .19f, .17f, 1);
+    c[ImGuiCol_TextDisabled] = p.muted;
+    c[ImGuiCol_WindowBg] = c[ImGuiCol_PopupBg] = p.panel;
+    c[ImGuiCol_ChildBg] = ImVec4(.94f, .96f, .94f, 1);
+    c[ImGuiCol_Border] = ImVec4(.70f, .77f, .73f, 1);
+    c[ImGuiCol_FrameBg] = ImVec4(.88f, .93f, .90f, 1);
+    c[ImGuiCol_FrameBgHovered] = ImVec4(.80f, .88f, .83f, 1);
+    c[ImGuiCol_FrameBgActive] = ImVec4(.73f, .84f, .77f, 1);
+    c[ImGuiCol_TitleBg] = c[ImGuiCol_TitleBgCollapsed] = p.panel;
+    c[ImGuiCol_TitleBgActive] = c[ImGuiCol_MenuBarBg] = ImVec4(.88f, .93f, .90f, 1);
+    c[ImGuiCol_ScrollbarBg] = ImVec4(.91f, .94f, .92f, 1);
+    c[ImGuiCol_ScrollbarGrab] = ImVec4(.58f, .68f, .62f, 1);
+    c[ImGuiCol_ScrollbarGrabHovered] = ImVec4(.45f, .59f, .51f, 1);
+    c[ImGuiCol_ScrollbarGrabActive] = p.success;
+    c[ImGuiCol_CheckMark] = c[ImGuiCol_SliderGrab] = p.success;
+    c[ImGuiCol_SliderGrabActive] = ImVec4(.05f, .31f, .20f, 1);
+    c[ImGuiCol_Button] = c[ImGuiCol_Header] = ImVec4(.85f, .91f, .87f, 1);
+    c[ImGuiCol_ButtonHovered] = c[ImGuiCol_HeaderHovered] = p.accentHovered;
+    c[ImGuiCol_ButtonActive] = c[ImGuiCol_HeaderActive] = p.accentActive;
+    c[ImGuiCol_Separator] = c[ImGuiCol_TableBorderStrong] = ImVec4(.70f, .77f, .73f, 1);
+    c[ImGuiCol_SeparatorHovered] = c[ImGuiCol_SeparatorActive] = p.success;
+    c[ImGuiCol_ResizeGrip] = ImVec4(.10f, .43f, .30f, .20f);
+    c[ImGuiCol_ResizeGripHovered] = ImVec4(.10f, .43f, .30f, .50f);
+    c[ImGuiCol_ResizeGripActive] = p.success;
+    c[ImGuiCol_Tab] = c[ImGuiCol_TabUnfocused] = ImVec4(.88f, .93f, .90f, 1);
+    c[ImGuiCol_TabHovered] = p.accentHovered;
+    c[ImGuiCol_TabActive] = c[ImGuiCol_TabUnfocusedActive] = p.accent;
+    c[ImGuiCol_TableHeaderBg] = ImVec4(.84f, .90f, .86f, 1);
+    c[ImGuiCol_TableBorderLight] = ImVec4(.80f, .85f, .82f, 1);
+    c[ImGuiCol_TableRowBgAlt] = ImVec4(.20f, .42f, .31f, .06f);
+    c[ImGuiCol_TextSelectedBg] = ImVec4(.18f, .55f, .37f, .25f);
+    c[ImGuiCol_NavHighlight] = p.success;
+    c[ImGuiCol_PlotLines] = c[ImGuiCol_PlotHistogram] = p.success;
+    return theme;
+}
+
 namespace detail
 {
 inline Theme& ThemeStorage()
@@ -115,4 +195,23 @@ inline void ApplyTheme(const Theme& theme)
     if (ImPlot::GetCurrentContext())
         std::copy(theme.implotColors.begin(), theme.implotColors.end(), ImPlot::GetStyle().Colors);
 }
+namespace detail
+{
+inline ThemeId pendingTheme = ThemeId::Custom;
+}
+
+// The menu queues its choice while ImGui has active windows/style scopes.
+// Commit it before clearing the next SDL frame so the entire frame agrees.
+inline void RequestTheme(ThemeId id)
+{
+    if (id == ThemeId::Dark || id == ThemeId::Light) detail::pendingTheme = id;
+}
+inline void ApplyPendingTheme()
+{
+    const auto id = detail::pendingTheme;
+    detail::pendingTheme = ThemeId::Custom;
+    if (id == ThemeId::Dark) ApplyTheme(MakeDefaultTheme());
+    if (id == ThemeId::Light) ApplyTheme(MakeLightTheme());
+}
+
 } // namespace vlsui

@@ -84,3 +84,10 @@ layout spacing and paused tick count, ImPlot colors, owned theme data, and retai
 selection in new ImGui/ImPlot contexts. The original theme is restored before the
 remaining scenarios. `theme-probe.png` is an isolated test palette preview, not a
 new application theme.
+
+Built-in theme checks open the real dropdown in the More inspector tab, choose
+Light and return to Dark in both engines at 1280×800 and 640×480. They verify
+unchanged field/selection, population, tick and spacing. Previews are
+`wide-light-menu.png`, `compact-light-menu.png`, and
+`compact-light-brain-chart.png`. The latter renders the light brain and chart
+with a selected bot. Theme application is queued until the next SDL frame.

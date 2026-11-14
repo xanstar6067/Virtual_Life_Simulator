@@ -1457,6 +1457,73 @@ struct InterfaceSmokeTest
         Frame(app, surface);
     }
 
+    static void SelectInspectorTab(Main& app, SDL_Surface* surface, const char* name)
+    {
+        Frame(app, surface); Frame(app, surface);
+        const auto inspector = ImGui::FindWindowByName("##WorkspaceInspector");
+        const auto bar = ImGui::GetCurrentContext()->TabBars.GetByKey(inspector->GetID("##InspectorTabs"));
+        assert(bar);
+        for (const auto& tab : bar->Tabs)
+            if (!strcmp(bar->GetTabName(&tab), name))
+            {
+                Click(app, surface, bar->BarRect.Min.x + tab.Offset - bar->ScrollingAnim + tab.Width * .5f,
+                    bar->BarRect.GetCenter().y);
+                Frame(app, surface);
+                return;
+            }
+        assert(false && "Inspector tab not found");
+    }
+
+    static void ChooseTheme(Main& app, SDL_Surface* surface, vlsui::ThemeId id)
+    {
+        SelectInspectorTab(app, surface, "Ещё");
+        ImGuiWindow* content = nullptr;
+        for (auto* window : ImGui::GetCurrentContext()->Windows)
+            if (window->Active && strstr(window->Name, "WindowsInspectorContent")) content = window;
+        assert(content);
+        // Keyboard activation opens the real dropdown; choose its real row by mouse.
+        ImGui::ActivateItem(content->GetID("##Theme"));
+        Frame(app, surface); Frame(app, surface);
+        const auto popup = ImGui::FindWindowByName("##Combo_00");
+        assert(popup && popup->Active);
+        const int row = id == vlsui::ThemeId::Light ? 1 : 0;
+        Click(app, surface, popup->WorkRect.GetCenter().x,
+            popup->WorkRect.Min.y + row * ImGui::GetTextLineHeightWithSpacing() + ImGui::GetTextLineHeight() * .5f);
+        Frame(app, surface);
+        assert(vlsui::GetTheme().id == id);
+    }
+
+    static void CheckBuiltinThemes(Main& app, SDL_Surface* surface, const char* prefix)
+    {
+        const auto tick = app.ticknum;
+        const auto count = CountBots(app);
+        const auto selected = app.selectedObject;
+        const auto field = app.field;
+        const auto padding = ImGui::GetStyle().FramePadding;
+        ChooseTheme(app, surface, vlsui::ThemeId::Light);
+        const auto& style = ImGui::GetStyle();
+        assert(style.Colors[ImGuiCol_WindowBg].x > .9f && style.Colors[ImGuiCol_Text].x < .2f);
+        assert(style.FramePadding.x == padding.x && style.FramePadding.y == padding.y);
+        assert(app.field == field && app.selectedObject == selected && app.ticknum == tick && CountBots(app) == count);
+        char path[128];
+        snprintf(path, sizeof(path), "%s-light-menu.png", prefix);
+        assert(IMG_SavePNG(surface, path) == 0);
+        // Both the chart and neural canvas must use the light presentation colors.
+        if (selected)
+        {
+            app.showBrain = app.showChart = true;
+            Frame(app, surface); Frame(app, surface);
+            snprintf(path, sizeof(path), "%s-light-brain-chart.png", prefix);
+            assert(IMG_SavePNG(surface, path) == 0);
+            app.showBrain = app.showChart = false;
+            Frame(app, surface);
+        }
+        ChooseTheme(app, surface, vlsui::ThemeId::Dark);
+        assert(ImGui::GetStyle().Colors[ImGuiCol_WindowBg].x == vlsui::MakeDefaultTheme().imguiColors[ImGuiCol_WindowBg].x);
+        assert(app.field == field && app.selectedObject == selected && app.ticknum == tick && CountBots(app) == count);
+        SelectInspectorTab(app, surface, "Организм");
+    }
+
     static void CheckThemes(Main& app, SDL_Surface* surface)
     {
         const auto original = vlsui::GetTheme();
@@ -1508,6 +1575,7 @@ struct InterfaceSmokeTest
     {
         CheckHistory();
         CheckThemes(app, surface);
+        CheckBuiltinThemes(app, surface, "wide");
         srand(12345);
         assert(!app.simulate);
         Frame(app, surface);
@@ -1617,6 +1685,7 @@ struct InterfaceSmokeTest
             }
             if (size.x == 640)
             {
+                CheckBuiltinThemes(app, resized, "compact");
                 app.savedBotPicker.Open();
                 Frame(app, resized); Frame(app, resized);
                 const auto picker = ImGui::FindWindowByName("Выберите бота##SavedBotPicker");

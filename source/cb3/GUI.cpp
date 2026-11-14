@@ -549,6 +549,7 @@ void Main::DrawSidePanelWindow()
 		if (ImGui::BeginTabItem("Ещё"))
 		{
 			ImGui::BeginChild("##WindowsInspectorContent", ImVec2(0.0f, 0.0f), false);
+			vlsui::DrawThemeMenu();
 			vlsui::SectionTitle("Окна");
 			if (ImGui::BeginTable("##Cb3Windows", 2, ImGuiTableFlags_SizingStretchSame))
 			{

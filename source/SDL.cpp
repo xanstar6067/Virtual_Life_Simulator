@@ -194,6 +194,7 @@ bool ReadMouseState()
 
 void SDLBeginScene()
 {
+	vlsui::ApplyPendingTheme();
 	// Clear the renderer that draws the world and ImGui, including panel gaps.
 	// OpenGL calls cannot clear an SDL renderer backed by Direct3D.
 	const ImVec4 color = vlsui::Palette().desktop;
